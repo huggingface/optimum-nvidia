@@ -12,9 +12,3 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
-from distutils.version import StrictVersion
-
-__version__ = "0.0.1a0"
-VERSION = StrictVersion(__version__)
-

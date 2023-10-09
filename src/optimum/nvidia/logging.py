@@ -12,9 +12,11 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from logging import basicConfig, DEBUG, INFO
 
-from distutils.version import StrictVersion
 
-__version__ = "0.0.1a0"
-VERSION = StrictVersion(__version__)
+DEFAULT_LOGGING_FMT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
+
+def setup_logging(verbose: bool = False):
+    basicConfig(format=DEFAULT_LOGGING_FMT, level=DEBUG if verbose else INFO)
