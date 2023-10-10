@@ -1,0 +1,22 @@
+FROM nvcr.io/nvidia/pytorch:23.07-py3
+
+# Python packages
+COPY third-party/tensorrt-llm /opt/tensorrt-llm
+RUN pip install -r /opt/tensorrt-llm/requirements-dev.txt
+
+# Remove prevous TRT installation
+RUN apt-get remove --purge -y libnvinfer* tensorrt*
+RUN pip uninstall -y tensorrt
+
+# Download and install TensorRT
+RUN wget https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/secure/9.0.1/tars/TensorRT-9.0.1.4.Linux.x86_64-gnu.cuda-12.2.tar.gz -P /workspace
+RUN tar -xvf /workspace/TensorRT-9.0.1.4.Linux.x86_64-gnu.cuda-12.2.tar.gz -C /usr/local/ && mv /usr/local/TensorRT-9.0.1.4 /usr/local/tensorrt
+RUN pip install /usr/local/tensorrt/python/tensorrt-9.0.1*cp310-none-linux_x86_64.whl && rm -fr /workspace/TensorRT-9.0.1.4.Linux.x86_64-gnu.cuda-12.2.tar.gz
+ENV LD_LIBRARY_PATH=/usr/local/tensorrt/lib/:$LD_LIBRARY_PATH
+
+# Download and install polygraphy, only required if you need to run TRT-LLM python tests
+RUN pip install https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/secure/9.0.1/tars/polygraphy-0.48.1-py2.py3-none-any.whl
+
+# Build & install tensorrt-llm
+RUN python /opt/tensorrt-llm/scripts/build_wheel.py --trt_root /usr/local/tensorrt
+RUN python -m pip install /opt/tensorrt-llm/build/tensorrt_llm*.whl
