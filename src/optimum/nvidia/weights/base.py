@@ -12,10 +12,31 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from abc import ABC, abstractmethod
+from typing import Tuple
 
-from .logging import DEFAULT_LOGGING_FMT, setup_logging
-from .version import __version__, VERSION
+import numpy as np
 
-from .builder import TRTEngineBuilder
+from tensorrt_llm import Mapping as ShardingConfig
 
-DEFAULT_HF_HUB_TRT_REVISION: str = "trt-llm"
+
+class WeightAdapter(ABC):
+    """
+
+    """
+
+    __slots__ = ("_sharding_config", )
+
+    def __init__(self, sharding_config: ShardingConfig):
+        self._sharding_config = sharding_config
+
+    @abstractmethod
+    def convert_tensor(self, name: str, value: np.array, rank: int) -> Tuple[str, np.array]:
+        """
+
+        :param name:
+        :param value:
+        :param rank:
+        :return:
+        """
+        raise NotImplementedError()

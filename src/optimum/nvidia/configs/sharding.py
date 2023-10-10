@@ -13,9 +13,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from .logging import DEFAULT_LOGGING_FMT, setup_logging
-from .version import __version__, VERSION
+from tensorrt_llm import Mapping as ShardingConfig
 
-from .builder import TRTEngineBuilder
 
-DEFAULT_HF_HUB_TRT_REVISION: str = "trt-llm"
+def shard(rank: int, world_size: int, gpus_per_node: int) -> ShardingConfig:
+    config = ShardingConfig(world_size, rank, gpus_per_node)
+    return config

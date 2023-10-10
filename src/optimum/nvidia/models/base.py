@@ -12,10 +12,13 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from optimum.nvidia.weights import WeightAdapter
+from tensorrt_llm import Module
 
-from .logging import DEFAULT_LOGGING_FMT, setup_logging
-from .version import __version__, VERSION
 
-from .builder import TRTEngineBuilder
+class ConvertibleModel:
+    """
 
-DEFAULT_HF_HUB_TRT_REVISION: str = "trt-llm"
+    """
+    ADAPTER: WeightAdapter
+    TARGET: Module

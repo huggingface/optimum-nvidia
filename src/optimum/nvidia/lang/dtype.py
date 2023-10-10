@@ -12,10 +12,14 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from enum import Enum
 
-from .logging import DEFAULT_LOGGING_FMT, setup_logging
-from .version import __version__, VERSION
 
-from .builder import TRTEngineBuilder
-
-DEFAULT_HF_HUB_TRT_REVISION: str = "trt-llm"
+class DataType(Enum):
+    """
+    Represent the data format used to store and run actual computations
+    """
+    INT8 = "int8"
+    FLOAT32 = "float32"
+    Float16 = "float16"
+    BFloat16 = "bfloat16"
