@@ -18,7 +18,7 @@ from setuptools import find_namespace_packages
 
 
 # Ensure we match the version set in optimum/neuron/version.py
-filepath = "optimum/neuron/version.py"
+filepath = "src/optimum/nvidia/version.py"
 try:
     with open(filepath) as version_file:
         (__version__,) = re.findall('__version__ = "(.*)"', version_file.read())
@@ -29,7 +29,7 @@ INSTALL_REQUIRES = [
     # "transformers >= 4.32.1",
     "fsspec",
     "huggingface_hub >= 0.14.0",
-    "numpy >= 1.24.0"
+    "numpy >= 1.24.0",
     "optimum >= 1.13.0",
 ]
 
