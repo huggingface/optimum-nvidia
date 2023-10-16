@@ -14,60 +14,56 @@
 #  limitations under the License.
 import sys
 from logging import getLogger
-from mmap import mmap, ACCESS_READ, MADV_RANDOM, MADV_HUGEPAGE, MADV_WILLNEED, MADV_FREE
+# from mmap import mmap, ACCESS_READ, MADV_RANDOM, MADV_HUGEPAGE, MADV_WILLNEED
 from os import PathLike
-from typing import Protocol, runtime_checkable, Optional, Union
+from typing import Protocol, runtime_checkable, Union, TypeVar
 
-from huggingface_hub import cached_download
-from fsspec import AbstractFileSystem
-from fsspec.implementations.local import LocalFileSystem
-from safetensors import safe_open
-from tensorrt_llm import Mapping as ShardingConfig
-
+from safetensors.numpy import safe_open
+from tensorrt_llm import Mapping as ShardingConfig, Module
 
 LOGGER = getLogger(__name__)
 
 
-def walk(path: PathLike, fs: Optional[AbstractFileSystem] = None):
-    if fs is None:
-        fs = LocalFileSystem()
-
-    with fs.open(str(path), "rb") as params_f:
-        LOGGER.debug(f"Opened file at {path}")
+def walk(path: PathLike):
+    # with open(str(path), "rb") as params_f:
+    #     LOGGER.debug(f"Opened file at {path}")
 
         # Memory-map the whole file
-        is_linux = sys.platform == "linux"
-        mm = mmap(params_f.fileno(), length=0, access=ACCESS_READ)
-        if is_linux:
-            LOGGER.debug("[mmap] advising MADV_RANDOM | MADV_HUGEPAGE")
-            mm.madvise(MADV_RANDOM | MADV_HUGEPAGE | MADV_WILLNEED)
+        # is_linux = sys.platform == "linux"
+        # mm = mmap(params_f.fileno(), length=0, access=ACCESS_READ)
+        # if is_linux:
+        #     LOGGER.debug("[mmap] advising MADV_RANDOM | MADV_HUGEPAGE")
+        #     mm.madvise(MADV_RANDOM | MADV_HUGEPAGE | MADV_WILLNEED)
 
         # Read the content
-        content = mm.read()
-        with safe_open(content, framework="numpy", device="cpu") as st_content:
-            for name in st_content.keys():
-                yield name, st_content.get_tensor(name)
+        # content = mm.read()
+        # with read_safetensors(content) as st_content:
 
-            if is_linux:
-                LOGGER.debug("[mmap] advising MADV_FREE")
-                mm.madvise(MADV_FREE)
+    with safe_open(path, framework="numpy") as st_content:
+        LOGGER.debug(f"Opened file at {path}")
+        for name in st_content.keys():
+            yield name, st_content.get_tensor(name)
+
+
+# Represent a generic trt module type
+M_co = TypeVar("M_co", covariant=True)
 
 
 @runtime_checkable
-class SupportsSafetensors(Protocol):
+class SupportsSafetensors(Protocol[M_co]):
 
     @classmethod
     def from_safetensors(
         cls,
         path: Union[str, PathLike],
         sharding_config: ShardingConfig,
-        filesystem: Optional[AbstractFileSystem] = None
+        model: M_co
     ):
         """
 
         :param path:
         :param sharding_config
-        :param filesystem
+        :param model
         :return:
         """
         ...

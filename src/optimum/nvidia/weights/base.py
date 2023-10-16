@@ -17,7 +17,9 @@ from typing import Tuple
 
 import numpy as np
 
-from tensorrt_llm import Mapping as ShardingConfig
+from optimum.nvidia.configs import ModelConfig
+from optimum.nvidia.lang import DataType
+from tensorrt_llm import Mapping as ShardingConfig, Module
 
 
 class WeightAdapter(ABC):
@@ -37,6 +39,18 @@ class WeightAdapter(ABC):
         :param name:
         :param value:
         :param rank:
+        :return:
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    @abstractmethod
+    def allocate_model(conf: ModelConfig, sharding: ShardingConfig, dtype: DataType) -> Module:
+        """
+
+        :param conf:
+        :param sharding
+        :param dtype
         :return:
         """
         raise NotImplementedError()

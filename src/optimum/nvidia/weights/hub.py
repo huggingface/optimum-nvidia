@@ -36,6 +36,8 @@ def get_safetensors_files(fs: AbstractFileSystem, model_id_or_path: Union[str, P
             index_content = json.load(index_f)
             total_size, weight_map = index_content["metadata"]["total_size"], index_content["weight_map"]
             shards = set(weight_map.values())
+
+            LOGGER.debug(f"Detected {len(shards)} shards for {model_id_or_path}")
             return shards
 
     elif fs.exists(os.path.join(model_id_or_path, SAFETENSORS_WEIGHT_FILENAME)):

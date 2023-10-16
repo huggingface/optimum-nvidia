@@ -16,24 +16,28 @@
 import os
 from fsspec.implementations.local import LocalFileSystem
 from logging import getLogger
-from os import PathLike
+from multiprocessing import Pool
+from os import PathLike, sched_getaffinity
 from pathlib import Path
-from typing import NamedTuple, Optional, Type, Union, Dict
+from typing import NamedTuple, Optional, Type, Union, Dict, List
 
 from huggingface_hub import ModelHubMixin, HfFileSystem
 from huggingface_hub.hub_mixin import T
 
-from optimum.nvidia.configs import ModelConfig
+from optimum.nvidia.configs import ModelConfig, TransformersConfig
+from optimum.nvidia.lang import DataType
+from optimum.nvidia.utils import ensure_file_exists_locally
+from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter
 from optimum.nvidia.weights.hub import get_safetensors_files
-from tensorrt_llm import Mapping, Module as TRTModule
+from tensorrt_llm import Mapping as Shard
+from tensorrt_llm.builder import Builder, BuilderConfig
 
-from optimum.nvidia.weights import DEFAULT_TRT_LLM_HUB_REVISION, SupportsSafetensors
 
 LOGGER = getLogger(__name__)
 
 # Utility classes to store build information
 BuildInfo = NamedTuple("BuildInfo", [("parallel", bool), ("num_parallel_jobs", int)])
-DEFAULT_SERIAL_BUILD_INFO = BuildInfo(False, 1)
+SERIAL_BUILD = BuildInfo(False, 1)
 
 # Utility classes to store sharding information
 ShardingInfo = NamedTuple("ShardingInfo", [("world_size", int), ("num_gpus_per_node", int)])
@@ -60,32 +64,27 @@ class TRTEngineBuilder(ModelHubMixin):
         **model_kwargs,
     ) -> T:
         config = model_kwargs.get("config", None)  # TODO: Ensure this is ok
-        sharding = model_kwargs.get("sharding", NO_SHARDING)  # Override inferred adapter
         adapter = model_kwargs.get("adapter", None)  # Override inferred adapter
 
         if adapter is None:
             LOGGER.debug(f"Inferring adapter from config: {config['model_type']}")
             raise NotImplementedError()
 
-        # Handle the loading - Note Safetensors is always preferred
-        if os.path.isdir(model_id):  # Can either be a local directory
-            LOGGER.debug(f"Loading weights from local directory {model_id}")
-            fs = LocalFileSystem()
+        # TODO: Handle more things from the params here
+        if config and not isinstance(config, TransformersConfig):
+            config = TransformersConfig(config)
+        else:
+            raise ValueError(f"Unsupported configuration type ({type(config).__name__})")
 
-        else:  # Or a model on the Hub
-            LOGGER.debug(f"Loading weights from remote Hugging Face Hub {model_id}")
-            fs = HfFileSystem()
+        return cls(model_id, config, adapter)
 
-        # Check for safetensors preferred serialization format
-        if issubclass(adapter, SupportsSafetensors):
-            for file in get_safetensors_files(fs, model_id):
-                adapter.from_safetensors(os.path.join(model_id, file), sharding, fs)
+    def __init__(self, model_id_or_path: Union[str, PathLike], config: ModelConfig, adapter: Type[WeightAdapter]):
+        self._model_id_or_path: Union[str, PathLike] = model_id_or_path
+        self._model_config: ModelConfig = config
+        self._weight_adapter: Type[WeightAdapter] = adapter
 
-        return cls(config)
-
-    def __init__(self, config: ModelConfig):
-        self._build_info: Optional[BuildInfo] = None
-        self._sharding_info: Optional[ShardingInfo] = None
+        self._build_info: BuildInfo = SERIAL_BUILD
+        self._sharding_info: ShardingInfo = NO_SHARDING
 
     def enable_parallel_build(self, num_jobs: int = -1) -> "TRTEngineBuilder":
         """
@@ -93,11 +92,11 @@ class TRTEngineBuilder(ModelHubMixin):
         :param num_jobs:
         :return:
         """
-        if self._build_info:
-            raise Exception(f"Cannot specify twice building info ({self._build_info}).")
+        # if self._build_info:
+        #     raise Exception(f"Cannot specify twice building info ({self._build_info}).")
 
         LOGGER.debug(f"Setting parallel build strategy to use a maximum of {num_jobs} parallel jobs")
-        self._build_info = BuildInfo(True, -1)
+        self._build_info = BuildInfo(True, num_jobs)
 
         return self
 
@@ -108,19 +107,80 @@ class TRTEngineBuilder(ModelHubMixin):
         :param num_gpus_per_node:
         :return:
         """
-        if self._sharding_info:
-            raise Exception(f"Cannot specify twice sharding config ({self._sharding_info})")
+        # if self._sharding_info:
+        #     raise Exception(f"Cannot specify twice sharding config ({self._sharding_info})")
 
         LOGGER.debug(f"Setting sharding strategy to world_size={world_size}, num_gpus_per_node={num_gpus_per_node}")
         self._sharding_info = ShardingInfo(world_size, num_gpus_per_node)
 
         return self
 
-    def build(self, output_path: PathLike):
+    def build(self, output_path: PathLike) -> PathLike:
         self._sharding_info = self._sharding_info or NO_SHARDING
 
-        for rank in range(self._sharding_info.world_size):
-            LOGGER.debug(f"Building engine rank={rank} (world_size={self._sharding_info.world_size})")
-            sharding_desc = Mapping(self._sharding_info.world_size, rank, self._sharding_info.num_gpus_per_node)
+        # Handle the loading - Note Safetensors is always preferred
+        if os.path.isdir(self._model_id_or_path):  # Can either be a local directory
+            LOGGER.debug(f"Loading weights from local directory {self._model_id_or_path}")
+            fs = LocalFileSystem()
 
-        raise NotImplementedError()
+        else:  # Or a model on the Hub
+            LOGGER.debug(f"Loading weights from remote Hugging Face Hub {self._model_id_or_path}")
+            fs = HfFileSystem()
+
+        # Check for safetensors preferred serialization format
+        local_files = []
+        if issubclass(self._weight_adapter, SupportsSafetensors):
+            for file in get_safetensors_files(fs, self._model_id_or_path):
+                local_filepath = Path(ensure_file_exists_locally(fs, self._model_id_or_path, file))
+                local_files.append(local_filepath)
+        else:
+            raise NotImplementedError("We only support loading from Safetensors checkpoints for now.")
+
+        shards_info = [
+            Shard(self._sharding_info.world_size, rank, self._sharding_info.num_gpus_per_node)
+            for rank in range(self._sharding_info.world_size)
+        ]
+
+        if self._build_info.parallel and self._build_info.num_parallel_jobs > 1:
+            build_func = self._build_parallel
+        else:
+            build_func = self._build_serial
+
+        # Let's build
+        build_func(shards_info, local_files)
+        return output_path
+
+    def _build_serial(self, shards_info: List[Shard], weight_files: List[PathLike]):
+        LOGGER.debug(f"Building TRT engines sequentially")
+
+        for shard in shards_info:
+            self._build_engine_for_rank(shard, weight_files)
+
+    def _build_parallel(self, shard_info: List[Shard], weight_files: List[PathLike]):
+        build_info = self._build_info
+        num_jobs = build_info.num_parallel_jobs if build_info.num_parallel_jobs > 1 else sched_getaffinity(0)
+
+        # If there are more CPU cores than rank ... Let's reduce the number of jobs
+        if num_jobs > len(shard_info):
+            num_jobs = shard_info
+
+        LOGGER.debug(f"Building TRT engines in parallel ({num_jobs} processes)")
+        with Pool(num_jobs) as builders:
+            for shard in shard_info:
+                engines = builders.map(self._build_engine_for_rank, weight_files)
+
+    def _build_engine_for_rank(self, shard: Shard, weight_files: List[PathLike]):
+        LOGGER.debug(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
+
+        print("Allocating model")
+        config = self._model_config
+        model = self._weight_adapter.allocate_model(config, shard, DataType.BFloat16)
+
+        print("Allocated model")
+        builder = Builder()
+
+        for file in weight_files:
+            LOGGER.debug(f"Processing file: {file}")
+
+            if issubclass(self._weight_adapter, SupportsSafetensors):
+                self._weight_adapter.from_safetensors(file, shard, model)

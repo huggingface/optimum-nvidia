@@ -14,12 +14,15 @@
 #  limitations under the License.
 
 from argparse import ArgumentParser
-from logging import DEBUG, INFO, basicConfig, getLogger
+from logging import getLogger
 from pathlib import Path
 
 from optimum.nvidia import setup_logging, TRTEngineBuilder
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models.llama import LlamaWeightAdapter
+
+# Setup logging
+setup_logging(True)
 
 LOGGER = getLogger(__name__)
 
@@ -33,9 +36,6 @@ if __name__ == '__main__':
     parser.add_argument("output", type=Path, help="Path to store generated TensorRT engine.")
     args = parser.parse_args()
 
-    # Setup logging
-    setup_logging(args.verbose)
-
     # Ensure the output folder exists or create the folder
     if args.output.exists():
         if not args.output.is_dir():
@@ -48,9 +48,7 @@ if __name__ == '__main__':
         args.output.mkdir()
 
     LOGGER.info(f"Exporting {args.model} to TensorRT-LLM engine at {args.output}")
-    builder = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter)
-        # .enable_parallel_build(4) \
-        # .shard(4, 4) \
-        # .build(args.output)
+    engine = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
+        .build(args.output)
 
-    print(args)
+    print()
