@@ -93,4 +93,9 @@ class TransformersConfig(ModelConfig):
     def activation(self) -> str:
         return self._config["hidden_act"]
 
+    def __getattr__(self, item):
+        return self._config[item]
+
+    def __getitem__(self, item):
+        return getattr(self, item)
 
