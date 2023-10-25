@@ -21,5 +21,5 @@ class DataType(Enum):
     """
     INT8 = "int8"
     FLOAT32 = "float32"
-    Float16 = "float16"
-    BFloat16 = "bfloat16"
+    FLOAT16 = "float16"
+    BFLOAT16 = "bfloat16"

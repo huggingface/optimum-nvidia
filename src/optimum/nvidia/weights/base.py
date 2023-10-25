@@ -33,11 +33,10 @@ class WeightAdapter(ABC):
         self._sharding_config = sharding_config
 
     @abstractmethod
-    def convert_tensor(self, name: str, value: np.array, rank: int) -> Tuple[str, np.array]:
+    def convert(self, model: Module, rank: int) -> Module:
         """
 
-        :param name:
-        :param value:
+        :param model:
         :param rank:
         :return:
         """

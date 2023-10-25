@@ -13,12 +13,16 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 import sys
+from io import BytesIO
+from itertools import chain
 from logging import getLogger
-# from mmap import mmap, ACCESS_READ, MADV_RANDOM, MADV_HUGEPAGE, MADV_WILLNEED
+from mmap import mmap, ACCESS_READ
 from os import PathLike
-from typing import Protocol, runtime_checkable, Union, TypeVar
+from sys import platform
+from typing import Protocol, runtime_checkable, Union, TypeVar, List, Mapping, Iterable, Tuple, Any
 
-from safetensors.numpy import safe_open
+import numpy as np
+from safetensors.numpy import load, safe_open
 from tensorrt_llm import Mapping as ShardingConfig, Module
 
 LOGGER = getLogger(__name__)
@@ -45,6 +49,42 @@ def walk(path: PathLike):
             yield name, st_content.get_tensor(name)
 
 
+class SafetensorsAccessor(Mapping[str, np.array]):
+
+    __slots__ = ("_buffers", "_indexes")
+
+    @classmethod
+    def from_files(cls, files: Iterable[PathLike]):
+        buffers = []
+        for path in files:
+            with open(path, mode="rb") as fd:
+                # Memory-map the whole file
+                is_linux = platform == "linux"
+                with mmap(fd.fileno(), length=0, access=ACCESS_READ) as mm:
+                    if is_linux:
+                        from mmap import MADV_SEQUENTIAL, MADV_HUGEPAGE, MADV_WILLNEED
+                        LOGGER.debug("[mmap] advising MADV_RANDOM | MADV_HUGEPAGE | MADV_WILLNEED")
+                        mm.madvise(MADV_SEQUENTIAL | MADV_HUGEPAGE | MADV_WILLNEED)
+
+                    # Append the file descriptor and memory mapped handle
+                    buffers.append(load(mm.read()))
+        return cls(buffers)
+
+    def __init__(self, buffers: Iterable[Mapping[str, np.array]]):
+        self._buffers = buffers
+        self._indexes = {name: buffer for buffer in buffers for name in buffer.keys()}
+
+    def __getitem__(self, __key):
+        buffer = self._indexes[__key]
+        return buffer[__key]
+
+    def __len__(self):
+        return len(self._indexes)
+
+    def __iter__(self):
+        return chain(self._buffers)
+
+
 # Represent a generic trt module type
 M_co = TypeVar("M_co", covariant=True)
 
@@ -55,13 +95,13 @@ class SupportsSafetensors(Protocol[M_co]):
     @classmethod
     def from_safetensors(
         cls,
-        path: Union[str, PathLike],
+        paths: List[Union[str, PathLike]],
         sharding_config: ShardingConfig,
         model: M_co
-    ):
+    ) -> Module:
         """
 
-        :param path:
+        :param paths:
         :param sharding_config
         :param model
         :return:
