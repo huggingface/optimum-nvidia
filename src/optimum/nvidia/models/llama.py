@@ -24,7 +24,7 @@ from optimum.nvidia.models import ConvertibleModel
 from optimum.nvidia.weights import WeightAdapter
 from optimum.nvidia.weights.safetensors import SupportsSafetensors, SafetensorsAccessor
 from safetensors import deserialize
-from tensorrt_llm import Mapping as ShardingConfig, Module
+from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
 from tensorrt_llm.models import LLaMAForCausalLM
 
 
