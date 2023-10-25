@@ -31,6 +31,7 @@ from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter
 from optimum.nvidia.weights.hub import get_safetensors_files
 from tensorrt_llm import Mapping as Shard
 from tensorrt_llm.builder import Builder, BuilderConfig
+from tensorrt_llm.network import net_guard
 
 
 LOGGER = getLogger(__name__)
@@ -42,6 +43,10 @@ SERIAL_BUILD = BuildInfo(False, 1)
 # Utility classes to store sharding information
 ShardingInfo = NamedTuple("ShardingInfo", [("world_size", int), ("num_gpus_per_node", int)])
 NO_SHARDING = ShardingInfo(1, 1)
+
+
+def create_unique_engine_name(identifier: str, dtype: str, rank: int) -> str:
+    return f"{identifier}_{dtype}_{rank}.engine"
 
 
 class TRTEngineBuilder(ModelHubMixin):
@@ -83,6 +88,7 @@ class TRTEngineBuilder(ModelHubMixin):
         self._model_config: ModelConfig = config
         self._weight_adapter: Type[WeightAdapter] = adapter
 
+        self._dtype = DataType.FLOAT16
         self._build_info: BuildInfo = SERIAL_BUILD
         self._sharding_info: ShardingInfo = NO_SHARDING
 
@@ -115,8 +121,18 @@ class TRTEngineBuilder(ModelHubMixin):
 
         return self
 
+    def to(self, dtype: DataType) -> "TRTEngineBuilder":
+        LOGGER.debug(f"Setting target dtype to {str(dtype)}")
+        self._dtype = dtype
+
+        return self
+
     def build(self, output_path: PathLike) -> PathLike:
         self._sharding_info = self._sharding_info or NO_SHARDING
+
+        output_path = Path(output_path)
+        if not output_path.exists():
+            output_path.mkdir(parents=True)
 
         # Handle the loading - Note Safetensors is always preferred
         if os.path.isdir(self._model_id_or_path):  # Can either be a local directory
@@ -147,16 +163,16 @@ class TRTEngineBuilder(ModelHubMixin):
             build_func = self._build_serial
 
         # Let's build
-        build_func(shards_info, local_files)
+        build_func(shards_info, local_files, output_path)
         return output_path
 
-    def _build_serial(self, shards_info: List[Shard], weight_files: List[PathLike]):
+    def _build_serial(self, shards_info: List[Shard], weight_files: List[PathLike], output_path: Path):
         LOGGER.debug(f"Building TRT engines sequentially")
 
         for shard in shards_info:
-            self._build_engine_for_rank(shard, weight_files)
+            self._build_engine_for_rank(shard, weight_files, output_path)
 
-    def _build_parallel(self, shard_info: List[Shard], weight_files: List[PathLike]):
+    def _build_parallel(self, shard_info: List[Shard], weight_files: List[PathLike], output_path: Path):
         build_info = self._build_info
         num_jobs = build_info.num_parallel_jobs if build_info.num_parallel_jobs > 1 else sched_getaffinity(0)
 
@@ -167,20 +183,58 @@ class TRTEngineBuilder(ModelHubMixin):
         LOGGER.debug(f"Building TRT engines in parallel ({num_jobs} processes)")
         with Pool(num_jobs) as builders:
             for shard in shard_info:
-                engines = builders.map(self._build_engine_for_rank, weight_files)
+                engines = builders.map(self._build_engine_for_rank, shard, weight_files, output_path)
 
-    def _build_engine_for_rank(self, shard: Shard, weight_files: List[PathLike]):
+    def _build_engine_for_rank(self, shard: Shard, weight_files: List[PathLike], output_path: Path):
         LOGGER.debug(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
 
-        print("Allocating model")
+        print(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
+
         config = self._model_config
-        model = self._weight_adapter.allocate_model(config, shard, DataType.BFloat16)
+        model = self._weight_adapter.allocate_model(config, shard, self._dtype)
+        ranked_engine_name = create_unique_engine_name(config["model_type"], self._dtype.value, shard.rank)
 
-        print("Allocated model")
         builder = Builder()
+        build_config = builder.create_builder_config(
+            precision=self._dtype.value,
+            tensor_parallel=shard.world_size,
+            **config.__dict__  # Inject model's config
+        )
 
-        for file in weight_files:
-            LOGGER.debug(f"Processing file: {file}")
+        if issubclass(self._weight_adapter, SupportsSafetensors):
+            self._weight_adapter.from_safetensors(weight_files, build_config, shard, model)
 
-            if issubclass(self._weight_adapter, SupportsSafetensors):
-                self._weight_adapter.from_safetensors(file, shard, model)
+        # Let's build the network
+        network = builder.create_network()
+        network.trt_network.name = ranked_engine_name
+
+        # Enable plugins
+        network.plugin_config.set_gpt_attention_plugin(dtype=self._dtype.value)
+        network.plugin_config.set_gemm_plugin(dtype=self._dtype.value)
+
+        if shard.world_size > 1:
+            LOGGER.debug(f"Enabling NCCL plugin as world_size = ({shard.world_size})")
+            network.plugin_config.set_nccl_plugin(dtype=self._dtype.value)
+
+        with net_guard(network):
+            # network.set_named_parameters(model.named_parameters())
+            pass
+
+        # Let's build the engine
+        _ = builder.build_engine(network, build_config)
+
+        # Store the build config for the master (rank = 0) to avoid writing up multiple times the same thing
+        if shard.rank == 0:
+            config_path = output_path.joinpath("config.json")
+            timings_path = output_path.joinpath("timings.cache")
+
+            # Save the computed timings
+            builder.save_timing_cache(build_config, timings_path)
+
+            LOGGER.debug(f"Saved rank 0 timings at {timings_path}")
+
+            # Save builder config holding all the engine specificities
+            builder.save_config(build_config, config_path)
+
+            LOGGER.debug(f"Saved engine config at {config_path}")
+

@@ -13,13 +13,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from abc import ABC, abstractmethod
-from typing import Tuple
+from typing import Mapping
 
 import numpy as np
 
 from optimum.nvidia.configs import ModelConfig
 from optimum.nvidia.lang import DataType
-from tensorrt_llm import Mapping as ShardingConfig, Module
+from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
 
 
 class WeightAdapter(ABC):
@@ -33,11 +33,13 @@ class WeightAdapter(ABC):
         self._sharding_config = sharding_config
 
     @abstractmethod
-    def convert(self, model: Module, rank: int) -> Module:
+    def convert(self, model: Module, config: BuilderConfig, rank: int, weights: Mapping[str, np.array]) -> Module:
         """
 
         :param model:
+        :param config
         :param rank:
+        :param weights
         :return:
         """
         raise NotImplementedError()

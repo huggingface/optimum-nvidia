@@ -23,7 +23,7 @@ from typing import Protocol, runtime_checkable, Union, TypeVar, List, Mapping, I
 
 import numpy as np
 from safetensors.numpy import load, safe_open
-from tensorrt_llm import Mapping as ShardingConfig, Module
+from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
 
 LOGGER = getLogger(__name__)
 
@@ -96,12 +96,14 @@ class SupportsSafetensors(Protocol[M_co]):
     def from_safetensors(
         cls,
         paths: List[Union[str, PathLike]],
+        builder_config: BuilderConfig,
         sharding_config: ShardingConfig,
         model: M_co
     ) -> Module:
         """
 
         :param paths:
+        :param builder_config:
         :param sharding_config
         :param model
         :return:

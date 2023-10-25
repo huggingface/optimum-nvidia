@@ -14,18 +14,18 @@
 #  limitations under the License.
 from logging import getLogger
 from os import PathLike
-from typing import Tuple
+from typing import List, Mapping, Set, Tuple, Union
 
 import numpy as np
 
 from optimum.nvidia.configs import ModelConfig
 from optimum.nvidia.lang import DataType
+from optimum.nvidia.models import ConvertibleModel
+from optimum.nvidia.weights import WeightAdapter
+from optimum.nvidia.weights.safetensors import SupportsSafetensors, SafetensorsAccessor
+from safetensors import deserialize
 from tensorrt_llm import Mapping as ShardingConfig, Module
 from tensorrt_llm.models import LLaMAForCausalLM
-
-from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter
-from optimum.nvidia.weights.safetensors import walk as walk_safetensors
 
 
 LOGGER = getLogger(__name__)
@@ -36,10 +36,18 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors):
 
     """
 
-    def convert_tensor(self, name: str, tensor: np.array, sharding_config: ShardingConfig) -> Tuple[str, np.array]:
-        LOGGER.debug(f"Converting tensor {name} ({tensor.dtype}<{tensor.shape}>) [rank={sharding_config.rank}]")
+    @property
+    def global_weights(self) -> Set[str]:
+        return {""}
+
+    def convert(self, model: Module, config: BuilderConfig, rank: int, weights: Mapping[str, np.array]) -> Module:
         world_size = self._sharding_config.world_size
-        return "", []
+        print(config.num_layers)
+        # print(weights["model.layers.7.input_layernorm.weight"])
+
+
+
+        return model
 
     @staticmethod
     def allocate_model(config: ModelConfig, sharding: ShardingConfig, dtype: DataType) -> Module:
@@ -54,25 +62,20 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors):
             mlp_hidden_size=config.intermediate_size,
             hidden_act=config.activation,
             dtype=dtype.value,
-            tensor_parallel=sharding.tp_size,
-            tensor_parallel_group=sharding.tp_group,
+            mapping=sharding
         )
 
     @classmethod
-    def from_safetensors(
-        cls,
-        path: PathLike,
-        sharding_config: ShardingConfig,
-        model: Module
-    ):
+    def from_safetensors(cls, paths: List[Union[str, PathLike]], builder_config, sharding_config: BuilderConfig,
+                         model: ShardingConfig) -> Module:
         if not isinstance(model, LLaMAForCausalLM):
             raise ValueError(f"model has to be a derived type from LLaMAForCausalLM, got {type(model)}")
 
+        accessor = SafetensorsAccessor.from_files(paths)
         adapter = cls(sharding_config)
-        for name, tensor in walk_safetensors(path):
-            trt_name, trt_tensor = adapter.convert_tensor(name, tensor, sharding_config)
-            print(name)
+        adapter.convert(model, sharding_config.rank, accessor)
 
+        return model
 
 class LLamaForCausalLM(ConvertibleModel):
     ADAPTER: LlamaWeightAdapter
