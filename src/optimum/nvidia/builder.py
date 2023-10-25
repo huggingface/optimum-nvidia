@@ -198,11 +198,11 @@ class TRTEngineBuilder(ModelHubMixin):
         build_config = builder.create_builder_config(
             precision=self._dtype.value,
             tensor_parallel=shard.world_size,
-            **config.__dict__  # Inject model's config
+            **config  # Inject model's config
         )
 
         if issubclass(self._weight_adapter, SupportsSafetensors):
-            self._weight_adapter.from_safetensors(weight_files, build_config, shard, model)
+            self._weight_adapter.from_safetensors(weight_files, model, config, build_config, shard)
 
         # Let's build the network
         network = builder.create_network()
@@ -217,8 +217,7 @@ class TRTEngineBuilder(ModelHubMixin):
             network.plugin_config.set_nccl_plugin(dtype=self._dtype.value)
 
         with net_guard(network):
-            # network.set_named_parameters(model.named_parameters())
-            pass
+            network.set_named_parameters(model.named_parameters())
 
         # Let's build the engine
         _ = builder.build_engine(network, build_config)

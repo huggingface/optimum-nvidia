@@ -12,6 +12,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from collections import UserDict
 from typing import Protocol, Any, Mapping
 
 
@@ -54,48 +55,42 @@ class ModelConfig(Protocol):
         return 1 if self.use_multi_query_attention else self.num_heads
 
 
-class TransformersConfig(ModelConfig):
+class TransformersConfig(UserDict, ModelConfig):
 
     __slots__ = ("_config", )
 
     def __init__(self, pretrained_config: Mapping[str, Any]):
-        self._config = pretrained_config
+        super().__init__(pretrained_config)
 
     @property
     def vocab_size(self) -> int:
-        return self._config["vocab_size"]
+        return self.data["vocab_size"]
 
     @property
     def max_sequence_length(self) -> int:
-        return self._config["max_sequence_length"]
+        return self.data["max_sequence_length"]
 
     @property
     def hidden_size(self) -> int:
-        return self._config["hidden_size"]
+        return self.data["hidden_size"]
 
     @property
     def intermediate_size(self) -> int:
-        return self._config["intermediate_size"]
+        return self.data["intermediate_size"]
 
     @property
     def num_layers(self) -> int:
-        return self._config["num_hidden_layers"]
+        return self.data["num_hidden_layers"]
 
     @property
     def num_heads(self) -> int:
-        return self._config["num_attention_heads"]
+        return self.data["num_attention_heads"]
 
     @property
     def use_multi_query_attention(self) -> bool:
-        return self._config.get("num_key_value_heads", self.num_heads) == 1
+        return self.get("num_key_value_heads", self.num_heads) == 1
 
     @property
     def activation(self) -> str:
-        return self._config["hidden_act"]
-
-    def __getattr__(self, item):
-        return self._config[item]
-
-    def __getitem__(self, item):
-        return getattr(self, item)
+        return self.data["hidden_act"]
 

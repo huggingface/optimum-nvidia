@@ -33,11 +33,19 @@ class WeightAdapter(ABC):
         self._sharding_config = sharding_config
 
     @abstractmethod
-    def convert(self, model: Module, config: BuilderConfig, rank: int, weights: Mapping[str, np.array]) -> Module:
+    def convert(
+        self,
+        model: Module,
+        config: ModelConfig,
+        builder: BuilderConfig,
+        rank: int,
+        weights: Mapping[str, np.array]
+    ) -> Module:
         """
 
         :param model:
         :param config
+        :param builder
         :param rank:
         :param weights
         :return:
