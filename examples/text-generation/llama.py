@@ -17,6 +17,8 @@ from argparse import ArgumentParser
 from logging import getLogger
 from pathlib import Path
 
+from transformers import AutoTokenizer
+
 from optimum.nvidia import setup_logging
 
 # Setup logging
@@ -33,6 +35,8 @@ if __name__ == '__main__':
     parser = ArgumentParser("🤗 TensorRT-LLM Llama implementation")
     parser.add_argument("--dtype", choices=[dtype.value for dtype in DataType], default=DataType.FLOAT16,
                         help="Data type to do the computations.")
+    parser.add_argument("--with-triton-structure", action="store_true",
+                        help="Generate the Triton Inference Server structure")
     parser.add_argument("model", type=str, help="The model's id or path to use.")
     parser.add_argument("output", type=Path, help="Path to store generated TensorRT engine.")
     args = parser.parse_args()
@@ -49,8 +53,15 @@ if __name__ == '__main__':
         args.output.mkdir()
 
     LOGGER.info(f"Exporting {args.model} to TensorRT-LLM engine at {args.output}")
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
     engine = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
         .to(args.dtype) \
         .build(args.output)
 
-    print()
+    if args.with_triton_structure:
+        generator = TritonLayoutGenerator()
+        LOGGER.info(f"Exporting Triton Inference Server structure at {args.output}")
+        tokenizer_output = args.output.joinpath("tokenizer/")
+        tokenizer.save_pretrained(tokenizer_output)
+
+    print(f"TRTLLM engines have been saved at {args.output}.")
