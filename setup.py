@@ -30,6 +30,7 @@ INSTALL_REQUIRES = [
     "fsspec",
     "huggingface_hub >= 0.14.0",
     "numpy >= 1.24.0",
+    "onnx >= 1.12.0",
     "optimum >= 1.13.0",
 ]
 
