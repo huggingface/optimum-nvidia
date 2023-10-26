@@ -18,3 +18,4 @@ DEFAULT_TRT_LLM_HUB_REVISION: str = "tensorrt-llm"
 
 from .base import WeightAdapter
 from .safetensors import SafetensorsAccessor, SupportsSafetensors
+from .shard import shard
