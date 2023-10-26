@@ -133,7 +133,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors):
                 rank_tensor = shard(qkv, rank, shard_info.tp_size, axis=1)
                 qkv_weight = rank_tensor.reshape(-1, config.hidden_size)
 
-            model.layers[idx].attention.qkv.weight = qkv_weight
+            model.layers[idx].attention.qkv.weight.value = np.ascontiguousarray(qkv_weight)
 
             # Common projection logic
             for (src, dst, shard_axis) in [

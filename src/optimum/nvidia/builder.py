@@ -29,9 +29,11 @@ from optimum.nvidia.lang import DataType
 from optimum.nvidia.utils import ensure_file_exists_locally
 from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter
 from optimum.nvidia.weights.hub import get_safetensors_files
-from tensorrt_llm import Mapping as Shard
+from optimum.nvidia.utils.onnx import to_onnx
+from tensorrt_llm import Mapping as Shard, graph_rewriting
 from tensorrt_llm.builder import Builder, BuilderConfig
 from tensorrt_llm.network import net_guard
+from tensorrt_llm.plugin.plugin import ContextFMHAType
 
 
 LOGGER = getLogger(__name__)
@@ -211,6 +213,11 @@ class TRTEngineBuilder(ModelHubMixin):
         # Enable plugins
         network.plugin_config.set_gpt_attention_plugin(dtype=self._dtype.value)
         network.plugin_config.set_gemm_plugin(dtype=self._dtype.value)
+        network.plugin_config.set_rmsnorm_plugin(dtype=self._dtype.value)
+
+        network.plugin_config.set_context_fmha(ContextFMHAType.enabled)
+        network.plugin_config.enable_remove_input_padding()
+        network.plugin_config.enable_paged_kv_cache(64)
 
         if shard.world_size > 1:
             LOGGER.debug(f"Enabling NCCL plugin as world_size = ({shard.world_size})")
@@ -218,9 +225,24 @@ class TRTEngineBuilder(ModelHubMixin):
 
         with net_guard(network):
             network.set_named_parameters(model.named_parameters())
+            inputs = model.prepare_inputs(
+                max_batch_size=32,
+                max_input_len=256,
+                max_new_tokens=2048,
+                max_beam_width=1,
+                max_num_tokens=config.max_sequence_length,
+                use_cache=True
+            )
+
+            model(*inputs)
+
+            to_onnx(network.trt_network, output_path.joinpath("model.onnx"))
+
+        LOGGER.debug("Optimizing network ...")
+        graph_rewriting.optimize(network)
 
         # Let's build the engine
-        _ = builder.build_engine(network, build_config)
+        engine = builder.build_engine(network, build_config)
 
         # Store the build config for the master (rank = 0) to avoid writing up multiple times the same thing
         if shard.rank == 0:
@@ -229,11 +251,16 @@ class TRTEngineBuilder(ModelHubMixin):
 
             # Save the computed timings
             builder.save_timing_cache(build_config, timings_path)
-
             LOGGER.debug(f"Saved rank 0 timings at {timings_path}")
 
             # Save builder config holding all the engine specificities
             builder.save_config(build_config, config_path)
-
             LOGGER.debug(f"Saved engine config at {config_path}")
+
+            self._serialize_engine(engine, output_path.joinpath(ranked_engine_name))
+
+    def _serialize_engine(self, engine, path: Path):
+        LOGGER.info(f'Saving engine to {path}...')
+        with open(path, 'wb') as f:
+            f.write(bytearray(engine))
 
