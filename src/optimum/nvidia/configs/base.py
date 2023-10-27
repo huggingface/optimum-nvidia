@@ -60,6 +60,13 @@ class TransformersConfig(UserDict, ModelConfig):
     __slots__ = ("_config", )
 
     def __init__(self, pretrained_config: Mapping[str, Any]):
+
+        if "num_heads" not in pretrained_config:
+            pretrained_config["num_heads"] = pretrained_config["num_attention_heads"]
+
+        if "num_layers" not in pretrained_config:
+            pretrained_config["num_layers"] = pretrained_config["num_hidden_layers"]
+
         super().__init__(pretrained_config)
 
     @property

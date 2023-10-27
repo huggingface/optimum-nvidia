@@ -59,7 +59,7 @@ if __name__ == '__main__':
         .build(args.output)
 
     if args.with_triton_structure:
-        generator = TritonLayoutGenerator()
+        # generator = TritonLayoutGenerator()
         LOGGER.info(f"Exporting Triton Inference Server structure at {args.output}")
         tokenizer_output = args.output.joinpath("tokenizer/")
         tokenizer.save_pretrained(tokenizer_output)

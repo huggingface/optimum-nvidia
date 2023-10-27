@@ -1,35 +1,9 @@
-# Copyright 2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-#
-# Redistribution and use in source and binary forms, with or without
-# modification, are permitted provided that the following conditions
-# are met:
-#  * Redistributions of source code must retain the above copyright
-#    notice, this list of conditions and the following disclaimer.
-#  * Redistributions in binary form must reproduce the above copyright
-#    notice, this list of conditions and the following disclaimer in the
-#    documentation and/or other materials provided with the distribution.
-#  * Neither the name of NVIDIA CORPORATION nor the names of its
-#    contributors may be used to endorse or promote products derived
-#    from this software without specific prior written permission.
-#
-# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS ``AS IS'' AND ANY
-# EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-# PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT OWNER OR
-# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
-# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
-# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
-# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
-# OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-# (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-# OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 name: "llm"
 backend: "tensorrtllm"
-max_batch_size: 32
+max_batch_size: 128
 
 model_transaction_policy {
-  decoupled: ${decoupled_mode}
+  decoupled: true
 }
 
 input [
@@ -146,12 +120,7 @@ output [
     dims: [ -1, -1 ]
   }
 ]
-instance_group [
-  {
-    count: 1
-    kind : KIND_CPU
-  }
-]
+
 parameters: {
   key: "max_beam_width"
   value: {
@@ -173,36 +142,43 @@ parameters: {
 parameters: {
   key: "gpt_model_path"
   value: {
-    string_value: "${engine_dir}"
+    string_value: "/opt/optimum/templates/inference-endpoints/llm/1"
   }
 }
 parameters: {
   key: "max_tokens_in_paged_kv_cache"
   value: {
-    string_value: "${max_tokens_in_paged_kv_cache}"
+    string_value: "512"
   }
 }
 parameters: {
   key: "batch_scheduler_policy"
   value: {
-    string_value: "${batch_scheduler_policy}"
+    string_value: "guaranteed_no_evict"
   }
 }
 parameters: {
   key: "kv_cache_free_gpu_mem_fraction"
   value: {
-    string_value: "${kv_cache_free_gpu_mem_fraction}"
+    string_value: "0.2"
   }
 }
 parameters: {
   key: "max_num_sequences"
   value: {
-    string_value: "${max_num_sequences}"
+    string_value: "128"
   }
 }
 parameters: {
   key: "enable_trt_overlap"
   value: {
-    string_value: "${enable_trt_overlap}"
+    string_value: "true"
   }
 }
+
+instance_group [
+  {
+    count: 1
+    kind : KIND_CPU
+  }
+]

@@ -47,8 +47,8 @@ ShardingInfo = NamedTuple("ShardingInfo", [("world_size", int), ("num_gpus_per_n
 NO_SHARDING = ShardingInfo(1, 1)
 
 
-def create_unique_engine_name(identifier: str, dtype: str, rank: int) -> str:
-    return f"{identifier}_{dtype}_{rank}.engine"
+def create_unique_engine_name(identifier: str, dtype: str, rank: int, tp_degree: int) -> str:
+    return f"{identifier}_{dtype}_tp{tp_degree}_rank{rank}.engine"
 
 
 class TRTEngineBuilder(ModelHubMixin):
@@ -185,7 +185,7 @@ class TRTEngineBuilder(ModelHubMixin):
         LOGGER.debug(f"Building TRT engines in parallel ({num_jobs} processes)")
         with Pool(num_jobs) as builders:
             for shard in shard_info:
-                engines = builders.map(self._build_engine_for_rank, shard, weight_files, output_path)
+                _ = builders.map(self._build_engine_for_rank, shard, weight_files, output_path)
 
     def _build_engine_for_rank(self, shard: Shard, weight_files: List[PathLike], output_path: Path):
         LOGGER.debug(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
@@ -194,12 +194,21 @@ class TRTEngineBuilder(ModelHubMixin):
 
         config = self._model_config
         model = self._weight_adapter.allocate_model(config, shard, self._dtype)
-        ranked_engine_name = create_unique_engine_name(config["model_type"], self._dtype.value, shard.rank)
+        ranked_engine_name = create_unique_engine_name(
+            config["model_type"],
+            self._dtype.value,
+            shard.rank,
+            shard.tp_size
+        )
 
         builder = Builder()
         build_config = builder.create_builder_config(
+            name=config["model_type"],
             precision=self._dtype.value,
             tensor_parallel=shard.world_size,
+            max_batch_size=32,
+            max_input_len=256,
+            max_new_tokens=2048,
             **config  # Inject model's config
         )
 

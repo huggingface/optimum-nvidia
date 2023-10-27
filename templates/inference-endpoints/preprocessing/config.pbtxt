@@ -26,7 +26,7 @@
 
 name: "preprocessing"
 backend: "python"
-max_batch_size: 32
+max_batch_size: 128
 input [
     {
         name: "QUERY"
