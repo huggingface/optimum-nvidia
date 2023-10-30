@@ -38,9 +38,18 @@ from tensorrt_llm.plugin.plugin import ContextFMHAType
 
 LOGGER = getLogger(__name__)
 
+
 # Utility classes to store build information
 BuildInfo = NamedTuple("BuildInfo", [("parallel", bool), ("num_parallel_jobs", int)])
 SERIAL_BUILD = BuildInfo(False, 1)
+
+# Utility classes to store shape information
+OptimizationProfile = NamedTuple("OptimizationProfile", [
+    ("max_batch_size", int),
+    ("max_prompt_length", int),
+    ("max_new_tokens", int)
+])
+
 
 # Utility classes to store sharding information
 ShardingInfo = NamedTuple("ShardingInfo", [("world_size", int), ("num_gpus_per_node", int)])
@@ -93,6 +102,10 @@ class TRTEngineBuilder(ModelHubMixin):
         self._dtype = DataType.FLOAT16
         self._build_info: BuildInfo = SERIAL_BUILD
         self._sharding_info: ShardingInfo = NO_SHARDING
+        self._optimization_profile: OptimizationProfile = None
+
+        # Sampling
+        self._beam_width = -1
 
     def enable_parallel_build(self, num_jobs: int = -1) -> "TRTEngineBuilder":
         """
@@ -123,11 +136,67 @@ class TRTEngineBuilder(ModelHubMixin):
 
         return self
 
+    def with_generation_profile(self, max_batch_size: int, max_prompt_length: int, max_new_tokens: int) -> "TRTEngineBuilder":
+        LOGGER.debug(
+            f"Defining generation profile: "
+            f"max_batch_size={max_batch_size}, "
+            f"max_prompt_length={max_prompt_length}, "
+            f"max_new_tokens={max_new_tokens}"
+        )
+        self._optimization_profile = OptimizationProfile(max_batch_size, max_prompt_length, max_new_tokens)
+        return self
+
+    def with_sampling_strategy(self, num_beams: int) -> "TRTEngineBuilder":
+        LOGGER.debug(f"Enabling sampling with strategy: num_beams={num_beams}")
+        self._beam_width = num_beams
+        return self
+
     def to(self, dtype: DataType) -> "TRTEngineBuilder":
         LOGGER.debug(f"Setting target dtype to {str(dtype)}")
         self._dtype = dtype
 
         return self
+
+    def validate(self) -> bool:
+        # Optimization profile
+        if self._optimization_profile is None:
+            raise ValueError(
+                "No optimization profile has been defined, please do set the profile you want this engine"
+                "to be optimized for through TRTEngineBuilder.with_optimization_profile()."
+            )
+
+        # Ensure ranges are compatible
+        optim_profile = self._optimization_profile
+        model_config = self._model_config
+        for prop, (min_value, max_value) in [
+            ("max_batch_size", (1, None)),
+            ("max_prompt_length", (1, model_config.max_sequence_length - 1)),
+            ("max_new_tokens", (1, model_config.max_sequence_length - 1)),
+        ]:
+            prop_value = getattr(optim_profile, prop)
+            if prop_value < min_value:
+                raise ValueError(f"Invalid value ({prop_value}) for {prop}. Needs to be >= {min_value}")
+
+            if max_value is not None and prop_value > max_value:
+                raise ValueError(f"Invalid value ({prop_value}) for {prop}. Needs to be <= {max_value}")
+
+        if optim_profile.max_prompt_length + optim_profile.max_new_tokens > model_config.max_sequence_length:
+            new_max_new_tokens = model_config.max_sequence_length - optim_profile.max_prompt_length
+            LOGGER.warning(
+                f"max_prompt_tokens ({optim_profile.max_prompt_length}) + max_new_tokens ({optim_profile.max_new_tokens})"
+                f" is longer than model's maximum sequence length ({model_config.max_sequence_length}). "
+                f"Truncating the max_new_tokens to {new_max_new_tokens}."
+            )
+
+        # Sampling info
+        if self._beam_width < 1:
+            LOGGER.warning(
+                "Sampling strategy was not specified, defaulting to greedy search. "
+                "If you want to define another sampling strategy, please use TRTEngineBuilder.with_sampling_strategy()."
+            )
+            self._beam_width = 1
+
+        return True
 
     def build(self, output_path: PathLike) -> PathLike:
         self._sharding_info = self._sharding_info or NO_SHARDING
@@ -154,19 +223,21 @@ class TRTEngineBuilder(ModelHubMixin):
         else:
             raise NotImplementedError("We only support loading from Safetensors checkpoints for now.")
 
+        # Sharding info
         shards_info = [
             Shard(self._sharding_info.world_size, rank, self._sharding_info.num_gpus_per_node)
             for rank in range(self._sharding_info.world_size)
         ]
 
-        if self._build_info.parallel and self._build_info.num_parallel_jobs > 1:
-            build_func = self._build_parallel
-        else:
-            build_func = self._build_serial
+        if self.validate():
+            if self._build_info.parallel and self._build_info.num_parallel_jobs > 1:
+                build_func = self._build_parallel
+            else:
+                build_func = self._build_serial
 
-        # Let's build
-        build_func(shards_info, local_files, output_path)
-        return output_path
+            # Let's build
+            build_func(shards_info, local_files, output_path)
+            return output_path
 
     def _build_serial(self, shards_info: List[Shard], weight_files: List[PathLike], output_path: Path):
         LOGGER.debug(f"Building TRT engines sequentially")
@@ -206,9 +277,9 @@ class TRTEngineBuilder(ModelHubMixin):
             name=config["model_type"],
             precision=self._dtype.value,
             tensor_parallel=shard.world_size,
-            max_batch_size=32,
-            max_input_len=256,
-            max_new_tokens=2048,
+            max_batch_size=self._optimization_profile.max_batch_size,
+            max_input_len=self._optimization_profile.max_prompt_length,
+            max_new_tokens=self._optimization_profile.max_new_tokens,
             **config  # Inject model's config
         )
 
@@ -238,7 +309,7 @@ class TRTEngineBuilder(ModelHubMixin):
                 max_batch_size=32,
                 max_input_len=256,
                 max_new_tokens=2048,
-                max_beam_width=1,
+                max_beam_width=self._beam_width,
                 max_num_tokens=config.max_sequence_length,
                 use_cache=True
             )

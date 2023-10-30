@@ -33,10 +33,23 @@ LOGGER = getLogger(__name__)
 
 if __name__ == '__main__':
     parser = ArgumentParser("🤗 TensorRT-LLM Llama implementation")
-    parser.add_argument("--dtype", choices=[dtype.value for dtype in DataType], default=DataType.FLOAT16,
-                        help="Data type to do the computations.")
-    parser.add_argument("--with-triton-structure", action="store_true",
-                        help="Generate the Triton Inference Server structure")
+    parser.add_argument(
+        "--dtype",
+        choices=[dtype.value for dtype in DataType], default=DataType.FLOAT16,
+        help="Data type to do the computations."
+    )
+
+    # Optimization profiles
+    parser.add_argument("--max-batch-size", type=int, default=1, help="Maximum batch size for the model.")
+    parser.add_argument("--max-prompt-length", type=int, default=128, help="Maximum prompt a user can give.")
+    parser.add_argument("--max-new-tokens", type=int, default=1024, help="Maximum number of tokens to generate")
+    parser.add_argument("--max-beam-width", type=int, default=1, help="Maximum number of beams for sampling")
+
+    # Triton Inference Server related
+    parser.add_argument(
+        "--with-triton-structure", action="store_true",
+        help="Generate the Triton Inference Server structure"
+    )
     parser.add_argument("model", type=str, help="The model's id or path to use.")
     parser.add_argument("output", type=Path, help="Path to store generated TensorRT engine.")
     args = parser.parse_args()
@@ -56,6 +69,8 @@ if __name__ == '__main__':
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     engine = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
         .to(args.dtype) \
+        .with_generation_profile(args.max_batch_size, args.max_prompt_length, args.max_new_tokens) \
+        .with_sampling_strategy(args.max_beam_width) \
         .build(args.output)
 
     if args.with_triton_structure:
