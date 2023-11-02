@@ -21,7 +21,7 @@ import numpy as np
 from optimum.nvidia.configs import ModelConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import WeightAdapter, shard
+from optimum.nvidia.weights import WeightAdapter, SupportsGPTQ, shard
 from optimum.nvidia.weights.safetensors import SupportsSafetensors, SafetensorsAccessor
 from safetensors import deserialize
 from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
@@ -32,14 +32,13 @@ LOGGER = getLogger(__name__)
 LAYERS_PREFIX = "model.layers"
 
 
-class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors):
+class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsGPTQ):
     """
 
     """
 
-    @property
-    def global_weights(self) -> Set[str]:
-        return {""}
+    def named_weight_parameters(self, ) -> set:
+        pass
 
     def convert(
         self,
