@@ -1,6 +1,6 @@
 name: "text-generation"
 platform: "ensemble"
-max_batch_size: 128
+max_batch_size: 32
 input [
   {
     name: "text_input"

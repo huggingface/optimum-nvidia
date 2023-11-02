@@ -22,7 +22,7 @@ from transformers import AutoTokenizer
 from optimum.nvidia import setup_logging
 
 # Setup logging
-setup_logging(True)
+setup_logging(False)
 
 from optimum.nvidia import TRTEngineBuilder
 from optimum.nvidia.lang import DataType

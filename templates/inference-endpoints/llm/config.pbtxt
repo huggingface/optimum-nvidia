@@ -1,9 +1,9 @@
 name: "llm"
 backend: "tensorrtllm"
-max_batch_size: 128
+max_batch_size: 32
 
 model_transaction_policy {
-  decoupled: true
+  decoupled: false
 }
 
 input [
@@ -148,7 +148,7 @@ parameters: {
 parameters: {
   key: "max_tokens_in_paged_kv_cache"
   value: {
-    string_value: "512"
+    string_value: ""
   }
 }
 parameters: {
@@ -166,7 +166,7 @@ parameters: {
 parameters: {
   key: "max_num_sequences"
   value: {
-    string_value: "128"
+    string_value: "16"
   }
 }
 parameters: {
