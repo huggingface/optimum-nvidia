@@ -34,6 +34,7 @@ from tensorrt_llm import Mapping as Shard, graph_rewriting
 from tensorrt_llm.builder import Builder, BuilderConfig
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
+from tensorrt_llm.quantization import QuantMode
 
 
 LOGGER = getLogger(__name__)
@@ -47,7 +48,8 @@ SERIAL_BUILD = BuildInfo(False, 1)
 OptimizationProfile = NamedTuple("OptimizationProfile", [
     ("max_batch_size", int),
     ("max_prompt_length", int),
-    ("max_new_tokens", int)
+    ("max_new_tokens", int),
+    ("max_output_length", int)
 ])
 
 
@@ -136,14 +138,31 @@ class TRTEngineBuilder(ModelHubMixin):
 
         return self
 
-    def with_generation_profile(self, max_batch_size: int, max_prompt_length: int, max_new_tokens: int) -> "TRTEngineBuilder":
+    def with_generation_profile(
+        self,
+        max_batch_size: int,
+        max_prompt_length: int,
+        max_new_tokens: int,
+        max_output_length: int = None
+    ) -> "TRTEngineBuilder":
+        if max_output_length is None:
+            # max_output_length = self._model_config.max_sequence_length
+            max_output_length = 512
+
         LOGGER.debug(
             f"Defining generation profile: "
             f"max_batch_size={max_batch_size}, "
             f"max_prompt_length={max_prompt_length}, "
-            f"max_new_tokens={max_new_tokens}"
+            f"max_new_tokens={max_new_tokens}",
+            f"max_output_length={max_output_length}"
         )
-        self._optimization_profile = OptimizationProfile(max_batch_size, max_prompt_length, max_new_tokens)
+        self._optimization_profile = OptimizationProfile(
+            max_batch_size,
+            max_prompt_length,
+            max_new_tokens,
+            max_output_length
+        )
+
         return self
 
     def with_sampling_strategy(self, num_beams: int) -> "TRTEngineBuilder":
@@ -172,6 +191,10 @@ class TRTEngineBuilder(ModelHubMixin):
             ("max_batch_size", (1, None)),
             ("max_prompt_length", (1, model_config.max_sequence_length - 1)),
             ("max_new_tokens", (1, model_config.max_sequence_length - 1)),
+            ("max_output_length", (
+                    optim_profile.max_prompt_length + optim_profile.max_new_tokens,
+                    model_config.max_sequence_length
+            ))
         ]:
             prop_value = getattr(optim_profile, prop)
             if prop_value < min_value:
@@ -276,12 +299,26 @@ class TRTEngineBuilder(ModelHubMixin):
         build_config = builder.create_builder_config(
             name=config["model_type"],
             precision=self._dtype.value,
-            tensor_parallel=shard.world_size,
+            vocab_size=config.vocab_size,
+            hidden_size=config.hidden_size,
+            hidden_act=config.activation,
+            num_heads=config.num_heads,
+            num_kv_heads=config.num_kv_heads,
+            num_layers=config.num_layers,
+            max_position_embeddings=config.max_sequence_length,
             max_batch_size=self._optimization_profile.max_batch_size,
-            max_input_len=self._optimization_profile.max_prompt_length,
-            max_new_tokens=self._optimization_profile.max_new_tokens,
-            **config  # Inject model's config
+            max_input_len=self._model_config.max_sequence_length,
+            max_output_len=self._optimization_profile.max_output_length,
+            max_num_tokens=None,
+            strongly_typed=False,
+            tensor_parallel=shard.world_size,
+            pipeline_parallel=1,
+            parallel_build=False,
+            use_refit=False,
+            quant_mode=QuantMode(0)
+            # **config  # Inject model's config
         )
+        # build_config.trt_builder_config.builder_optimization_level = 5
 
         if issubclass(self._weight_adapter, SupportsSafetensors):
             self._weight_adapter.from_safetensors(weight_files, model, config, build_config, shard)
@@ -293,7 +330,7 @@ class TRTEngineBuilder(ModelHubMixin):
         # Enable plugins
         network.plugin_config.set_gpt_attention_plugin(dtype=self._dtype.value)
         network.plugin_config.set_gemm_plugin(dtype=self._dtype.value)
-        network.plugin_config.set_rmsnorm_plugin(dtype=self._dtype.value)
+        # network.plugin_config.set_rmsnorm_plugin(dtype=self._dtype.value)
 
         network.plugin_config.set_context_fmha(ContextFMHAType.enabled)
         network.plugin_config.enable_remove_input_padding()
@@ -306,11 +343,11 @@ class TRTEngineBuilder(ModelHubMixin):
         with net_guard(network):
             network.set_named_parameters(model.named_parameters())
             inputs = model.prepare_inputs(
-                max_batch_size=32,
-                max_input_len=256,
-                max_new_tokens=2048,
+                max_batch_size=self._optimization_profile.max_batch_size,
+                max_input_len=self._model_config.max_sequence_length,
+                max_new_tokens=self._optimization_profile.max_new_tokens,
+                max_num_tokens=None,
                 max_beam_width=self._beam_width,
-                max_num_tokens=config.max_sequence_length,
                 use_cache=True
             )
 
