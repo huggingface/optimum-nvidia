@@ -56,6 +56,7 @@ if __name__ == '__main__':
     tokenizer = AutoTokenizer.from_pretrained(args.model)
     engine = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
         .to(args.dtype) \
+        .shard(args.tensor_parallelism, args.pipeline_parallelism, args.world_size, args.gpus_per_node) \
         .with_generation_profile(args.max_batch_size, args.max_prompt_length, args.max_new_tokens) \
         .with_sampling_strategy(args.max_beam_width) \
         .build(args.output)

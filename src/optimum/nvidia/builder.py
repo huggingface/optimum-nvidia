@@ -54,8 +54,13 @@ OptimizationProfile = NamedTuple("OptimizationProfile", [
 
 
 # Utility classes to store sharding information
-ShardingInfo = NamedTuple("ShardingInfo", [("world_size", int), ("num_gpus_per_node", int)])
-NO_SHARDING = ShardingInfo(1, 1)
+ShardingInfo = NamedTuple("ShardingInfo", [
+    ("tp_degree", int),
+    ("pp_degree", int),
+    ("world_size", int),
+    ("num_gpus_per_node", int)
+])
+NO_SHARDING = ShardingInfo(1, 1, 1, 1)
 
 
 def create_unique_engine_name(identifier: str, dtype: str, rank: int, tp_degree: int) -> str:
@@ -123,7 +128,7 @@ class TRTEngineBuilder(ModelHubMixin):
 
         return self
 
-    def shard(self, world_size: int, num_gpus_per_node: int) -> "TRTEngineBuilder":
+    def shard(self, tp_degree: int, pp_degree: int, world_size: int, num_gpus_per_node: int) -> "TRTEngineBuilder":
         """
 
         :param world_size:
@@ -134,7 +139,7 @@ class TRTEngineBuilder(ModelHubMixin):
         #     raise Exception(f"Cannot specify twice sharding config ({self._sharding_info})")
 
         LOGGER.debug(f"Setting sharding strategy to world_size={world_size}, num_gpus_per_node={num_gpus_per_node}")
-        self._sharding_info = ShardingInfo(world_size, num_gpus_per_node)
+        self._sharding_info = ShardingInfo(tp_degree, pp_degree, world_size, num_gpus_per_node)
 
         return self
 
@@ -247,9 +252,10 @@ class TRTEngineBuilder(ModelHubMixin):
             raise NotImplementedError("We only support loading from Safetensors checkpoints for now.")
 
         # Sharding info
+        sharding = self._sharding_info
         shards_info = [
-            Shard(self._sharding_info.world_size, rank, self._sharding_info.num_gpus_per_node)
-            for rank in range(self._sharding_info.world_size)
+            Shard(sharding.world_size, rank, sharding.num_gpus_per_node, sharding.tp_degree, sharding.pp_degree)
+            for rank in range(sharding.world_size)
         ]
 
         if self.validate():
@@ -374,7 +380,7 @@ class TRTEngineBuilder(ModelHubMixin):
             builder.save_config(build_config, config_path)
             LOGGER.debug(f"Saved engine config at {config_path}")
 
-            self._serialize_engine(engine, output_path.joinpath(ranked_engine_name))
+        self._serialize_engine(engine, output_path.joinpath(ranked_engine_name))
 
     def _serialize_engine(self, engine, path: Path):
         LOGGER.info(f'Saving engine to {path}...')
