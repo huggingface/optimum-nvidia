@@ -13,10 +13,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from logging import basicConfig, DEBUG, INFO
+from tensorrt_llm.logger import logger
 
 
 DEFAULT_LOGGING_FMT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
 def setup_logging(verbose: bool = False):
+    logger.set_level("info")
     basicConfig(format=DEFAULT_LOGGING_FMT, level=DEBUG if verbose else INFO)
