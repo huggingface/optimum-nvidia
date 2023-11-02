@@ -25,31 +25,18 @@ from optimum.nvidia import setup_logging
 setup_logging(False)
 
 from optimum.nvidia import TRTEngineBuilder
-from optimum.nvidia.lang import DataType
 from optimum.nvidia.models.llama import LlamaWeightAdapter
+from optimum.nvidia.utils.cli import *
 
 LOGGER = getLogger(__name__)
 
 
 if __name__ == '__main__':
     parser = ArgumentParser("🤗 TensorRT-LLM Llama implementation")
-    parser.add_argument(
-        "--dtype",
-        choices=[dtype.value for dtype in DataType], default=DataType.FLOAT16,
-        help="Data type to do the computations."
-    )
+    register_common_model_topology_args(parser)
+    register_optimization_profiles_args(parser)
+    register_triton_server_args(parser)
 
-    # Optimization profiles
-    parser.add_argument("--max-batch-size", type=int, default=1, help="Maximum batch size for the model.")
-    parser.add_argument("--max-prompt-length", type=int, default=128, help="Maximum prompt a user can give.")
-    parser.add_argument("--max-new-tokens", type=int, default=1024, help="Maximum number of tokens to generate")
-    parser.add_argument("--max-beam-width", type=int, default=1, help="Maximum number of beams for sampling")
-
-    # Triton Inference Server related
-    parser.add_argument(
-        "--with-triton-structure", action="store_true",
-        help="Generate the Triton Inference Server structure"
-    )
     parser.add_argument("model", type=str, help="The model's id or path to use.")
     parser.add_argument("output", type=Path, help="Path to store generated TensorRT engine.")
     args = parser.parse_args()
