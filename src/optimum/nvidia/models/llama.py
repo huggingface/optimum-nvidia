@@ -161,7 +161,9 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors):
             mlp_hidden_size=config.intermediate_size,
             hidden_act=config.activation,
             dtype=dtype.value,
-            mapping=sharding
+            mapping=sharding,
+            rms_norm_eps=config["rms_norm_eps"],
+            embedding_sharding_dim=1,  # As Meta does
         )
 
     @classmethod
