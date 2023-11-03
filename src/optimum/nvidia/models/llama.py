@@ -14,14 +14,14 @@
 #  limitations under the License.
 from logging import getLogger
 from os import PathLike
-from typing import List, Mapping, Set, Tuple, Union
+from typing import List, Iterable, Mapping, Set, Tuple, Union
 
 import numpy as np
 
 from optimum.nvidia.configs import ModelConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import WeightAdapter, SupportsGPTQ, shard
+from optimum.nvidia.weights import WeightAdapter, SupportsWeightCompression, shard
 from optimum.nvidia.weights.safetensors import SupportsSafetensors, SafetensorsAccessor
 from safetensors import deserialize
 from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
@@ -32,13 +32,14 @@ LOGGER = getLogger(__name__)
 LAYERS_PREFIX = "model.layers"
 
 
-class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsGPTQ):
+class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightCompression):
     """
 
     """
 
-    def named_weight_parameters(self, ) -> set:
-        pass
+    @property
+    def named_weight_parameters(self) -> Iterable[Tuple[str, np.array]]:
+        return []
 
     def convert(
         self,

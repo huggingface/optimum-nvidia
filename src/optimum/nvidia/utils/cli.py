@@ -1,8 +1,9 @@
-from argparse import ArgumentParser
+from argparse import ArgumentParser, Namespace
 
 from optimum.nvidia.lang import DataType
 
 
+# Model topology (sharding, pipelining, dtype)
 def register_common_model_topology_args(parser: ArgumentParser) -> ArgumentParser:
     parser.add_argument(
         "--dtype",
@@ -24,6 +25,7 @@ def register_common_model_topology_args(parser: ArgumentParser) -> ArgumentParse
     return parser
 
 
+# TensorRT optimization profiles
 def register_optimization_profiles_args(parser: ArgumentParser) -> ArgumentParser:
     parser.add_argument("--max-batch-size", type=int, default=1, help="Maximum batch size for the model.")
     parser.add_argument("--max-prompt-length", type=int, default=128, help="Maximum prompt a user can give.")
@@ -33,9 +35,39 @@ def register_optimization_profiles_args(parser: ArgumentParser) -> ArgumentParse
     return parser
 
 
+# Triton Inference Server
 def register_triton_server_args(parser: ArgumentParser) -> ArgumentParser:
     parser.add_argument(
         "--with-triton-structure", action="store_true",
         help="Generate the Triton Inference Server structure"
     )
     return parser
+
+
+# Quantization
+def register_quantization_args(parser: ArgumentParser) -> ArgumentParser:
+    parser.add_argument("--quantize-weights", action="store_true", help="Enable weight compression such as GPTQ/AWQ")
+    parser.add_argument("--quantize-activations", action="store_true", help="Enable weight compression such as GPTQ/AWQ")
+    parser.add_argument("--quantize-per-group", action="store_true", help="Enable weight compression factor to be computed per-group")
+    parser.add_argument("--quantize-per-channel", action="store_true", help="Enable weight compression factor to be computed per-group")
+    parser.add_argument("--quantize-per-token", action="store_true", help="Enable weight compression factor to be computed per-group")
+    parser.add_argument("--quantization-bits", type=int, default=8, choices=[4, 8], help="Number of bits to represent weights.")
+    return parser
+
+
+def postprocess_quantization_parameters(params: Namespace) -> Namespace:
+    from tensorrt_llm.quantization import QuantMode
+
+    params.quantization_mode = QuantMode.from_description(
+        quantize_weights=params.quantize_weights,
+        quantize_activations=params.quantize_activations,
+        per_token=params.quantize_per_token,
+        per_channel=params.quantize_per_channel,
+        per_group=params.quantize_per_group,
+        use_int4_weights=params.quantization_bits == 4,
+        use_int8_kv_cache=False,
+        use_fp8_kv_cache=False,
+        use_fp8_qdq=False
+    )
+
+    return params

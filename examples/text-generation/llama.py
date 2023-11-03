@@ -36,10 +36,12 @@ if __name__ == '__main__':
     register_common_model_topology_args(parser)
     register_optimization_profiles_args(parser)
     register_triton_server_args(parser)
+    register_quantization_args(parser)
 
     parser.add_argument("model", type=str, help="The model's id or path to use.")
     parser.add_argument("output", type=Path, help="Path to store generated TensorRT engine.")
     args = parser.parse_args()
+    args = postprocess_quantization_parameters(args)
 
     # Ensure the output folder exists or create the folder
     if args.output.exists():
@@ -54,12 +56,13 @@ if __name__ == '__main__':
 
     LOGGER.info(f"Exporting {args.model} to TensorRT-LLM engine at {args.output}")
     tokenizer = AutoTokenizer.from_pretrained(args.model)
-    engine = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
+    builder = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
         .to(args.dtype) \
         .shard(args.tensor_parallelism, args.pipeline_parallelism, args.world_size, args.gpus_per_node) \
+        .with_quantization_profile(args.quantization_mode) \
         .with_generation_profile(args.max_batch_size, args.max_prompt_length, args.max_new_tokens) \
-        .with_sampling_strategy(args.max_beam_width) \
-        .build(args.output)
+        .with_sampling_strategy(args.max_beam_width)
+    builder.build(args.output)
 
     if args.with_triton_structure:
         # generator = TritonLayoutGenerator()

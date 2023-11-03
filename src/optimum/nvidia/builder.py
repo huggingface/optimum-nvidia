@@ -25,9 +25,10 @@ from huggingface_hub import ModelHubMixin, HfFileSystem
 from huggingface_hub.hub_mixin import T
 
 from optimum.nvidia.configs import ModelConfig, TransformersConfig
+from optimum.nvidia.errors import UnsupportedOperation
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.utils import ensure_file_exists_locally
-from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter
+from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter, SupportsWeightCompression, QUANTIZATION_PROTOCOLS
 from optimum.nvidia.weights.hub import get_safetensors_files
 from optimum.nvidia.utils.onnx import to_onnx
 from tensorrt_llm import Mapping as Shard, graph_rewriting
@@ -109,6 +110,7 @@ class TRTEngineBuilder(ModelHubMixin):
         self._dtype = DataType.FLOAT16
         self._build_info: BuildInfo = SERIAL_BUILD
         self._sharding_info: ShardingInfo = NO_SHARDING
+        self._quantization_descriptor = None
         self._optimization_profile: OptimizationProfile = None
 
         # Sampling
@@ -143,6 +145,17 @@ class TRTEngineBuilder(ModelHubMixin):
 
         return self
 
+    def with_quantization_profile(self, descriptor: QuantMode) -> "TRTEngineBuilder":
+        if not isinstance(self._weight_adapter, SupportsWeightCompression):
+            raise UnsupportedOperation.quantization(
+                f"{self._weight_adapter} doesn't implement one of the quantization protocols {QUANTIZATION_PROTOCOLS},"
+                f" Please open an issue on huggingface/optimum-nvidia repository to request support."
+            )
+
+        LOGGER.debug(f"Defining quantization schema: {descriptor}")
+        self._quantization_descriptor = descriptor
+        return self
+
     def with_generation_profile(
         self,
         max_batch_size: int,
@@ -151,6 +164,7 @@ class TRTEngineBuilder(ModelHubMixin):
         max_output_length: int = None
     ) -> "TRTEngineBuilder":
         if max_output_length is None:
+            # TODO: Understand why we can set to a larger value?
             # max_output_length = self._model_config.max_sequence_length
             max_output_length = 512
 
@@ -182,6 +196,13 @@ class TRTEngineBuilder(ModelHubMixin):
         return self
 
     def validate(self) -> bool:
+        if self._quantization_descriptor is None:
+            LOGGER.warning(
+                "Quantization descriptor was None, assuming no quantization will be applied. "
+                "If you want to change this behaviour, please use TRTEngineBuilder.with_quantization_schema()"
+            )
+            self._quantization_descriptor = QuantMode(0)
+
         # Optimization profile
         if self._optimization_profile is None:
             raise ValueError(
@@ -317,11 +338,11 @@ class TRTEngineBuilder(ModelHubMixin):
             max_output_len=self._optimization_profile.max_output_length,
             max_num_tokens=None,
             strongly_typed=False,
-            tensor_parallel=shard.world_size,
-            pipeline_parallel=1,
+            tensor_parallel=shard.tp_size,
+            pipeline_parallel=shard.pp_size,
             parallel_build=False,
             use_refit=False,
-            quant_mode=QuantMode(0)
+            quant_mode=self._quantization_descriptor
             # **config  # Inject model's config
         )
         # build_config.trt_builder_config.builder_optimization_level = 5
