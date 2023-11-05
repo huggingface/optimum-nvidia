@@ -14,7 +14,7 @@
 #  limitations under the License.
 from logging import getLogger
 from os import PathLike
-from typing import List, Iterable, Mapping, Set, Tuple, Union
+from typing import List, Iterable, Mapping, Set, Tuple, Union, Optional
 
 import numpy as np
 
@@ -37,9 +37,17 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightCompr
 
     """
 
+    EXCLUDED_WEIGHT_PARAMETERS = set(["lm_head"])
+
+    @staticmethod
     @property
-    def named_weight_parameters(self) -> Iterable[Tuple[str, np.array]]:
-        return []
+    def named_weight_parameters() -> Iterable[str]:
+        return {
+            "self_attn.o_proj.weight",
+            "mlp.up_proj.weight",
+            "mlp.down_proj.weight",
+            "mlp.gate_proj.weight",
+        }
 
     def convert(
         self,

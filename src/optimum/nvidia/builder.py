@@ -29,8 +29,10 @@ from optimum.nvidia.errors import UnsupportedOperation
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.utils import ensure_file_exists_locally
 from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter, SupportsWeightCompression, QUANTIZATION_PROTOCOLS
+from optimum.nvidia.weights.compression import awq_weight_only_compression
 from optimum.nvidia.weights.hub import get_safetensors_files
 from optimum.nvidia.utils.onnx import to_onnx
+
 from tensorrt_llm import Mapping as Shard, graph_rewriting
 from tensorrt_llm.builder import Builder, BuilderConfig
 from tensorrt_llm.network import net_guard
@@ -166,7 +168,7 @@ class TRTEngineBuilder(ModelHubMixin):
         if max_output_length is None:
             # TODO: Understand why we can set to a larger value?
             # max_output_length = self._model_config.max_sequence_length
-            max_output_length = 512
+            max_output_length = 1024
 
         LOGGER.debug(
             f"Defining generation profile: "
@@ -346,6 +348,19 @@ class TRTEngineBuilder(ModelHubMixin):
             # **config  # Inject model's config
         )
         # build_config.trt_builder_config.builder_optimization_level = 5
+
+        if self._quantization_descriptor.is_weight_only():
+            if isinstance(self._weight_adapter, SupportsWeightCompression):
+                weights_compression = self._weight_adapter
+                quantization_desc = self._quantization_descriptor
+
+                # Apply AWQ style weight quantization
+                model = awq_weight_only_compression(
+                    model,
+                    quantization_desc,
+                    group_size=128,  # TODO: Move to quantization parameter
+                    exclude_modules=weights_compression.EXCLUDED_WEIGHT_PARAMETERS
+                )
 
         if issubclass(self._weight_adapter, SupportsSafetensors):
             self._weight_adapter.from_safetensors(weight_files, model, config, build_config, shard)
