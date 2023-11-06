@@ -2,11 +2,26 @@ FROM tensorrt_llm/devel:latest
 
 COPY third-party/tensorrt-llm /opt/tensorrt-llm
 
+# Install tensorrt-llm
 WORKDIR /opt/tensorrt-llm
 RUN python3 scripts/build_wheel.py --trt_root /usr/local/tensorrt && \
     pip install build/tensorrt_llm*.whl && \
-    python3 scripts/build_wheel.py --clean  --trt_root /usr/local/tensorrt
+    python3 scripts/build_wheel.py --clean -j --trt_root /usr/local/tensorrt
 
+# Install NVIDIA Ammo Quantization Framework
+ARG NVIDIA_AMMO_VERSION=0.3.0
+ARG NVIDIA_AMMO_DOWNLOAD_URL=https://developer.nvidia.com/downloads/assets/cuda/files/nvidia-ammo/nvidia_ammo-${NVIDIA_AMMO_VERSION}.tar.gz
+
+RUN cuda_version=$(nvcc --version | grep 'release' | awk '{print $6}' | awk -F'[V.]' '{print $2$3}') && \
+    # Obtain the python version from the system.
+    python_version=$(python3 --version 2>&1 | awk '{print $2}' | awk -F. '{print $1$2}') && \
+    # Download and install the AMMO package from the DevZone.
+    wget ${NVIDIA_AMMO_DOWNLOAD_URL} && \
+    tar -xzf nvidia_ammo-${NVIDIA_AMMO_VERSION}.tar.gz && \
+    pip install nvidia_ammo-${NVIDIA_AMMO_VERSION}/nvidia_ammo-${NVIDIA_AMMO_VERSION}+cu$cuda_version-cp$python_version-cp$python_version-linux_x86_64.whl && \
+    rm -rf nvidia_ammo-${NVIDIA_AMMO_VERSION}*
+
+# Install dependencies
 RUN python -m pip install huggingface_hub
 
 WORKDIR /workspace
