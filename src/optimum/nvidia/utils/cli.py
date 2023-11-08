@@ -1,6 +1,7 @@
 from argparse import ArgumentParser, Namespace
 
 from optimum.nvidia.lang import DataType
+from optimum.nvidia.configs import QuantizationConfig
 
 
 # Model topology (sharding, pipelining, dtype)
@@ -52,22 +53,34 @@ def register_quantization_args(parser: ArgumentParser) -> ArgumentParser:
     parser.add_argument("--quantize-per-channel", action="store_true", help="Enable weight compression factor to be computed per-group")
     parser.add_argument("--quantize-per-token", action="store_true", help="Enable weight compression factor to be computed per-group")
     parser.add_argument("--quantization-bits", type=int, default=8, choices=[4, 8], help="Number of bits to represent weights.")
+    parser.add_argument("--quantization-group_size", type=int, default=128, help="Number of element within a group to compute weight scales.")
     return parser
 
 
 def postprocess_quantization_parameters(params: Namespace) -> Namespace:
     from tensorrt_llm.quantization import QuantMode
 
-    params.quantization_mode = QuantMode.from_description(
-        quantize_weights=params.quantize_weights,
-        quantize_activations=params.quantize_activations,
-        per_token=params.quantize_per_token,
-        per_channel=params.quantize_per_channel,
-        per_group=params.quantize_per_group,
-        use_int4_weights=params.quantization_bits == 4,
-        use_int8_kv_cache=False,
-        use_fp8_kv_cache=False,
-        use_fp8_qdq=False
+    if params.quantize_per_channel:
+        group_size = 1
+    elif params.quantize_per_group:
+        group_size = params.quantization_group_size
+    else:
+        group_size = -1
+
+    params.has_quantization_step = params.quantize_weights or params.quantize_activations
+    params.quantization_config = QuantizationConfig(
+        mode=QuantMode.from_description(
+            quantize_weights=params.quantize_weights,
+            quantize_activations=params.quantize_activations,
+            per_token=params.quantize_per_token,
+            per_channel=params.quantize_per_channel,
+            per_group=params.quantize_per_group,
+            use_int4_weights=params.quantization_bits == 4,
+            use_int8_kv_cache=False,
+            use_fp8_kv_cache=False,
+            use_fp8_qdq=False
+        ),
+        group_size=group_size
     )
 
     return params

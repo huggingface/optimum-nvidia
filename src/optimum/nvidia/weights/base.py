@@ -19,6 +19,7 @@ import numpy as np
 
 from optimum.nvidia.configs import ModelConfig
 from optimum.nvidia.lang import DataType
+from optimum.nvidia.configs import QuantizationConfig
 from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
 
 
@@ -38,6 +39,7 @@ class WeightAdapter(ABC):
         model: Module,
         config: ModelConfig,
         builder: BuilderConfig,
+        qconfig: QuantizationConfig,
         rank: int,
         weights: Mapping[str, np.array]
     ) -> Module:
@@ -46,6 +48,7 @@ class WeightAdapter(ABC):
         :param model:
         :param config
         :param builder
+        :param qconfig
         :param rank:
         :param weights
         :return:

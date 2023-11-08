@@ -25,7 +25,7 @@ import numpy as np
 from safetensors.numpy import load, safe_open
 from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
 
-from optimum.nvidia.configs import ModelConfig
+from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 
 LOGGER = getLogger(__name__)
 
@@ -101,6 +101,7 @@ class SupportsSafetensors(Protocol[M_co]):
         model: M_co,
         config: ModelConfig,
         builder_config: BuilderConfig,
+        qconfig: QuantizationConfig,
         sharding_config: ShardingConfig,
     ) -> Module:
         """
@@ -109,6 +110,7 @@ class SupportsSafetensors(Protocol[M_co]):
         :param model:
         :param config:
         :param builder_config:
+        :param qconfig:
         :param sharding_config
         :return:
         """

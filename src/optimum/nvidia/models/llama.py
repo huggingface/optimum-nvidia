@@ -18,11 +18,12 @@ from typing import List, Iterable, Mapping, Set, Tuple, Union, Optional
 
 import numpy as np
 
-from optimum.nvidia.configs import ModelConfig
+from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import WeightAdapter, SupportsWeightCompression, shard
-from optimum.nvidia.weights.safetensors import SupportsSafetensors, SafetensorsAccessor
+from optimum.nvidia.weights import WeightAdapter, shard
+from optimum.nvidia.weights import SupportsSafetensors, SupportsWeightCompression
+from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 from safetensors import deserialize
 from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
 from tensorrt_llm.models import LLaMAForCausalLM
@@ -37,23 +38,25 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightCompr
 
     """
 
-    EXCLUDED_WEIGHT_PARAMETERS = set(["lm_head"])
+    QUANTIZATION_EXCLUDED_PARAMETERS = set(["lm_head"])
+    NAMED_WEIGHT_PARAMETERS = {
+        "self_attn.o_proj.weight": ("attention.dense", 1),
+        "mlp.up_proj.weight": ("mlp.gate.weight", 0),
+        "mlp.down_proj.weight": ("mlp.proj.weight", 1),
+        "mlp.gate_proj.weight": ("mlp.fc.weight", 0)
+    }
 
     @staticmethod
     @property
     def named_weight_parameters() -> Iterable[str]:
-        return {
-            "self_attn.o_proj.weight",
-            "mlp.up_proj.weight",
-            "mlp.down_proj.weight",
-            "mlp.gate_proj.weight",
-        }
+        return LlamaWeightAdapter.NAMED_WEIGHT_PARAMETERS.keys()
 
     def convert(
         self,
         model: Module,
         config: ModelConfig,
         builder: BuilderConfig,
+        qconfig: QuantizationConfig,
         rank: int,
         weights: Mapping[str, np.array]
     ) -> Module:
@@ -78,9 +81,8 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightCompr
                         factor = tp_size // num_head
                         weight = weight.reshape(num_head, 1, head_size, -1).repeat(factor, axis=1)
                         weight = weight.reshape(num_head * reps * head_size, -1).clone()
-                    qkv_weight = [q_weight, k_weight, v_weight]
-            else:
-                qkv_weight = np.concatenate((q_weight, k_weight, v_weight), axis=0)
+
+            qkv_weight = [q_weight, k_weight, v_weight]
 
             # Insert the packed weights inside the weights
             qkv_packed_layers.append(qkv_weight)
@@ -128,20 +130,28 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightCompr
 
             # Self attention layer
             qkv = qkv_packed_layers[idx]
+            q, k, v = qkv
+
+            # Shard
             if config.use_multi_query_attention:  # TODO: support GQA
-                q, k, v = qkv
                 wq, wk, wv = (
                     shard(q, rank, shard_info.tp_size, axis=0),
                     shard(k, rank, shard_info.tp_size, axis=0),
                     shard(v, rank, shard_info.tp_size, axis=0),
                 )
+
                 qkw_weight = np.concatenate((wq, wk, wv), axis=0)
             else:
+                qkw_weight = np.concatenate((q_weight, k_weight, v_weight), axis=0)
                 qkv = qkv.reshape(3, config.hidden_size, config.hidden_size)
                 rank_tensor = shard(qkv, rank, shard_info.tp_size, axis=1)
                 qkv_weight = rank_tensor.reshape(-1, config.hidden_size)
 
-            model.layers[idx].attention.qkv.weight.value = np.ascontiguousarray(qkv_weight)
+
+            if qconfig.mode == QUANTIZATION_DISABLED:
+                model.layers[idx].attention.qkv.weight.value = np.ascontiguousarray(qkv_weight)
+            else:
+                raise NotImplementedError("quantized weights are not yet implemented")
 
             # Common projection logic
             for (src, dst, shard_axis) in [
@@ -181,6 +191,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightCompr
         model: Module,
         config: ModelConfig,
         builder_config: BuilderConfig,
+        qconfig: QuantizationConfig,
         sharding_config: ShardingConfig,
     ) -> Module:
         if not isinstance(model, LLaMAForCausalLM):
@@ -188,7 +199,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightCompr
 
         accessor = SafetensorsAccessor.from_files(paths)
         adapter = cls(sharding_config)
-        adapter.convert(model, config, builder_config, sharding_config.rank, accessor)
+        adapter.convert(model, config, builder_config, qconfig, sharding_config.rank, accessor)
 
         return model
 

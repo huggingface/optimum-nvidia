@@ -12,5 +12,18 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import functools
 
 from .fs import *
+
+
+def rgetattr(obj, attr):
+    """
+    Recursively get object attribute
+    :param obj: The root object we want to retrieve nested attribute
+    :param attr: The attribute path where nested attribute are comma delimited
+    :return:
+    """
+    def _getattr(obj, attr):
+        return getattr(obj, attr)
+    return functools.reduce(_getattr, [obj] + attr.split('.'))

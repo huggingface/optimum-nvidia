@@ -22,6 +22,6 @@ RUN cuda_version=$(nvcc --version | grep 'release' | awk '{print $6}' | awk -F'[
     rm -rf nvidia_ammo-${NVIDIA_AMMO_VERSION}*
 
 # Install dependencies
-RUN python -m pip install huggingface_hub
+RUN python -m pip install datasets, huggingface_hub, transformers
 
 WORKDIR /workspace

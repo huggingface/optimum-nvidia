@@ -24,12 +24,12 @@ from typing import NamedTuple, Optional, Type, Union, Dict, List
 from huggingface_hub import ModelHubMixin, HfFileSystem
 from huggingface_hub.hub_mixin import T
 
-from optimum.nvidia.configs import ModelConfig, TransformersConfig
+from optimum.nvidia.configs import ModelConfig, TransformersConfig, QuantizationConfig
 from optimum.nvidia.errors import UnsupportedOperation
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.utils import ensure_file_exists_locally
 from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter, SupportsWeightCompression, QUANTIZATION_PROTOCOLS
-from optimum.nvidia.weights.compression import awq_weight_only_compression
+from optimum.nvidia.weights.quantization import to_awq_module
 from optimum.nvidia.weights.hub import get_safetensors_files
 from optimum.nvidia.utils.onnx import to_onnx
 
@@ -112,7 +112,7 @@ class TRTEngineBuilder(ModelHubMixin):
         self._dtype = DataType.FLOAT16
         self._build_info: BuildInfo = SERIAL_BUILD
         self._sharding_info: ShardingInfo = NO_SHARDING
-        self._quantization_descriptor = None
+        self._quantization_descriptor: QuantizationConfig = None
         self._optimization_profile: OptimizationProfile = None
 
         # Sampling
@@ -147,7 +147,7 @@ class TRTEngineBuilder(ModelHubMixin):
 
         return self
 
-    def with_quantization_profile(self, descriptor: QuantMode) -> "TRTEngineBuilder":
+    def with_quantization_profile(self, descriptor: QuantMode, group_size: int = -1) -> "TRTEngineBuilder":
         if not isinstance(self._weight_adapter, SupportsWeightCompression):
             raise UnsupportedOperation.quantization(
                 f"{self._weight_adapter} doesn't implement one of the quantization protocols {QUANTIZATION_PROTOCOLS},"
@@ -203,7 +203,7 @@ class TRTEngineBuilder(ModelHubMixin):
                 "Quantization descriptor was None, assuming no quantization will be applied. "
                 "If you want to change this behaviour, please use TRTEngineBuilder.with_quantization_schema()"
             )
-            self._quantization_descriptor = QuantMode(0)
+            self._quantization_descriptor = QuantizationConfig(QuantMode(0), 0)
 
         # Optimization profile
         if self._optimization_profile is None:
@@ -349,21 +349,21 @@ class TRTEngineBuilder(ModelHubMixin):
         )
         # build_config.trt_builder_config.builder_optimization_level = 5
 
-        if self._quantization_descriptor.is_weight_only():
+        qconfig = self._quantization_descriptor
+        if qconfig.mode.is_weight_only():
             if isinstance(self._weight_adapter, SupportsWeightCompression):
                 weights_compression = self._weight_adapter
-                quantization_desc = self._quantization_descriptor
 
                 # Apply AWQ style weight quantization
-                model = awq_weight_only_compression(
+                model = to_awq_module(
                     model,
-                    quantization_desc,
-                    group_size=128,  # TODO: Move to quantization parameter
-                    exclude_modules=weights_compression.EXCLUDED_WEIGHT_PARAMETERS
+                    qconfig.mode,
+                    group_size=qconfig.group_size,
+                    exclude_modules=weights_compression.QUANTIZATION_EXCLUDED_PARAMETERS
                 )
 
         if issubclass(self._weight_adapter, SupportsSafetensors):
-            self._weight_adapter.from_safetensors(weight_files, model, config, build_config, shard)
+            self._weight_adapter.from_safetensors(weight_files, model, config, build_config, qconfig, shard)
 
         # Let's build the network
         network = builder.create_network()

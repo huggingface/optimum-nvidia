@@ -34,7 +34,7 @@ INSTALL_REQUIRES = [
     "optimum >= 1.13.0",
 ]
 
-TESTS_REQUIRE = [
+TESTS_REQUIRES = [
     "pytest",
     "psutil",
     "parameterized",
@@ -49,9 +49,18 @@ QUALITY_REQUIRES = [
     "hf_doc_builder @ git+https://github.com/huggingface/doc-builder.git",
 ]
 
+
+QUANTIZATION_REQUIRES = [
+    "ammo"  # This one is a bit harder to install ...
+    "datasets"
+    "transformers",
+    "torch",
+]
+
 EXTRAS_REQUIRE = {
-    "tests": TESTS_REQUIRE,
+    "tests": TESTS_REQUIRES,
     "quality": QUALITY_REQUIRES,
+    "quantization": QUANTIZATION_REQUIRES,
 }
 
 setup(
