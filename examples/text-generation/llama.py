@@ -80,12 +80,20 @@ if __name__ == '__main__':
         tokenizer.save_pretrained(tokenizer_output)
 
     with open(args.output.joinpath("config.json"), mode="r", encoding="utf-8") as config_f:
+        import torch
         from json import load
-        config = load(config_f)
+        from tokenizers import Tokenizer
+        from transformers import GenerationConfig
 
-        with open(args.output.joinpath("llama_float16_tp1_rank0.engine"), mode="rb") as model_f:
-            from tensorrt_llm import Mapping
-            engine = model_f.read()
-            model = TRTEngineForCausalLM(config, Mapping(), engine, use_cuda_graph=False)
+        config = load(config_f)
+        tokenizer = Tokenizer.from_pretrained(args.model, auth_token=args.hub_token)
+        model = TRTEngineForCausalLM(config, args.output, args.gpus_per_node)
+
+        while True:
+            prompt = input("Enter text... ")
+            tokens = torch.tensor(tokenizer.encode(prompt).ids).int()
+            generated = model.generate(tokens, top_k=40, top_p=0.7, repetition_penalty=10)
+
+            print(tokenizer.decode(generated.flatten().tolist()))
 
     print(f"TRTLLM engines have been saved at {args.output}.")
