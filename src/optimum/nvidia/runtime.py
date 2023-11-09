@@ -67,9 +67,9 @@ class TRTEngineForCausalLM(TRTEnginePretrainedModel):
         repetition_penalty: float = 0.0,
         length_penalty: float = 1.0,
         seed: int = 0,
-        pad_token_id = 0,
-        bos_token_id = 1,
-        eos_token_id = 2
+        pad_token_id: int = 0,
+        bos_token_id: int = 1,
+        eos_token_id: int = 2
     ):
         # If no GenerationConfig is provided, let's allocate one with default settings
         generation_config = ctrrt.SamplingConfig(min(num_beams, self._max_beam_width))
