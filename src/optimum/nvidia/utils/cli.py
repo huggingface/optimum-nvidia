@@ -3,6 +3,8 @@ from argparse import ArgumentParser, Namespace
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.configs import QuantizationConfig
 
+from tensorrt_llm.quantization import QuantMode
+
 
 # Model topology (sharding, pipelining, dtype)
 def register_common_model_topology_args(parser: ArgumentParser) -> ArgumentParser:
@@ -47,40 +49,26 @@ def register_triton_server_args(parser: ArgumentParser) -> ArgumentParser:
 
 # Quantization
 def register_quantization_args(parser: ArgumentParser) -> ArgumentParser:
-    parser.add_argument("--quantize-weights", action="store_true", help="Enable weight compression such as GPTQ/AWQ")
-    parser.add_argument("--quantize-activations", action="store_true", help="Enable weight compression such as GPTQ/AWQ")
-    parser.add_argument("--quantize-per-group", action="store_true", help="Enable weight compression factor to be computed per-group")
-    parser.add_argument("--quantize-per-channel", action="store_true", help="Enable weight compression factor to be computed per-group")
-    parser.add_argument("--quantize-per-token", action="store_true", help="Enable weight compression factor to be computed per-group")
-    parser.add_argument("--quantization-bits", type=int, default=8, choices=[4, 8], help="Number of bits to represent weights.")
-    parser.add_argument("--quantization-group_size", type=int, default=128, help="Number of element within a group to compute weight scales.")
+    parser.add_argument("--fp8", action="store_true", help="Enable FP8 quantization for Ada & Hopper.")
+    parser.add_argument("--fp8-cache", action="store_true", help="Enable KV cache as fp8 for Ada & Hopper.")
     return parser
 
 
 def postprocess_quantization_parameters(params: Namespace) -> Namespace:
-    from tensorrt_llm.quantization import QuantMode
-
-    if params.quantize_per_channel:
-        group_size = 1
-    elif params.quantize_per_group:
-        group_size = params.quantization_group_size
-    else:
-        group_size = -1
-
-    params.has_quantization_step = params.quantize_weights or params.quantize_activations
+    # Only support FP8 quantization for now
     params.quantization_config = QuantizationConfig(
         mode=QuantMode.from_description(
-            quantize_weights=params.quantize_weights,
-            quantize_activations=params.quantize_activations,
-            per_token=params.quantize_per_token,
-            per_channel=params.quantize_per_channel,
-            per_group=params.quantize_per_group,
-            use_int4_weights=params.quantization_bits == 4,
+            quantize_weights=False,
+            quantize_activations=False,
+            per_token=False,
+            per_channel=False,
+            per_group=False,
+            use_int4_weights=False,
             use_int8_kv_cache=False,
-            use_fp8_kv_cache=False,
-            use_fp8_qdq=False
+            use_fp8_kv_cache=args.fp8_cache,
+            use_fp8_qdq=args.fp8
         ),
-        group_size=group_size
+        group_size=-1
     )
 
     return params

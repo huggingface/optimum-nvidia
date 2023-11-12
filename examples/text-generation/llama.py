@@ -60,9 +60,14 @@ if __name__ == '__main__':
         login(args.hub_token, )
 
     if args.has_quantization_step:
-        from optimum.nvidia.weights.quantization.ammo import AmmoQuantizer
+        from transformers import AutoModelForCausalLM
+        from optimum.nvidia.quantization.ammo import AmmoQuantizer
         LOGGER.info(f"About to calibrate model for quantization {args.quantization_config}")
-        quantizer = AmmoQuantizer.from_pretrained(args.model)
+        hf_model = AutoModelForCausalLM.from_pretrained(args.model)
+        quantizer = AmmoQuantizer(hf_model, args.quantization_config.mode)
+        quantizer.calibrate()
+        quantizer.save_file()
+
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, token=True)
     # builder = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
@@ -80,20 +85,18 @@ if __name__ == '__main__':
         tokenizer.save_pretrained(tokenizer_output)
 
     with open(args.output.joinpath("config.json"), mode="r", encoding="utf-8") as config_f:
-        import torch
         from json import load
-        from tokenizers import Tokenizer
-        from transformers import GenerationConfig
+        from transformers import AutoTokenizer, pipeline, TextGenerationPipeline
 
         config = load(config_f)
-        tokenizer = Tokenizer.from_pretrained(args.model, auth_token=args.hub_token)
+        tokenizer = AutoTokenizer.from_pretrained(args.model, auth_token=args.hub_token)
         model = TRTEngineForCausalLM(config, args.output, args.gpus_per_node)
 
-        while True:
-            prompt = input("Enter text... ")
-            tokens = torch.tensor(tokenizer.encode(prompt).ids).int()
-            generated = model.generate(tokens, top_k=40, top_p=0.7, repetition_penalty=10)
-
-            print(tokenizer.decode(generated.flatten().tolist()))
+        # while True:
+        #     prompt = input("Enter text... ")
+        #     tokens = torch.tensor(tokenizer.encode(prompt).ids).int()
+        #     generated = model.generate(tokens, top_k=40, top_p=0.7, repetition_penalty=10)
+        #
+        #     print(tokenizer.decode(generated.flatten().tolist()))
 
     print(f"TRTLLM engines have been saved at {args.output}.")

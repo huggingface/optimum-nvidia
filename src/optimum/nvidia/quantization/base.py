@@ -8,7 +8,7 @@ LOGGER = getLogger(__name__)
 
 
 @runtime_checkable
-class SupportsWeightCompression(Protocol):
+class SupportsWeightQuantization(Protocol):
 
     QUANTIZATION_EXCLUDED_PARAMETERS: Optional[Set[str]]
 
@@ -18,4 +18,9 @@ class SupportsWeightCompression(Protocol):
         ...
 
 
-QUANTIZATION_PROTOCOLS = {SupportsWeightCompression}
+
+class SupportsWeightAndActivationQuantization(Protocol):
+
+
+
+QUANTIZATION_PROTOCOLS = {SupportsWeightQuantization}

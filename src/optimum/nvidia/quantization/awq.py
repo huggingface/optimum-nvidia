@@ -2,7 +2,6 @@ from logging import getLogger
 from typing import Optional, Set
 
 from tensorrt_llm import Module
-from tensorrt_llm.models import weight_only_groupwise_quantize
 from tensorrt_llm.quantization import QuantMode
 
 
@@ -29,11 +28,11 @@ def to_awq_module(
     :return:
     """
     LOGGER.debug(f"Replacing {type(model)} with AWQ specific linear modules")
-    return weight_only_groupwise_quantize(
-        model=model,
-        quant_mode=quantization_mode,
-        group_size=group_size,
-        pre_quant_scale=pre_quant_scale,
-        zero=zero,
-        exclude_modules=exclude_modules
-    )
+    # return weight_only_groupwise_quantize(
+    #     model=model,
+    #     quant_mode=quantization_mode,
+    #     group_size=group_size,
+    #     pre_quant_scale=pre_quant_scale,
+    #     zero=zero,
+    #     exclude_modules=exclude_modules
+    # )
