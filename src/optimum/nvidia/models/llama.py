@@ -22,7 +22,8 @@ from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
 from optimum.nvidia.weights import WeightAdapter, shard
-from optimum.nvidia.weights import SupportsSafetensors, SupportsWeightCompression
+from optimum.nvidia.weights import SupportsSafetensors
+from optimum.nvidia.quantization import SupportsWeightQuantization, NO_QUANTIZATION
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 from safetensors import deserialize
 from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
@@ -33,7 +34,7 @@ LOGGER = getLogger(__name__)
 LAYERS_PREFIX = "model.layers"
 
 
-class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightCompression):
+class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightQuantization):
     """
 
     """
@@ -143,15 +144,15 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightCompr
                 qkw_weight = np.concatenate((wq, wk, wv), axis=0)
             else:
                 qkw_weight = np.concatenate((q_weight, k_weight, v_weight), axis=0)
-                qkv = qkv.reshape(3, config.hidden_size, config.hidden_size)
+                qkv = qkw_weight.reshape(3, config.hidden_size, config.hidden_size)
                 rank_tensor = shard(qkv, rank, shard_info.tp_size, axis=1)
                 qkv_weight = rank_tensor.reshape(-1, config.hidden_size)
 
 
-            if qconfig.mode == QUANTIZATION_DISABLED:
-                model.layers[idx].attention.qkv.weight.value = np.ascontiguousarray(qkv_weight)
-            else:
-                raise NotImplementedError("quantized weights are not yet implemented")
+            # if qconfig.mode == NO_QUANTIZATION:
+            #     model.layers[idx].attention.qkv.weight.value = np.ascontiguousarray(qkv_weight)
+            # else:
+            #     raise NotImplementedError("quantized weights are not yet implemented")
 
             # Common projection logic
             for (src, dst, shard_axis) in [

@@ -5,13 +5,13 @@ from pathlib import Path
 import torch
 from ammo.torch import quantization as atq, export as ate
 from optimum.nvidia.configs import QuantizationConfig
-
+from tensorrt_llm.quantization import QuantMode
 
 LOGGER = getLogger(__name__)
 
 
-def get_ammo_config(mode: QuantMode, **quantizer_overrides)
-    if mode.fp8_qdq:
+def get_ammo_config(mode: QuantMode, **quantizer_overrides):
+    if mode.has_fp8_qdq():
         return atq.FP8_DEFAULT_CFG
     else:
         raise NotImplementedError(
@@ -30,12 +30,14 @@ class AmmoQuantizer:
         self._ammo_config = get_ammo_config(qconfig.mode, **quantizer_overrides)
 
     def forward(self, **inputs):
+        inputs = {name: tensor.view((1, -1)).to(self._model.device) for name, tensor in inputs.items()}
         self._model(**inputs)
 
     def calibrate(self, calibration_data: Iterable[Dict[str, torch.Tensor]]):
+        from tqdm import tqdm
         with torch.inference_mode():
             def _loop():
-                for sample in calibration_data:
+                for sample in tqdm(calibration_data):
                     self.forward(**sample)
 
             atq.quantize(self._model, self._ammo_config, _loop)

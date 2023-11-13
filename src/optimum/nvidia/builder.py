@@ -28,8 +28,8 @@ from optimum.nvidia.configs import ModelConfig, TransformersConfig, Quantization
 from optimum.nvidia.errors import UnsupportedOperation
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.utils import ensure_file_exists_locally
-from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter, SupportsWeightCompression, QUANTIZATION_PROTOCOLS
-from optimum.nvidia.weights.quantization import to_awq_module
+from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter
+from optimum.nvidia.quantization import SupportsWeightQuantization
 from optimum.nvidia.weights.hub import get_safetensors_files
 from optimum.nvidia.utils.onnx import to_onnx
 
@@ -148,7 +148,7 @@ class TRTEngineBuilder(ModelHubMixin):
         return self
 
     def with_quantization_profile(self, descriptor: QuantMode, group_size: int = -1) -> "TRTEngineBuilder":
-        if not isinstance(self._weight_adapter, SupportsWeightCompression):
+        if not isinstance(self._weight_adapter, SupportsWeightQuantization):
             raise UnsupportedOperation.quantization(
                 f"{self._weight_adapter} doesn't implement one of the quantization protocols {QUANTIZATION_PROTOCOLS},"
                 f" Please open an issue on huggingface/optimum-nvidia repository to request support."
@@ -344,23 +344,23 @@ class TRTEngineBuilder(ModelHubMixin):
             pipeline_parallel=shard.pp_size,
             parallel_build=False,
             use_refit=False,
-            quant_mode=self._quantization_descriptor
-            # **config  # Inject model's config
+            quant_mode=self._quantization_descriptor.mode,
+            huggingface=dict(**config)
         )
-        # build_config.trt_builder_config.builder_optimization_level = 5
+        build_config.trt_builder_config.builder_optimization_level = 5
 
         qconfig = self._quantization_descriptor
-        if qconfig.mode.is_weight_only():
-            if isinstance(self._weight_adapter, SupportsWeightCompression):
-                weights_compression = self._weight_adapter
-
-                # Apply AWQ style weight quantization
-                model = to_awq_module(
-                    model,
-                    qconfig.mode,
-                    group_size=qconfig.group_size,
-                    exclude_modules=weights_compression.QUANTIZATION_EXCLUDED_PARAMETERS
-                )
+        # if qconfig.mode.is_weight_only():
+        #     if isinstance(self._weight_adapter, SupportsWeightQuantization):
+        #         weights_compression = self._weight_adapter
+        #
+        #         # Apply AWQ style weight quantization
+        #         model = to_awq_module(
+        #             model,
+        #             qconfig.mode,
+        #             group_size=qconfig.group_size,
+        #             exclude_modules=weights_compression.QUANTIZATION_EXCLUDED_PARAMETERS
+        #         )
 
         if issubclass(self._weight_adapter, SupportsSafetensors):
             self._weight_adapter.from_safetensors(weight_files, model, config, build_config, qconfig, shard)

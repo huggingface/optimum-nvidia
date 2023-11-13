@@ -20,7 +20,7 @@ class SupportsWeightQuantization(Protocol):
 
 
 class SupportsWeightAndActivationQuantization(Protocol):
-
+    pass
 
 
 QUANTIZATION_PROTOCOLS = {SupportsWeightQuantization}
