@@ -1,12 +1,13 @@
 FROM tensorrt_llm/devel:latest
 
-COPY third-party/tensorrt-llm /opt/tensorrt-llm
+COPY . /opt/optimum-nvidia
 
 # Install tensorrt-llm
-WORKDIR /opt/tensorrt-llm
-RUN python3 scripts/build_wheel.py --trt_root /usr/local/tensorrt && \
+WORKDIR /opt/optimum-nvidia/third-party/tensorrt-llm
+RUN git lfs install --force && git lfs pull && \
+    python3 scripts/build_wheel.py -j --trt_root /usr/local/tensorrt --python_bindings && \
     pip install build/tensorrt_llm*.whl && \
-    python3 scripts/build_wheel.py --clean -j --trt_root /usr/local/tensorrt
+    python3 scripts/build_wheel.py --clean --trt_root /usr/local/tensorrt
 
 # Install NVIDIA Ammo Quantization Framework
 ARG NVIDIA_AMMO_VERSION=0.3.0
@@ -22,6 +23,6 @@ RUN cuda_version=$(nvcc --version | grep 'release' | awk '{print $6}' | awk -F'[
     rm -rf nvidia_ammo-${NVIDIA_AMMO_VERSION}*
 
 # Install dependencies
-RUN python -m pip install datasets, huggingface_hub, transformers
+RUN python -m pip install datasets huggingface_hub transformers
 
-WORKDIR /workspace
+WORKDIR /opt/optimum-nvidia
