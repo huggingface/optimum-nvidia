@@ -295,7 +295,7 @@ class TRTEngineBuilder(ModelHubMixin):
         LOGGER.debug(f"Building TRT engines sequentially")
 
         for shard in shards_info:
-            self._build_engine_for_rank(shard, weight_files, output_path)
+            self._build_engine_for_rank(shard, weight_files, output_path, is_parallel=False)
 
     def _build_parallel(self, shard_info: List[Shard], weight_files: List[PathLike], output_path: Path):
         build_info = self._build_info
@@ -308,9 +308,9 @@ class TRTEngineBuilder(ModelHubMixin):
         LOGGER.debug(f"Building TRT engines in parallel ({num_jobs} processes)")
         with Pool(num_jobs) as builders:
             for shard in shard_info:
-                _ = builders.map(self._build_engine_for_rank, shard, weight_files, output_path)
+                _ = builders.map(self._build_engine_for_rank, shard, weight_files, output_path, is_parallel=True)
 
-    def _build_engine_for_rank(self, shard: Shard, weight_files: List[PathLike], output_path: Path):
+    def _build_engine_for_rank(self, shard: Shard, weight_files: List[PathLike], output_path: Path, is_parallel: bool):
         LOGGER.debug(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
 
         print(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
@@ -342,7 +342,7 @@ class TRTEngineBuilder(ModelHubMixin):
             strongly_typed=False,
             tensor_parallel=shard.tp_size,
             pipeline_parallel=shard.pp_size,
-            parallel_build=False,
+            parallel_build=is_parallel,
             use_refit=False,
             quant_mode=self._quantization_descriptor.mode,
             huggingface=dict(**config)
