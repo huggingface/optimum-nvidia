@@ -76,7 +76,7 @@ if __name__ == '__main__':
             lambda x: tokenizer(
                 x["system_prompt"] if len(x["system_prompt"]) > 0 else x["question"],
                 pad_to_multiple_of=16,
-                max_length=model.config.max_position_embeddings,
+                max_length=hf_model.config.max_position_embeddings,
                 return_tensors="pt"
             ),
         ).select_columns(["input_ids", "attention_mask"])
