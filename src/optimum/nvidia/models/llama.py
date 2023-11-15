@@ -14,6 +14,7 @@
 #  limitations under the License.
 from logging import getLogger
 from os import PathLike
+from pathlib import Path
 from typing import List, Iterable, Mapping, Set, Tuple, Union, Optional
 
 import numpy as np
@@ -22,8 +23,7 @@ from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
 from optimum.nvidia.weights import WeightAdapter, shard
-from optimum.nvidia.weights import SupportsSafetensors
-from optimum.nvidia.quantization import SupportsWeightQuantization, NO_QUANTIZATION
+from optimum.nvidia.weights import SupportsSafetensors, SupportsNpz
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 from safetensors import deserialize
 from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
@@ -34,7 +34,7 @@ LOGGER = getLogger(__name__)
 LAYERS_PREFIX = "model.layers"
 
 
-class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightQuantization):
+class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
     """
 
     """
@@ -46,11 +46,6 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightQuant
         "mlp.down_proj.weight": ("mlp.proj.weight", 1),
         "mlp.gate_proj.weight": ("mlp.fc.weight", 0)
     }
-
-    @staticmethod
-    @property
-    def named_weight_parameters() -> Iterable[str]:
-        return LlamaWeightAdapter.NAMED_WEIGHT_PARAMETERS.keys()
 
     def convert(
         self,
@@ -203,6 +198,60 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsWeightQuant
         adapter.convert(model, config, builder_config, qconfig, sharding_config.rank, accessor)
 
         return model
+
+
+    @classmethod
+    def from_numpy(cls, path: Path) -> Module:
+        # TODO: Currently only used to load quantized models, might need to change later on
+        return np.load(path, "r", allow_pickle=False)
+
+    @staticmethod
+    def get_scaling_factors(weights: Mapping[str, np.array]) -> Mapping[str, List[np.array]]:
+        # yapf: disable
+        scaling_factors = {
+            'qkv_act': [],
+            'qkv_weights': [],
+            'qkv_output': [],
+            'dense_act': [],
+            'dense_weights': [],
+            'fc_act': [],
+            'fc_weights': [],
+            'gate_act': [],
+            'gate_weights': [],
+            'proj_act': [],
+            'proj_weights': [],
+        }
+
+        for layer in range(num_layers):
+            scaling_factors['qkv_act'].append(max(
+                weight_dict[f'_np:layers:{layer}:attention:qkv:q:activation_scaling_factor'].item(),
+                weight_dict[f'_np:layers:{layer}:attention:qkv:k:activation_scaling_factor'].item(),
+                weight_dict[f'_np:layers:{layer}:attention:qkv:v:activation_scaling_factor'].item()
+            ))
+            scaling_factors['qkv_weights'].append(max(
+                weight_dict[f'_np:layers:{layer}:attention:qkv:q:weights_scaling_factor'].item(),
+                weight_dict[f'_np:layers:{layer}:attention:qkv:k:weights_scaling_factor'].item(),
+                weight_dict[f'_np:layers:{layer}:attention:qkv:v:weights_scaling_factor'].item()
+            ))
+            if quant_mode is not None and quant_mode.has_fp8_kv_cache():
+                # Not calibrarting KV cache.
+                scaling_factors['qkv_output'].append(1.0)
+            scaling_factors['dense_act'].append(weight_dict[f'_np:layers:{layer}:attention:dense:activation_scaling_factor'].item())
+            scaling_factors['dense_weights'].append(weight_dict[f'_np:layers:{layer}:attention:dense:weights_scaling_factor'].item())
+            scaling_factors['fc_act'].append(weight_dict[f'_np:layers:{layer}:mlp:fc:activation_scaling_factor'].item())
+            scaling_factors['fc_weights'].append(weight_dict[f'_np:layers:{layer}:mlp:fc:weights_scaling_factor'].item())
+            scaling_factors['gate_act'].append(weight_dict[f'_np:layers:{layer}:mlp:gate:activation_scaling_factor'].item())
+            scaling_factors['gate_weights'].append(weight_dict[f'_np:layers:{layer}:mlp:gate:weights_scaling_factor'].item())
+            scaling_factors['proj_act'].append(weight_dict[f'_np:layers:{layer}:mlp:proj:activation_scaling_factor'].item())
+            scaling_factors['proj_weights'].append(weight_dict[f'_np:layers:{layer}:mlp:proj:weights_scaling_factor'].item())
+
+        # yapf: enable
+        for k, v in scaling_factors.items():
+            assert len(v) == num_layers, f'Expect scaling factor {k} of length {num_layers}, got {len(v)}'
+
+        return scaling_factors
+
+
 
 class LLamaForCausalLM(ConvertibleModel):
     ADAPTER: LlamaWeightAdapter

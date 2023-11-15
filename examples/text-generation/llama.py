@@ -61,38 +61,30 @@ if __name__ == '__main__':
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, token=True)
 
-    # Check if we need to collect calibration samples
-    # TODO: Move elsewhere ... builder?
-    if args.has_quantization_step:
-        from datasets import load_dataset
-        from optimum.nvidia.quantization.ammo import AmmoQuantizer
-        from torch.utils.data import DataLoader
-        from transformers import AutoModelForCausalLM
-        LOGGER.info(f"About to calibrate model for quantization {args.quantization_config}")
-        hf_model = AutoModelForCausalLM.from_pretrained(args.model, device_map="auto")
-        hf_dataset = load_dataset(args.dataset, split="train", streaming=True)
-        hf_dataset = hf_dataset.take(args.num_calibration_samples).select_columns(["system_prompt", "question"])
-        hf_dataset = hf_dataset.map(
-            lambda x: tokenizer(
-                x["system_prompt"] if len(x["system_prompt"]) > 0 else x["question"],
-                pad_to_multiple_of=16,
-                max_length=hf_model.config.max_position_embeddings,
-                return_tensors="pt"
-            ),
-        ).select_columns(["input_ids", "attention_mask"])
-        loader = DataLoader(hf_dataset, batch_size=1)
-
-        quantizer = AmmoQuantizer(hf_model, args.quantization_config)
-        quantizer.calibrate(loader)
-        quantizer.save_file(args.calibration_output)
-
-    # Build the engine
+    # Define the target engine details
     builder = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
         .to(args.dtype) \
         .shard(args.tensor_parallelism, args.pipeline_parallelism, args.world_size, args.gpus_per_node) \
-        .with_quantization_profile(args.quantization_config) \
         .with_generation_profile(args.max_batch_size, args.max_prompt_length, args.max_new_tokens) \
         .with_sampling_strategy(args.max_beam_width)
+
+    # Check if we need to collect calibration samples
+    # TODO: Move elsewhere ... builder?
+    if args.has_quantization_step:
+        from optimum.nvidia.quantization import HfDatasetCalibration
+        calib = HfDatasetCalibration.from_datasets(
+            args.dataset,
+            split="train",
+            num_samples=args.num_calibration_samples,
+            column="question",
+            streaming=True
+        )
+        calib.tokenize(tokenizer, tokenizer.model_max_length, pad_to_multiple_of=16)
+
+        # Add the quantization step
+        builder.with_quantization_profile(args.quantization_config, calib)
+
+    # Build the engine
     builder.build(args.output)
 
     if args.with_triton_structure:

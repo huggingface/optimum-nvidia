@@ -13,4 +13,4 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from .dtype import DataType
+from .dtype import DataType, as_torch_dtype

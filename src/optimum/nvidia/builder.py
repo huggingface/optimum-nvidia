@@ -23,14 +23,12 @@ from typing import NamedTuple, Optional, Type, Union, Dict, List
 
 from huggingface_hub import ModelHubMixin, HfFileSystem
 from huggingface_hub.hub_mixin import T
+from transformers import AutoModelForCausalLM
 
 from optimum.nvidia.configs import ModelConfig, TransformersConfig, QuantizationConfig
-from optimum.nvidia.errors import UnsupportedOperation
 from optimum.nvidia.lang import DataType
-from optimum.nvidia.utils import ensure_file_exists_locally
 from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter
-from optimum.nvidia.quantization import SupportsWeightQuantization
-from optimum.nvidia.weights.hub import get_safetensors_files
+from optimum.nvidia.quantization import Calibration
 from optimum.nvidia.utils.onnx import to_onnx
 
 from tensorrt_llm import Mapping as Shard, graph_rewriting
@@ -105,15 +103,20 @@ class TRTEngineBuilder(ModelHubMixin):
         return cls(model_id, config, adapter)
 
     def __init__(self, model_id_or_path: Union[str, PathLike], config: ModelConfig, adapter: Type[WeightAdapter]):
+        # Model
         self._model_id_or_path: Union[str, PathLike] = model_id_or_path
         self._model_config: ModelConfig = config
         self._weight_adapter: Type[WeightAdapter] = adapter
 
+        # Engine build
         self._dtype = DataType.FLOAT16
         self._build_info: BuildInfo = SERIAL_BUILD
         self._sharding_info: ShardingInfo = NO_SHARDING
-        self._quantization_descriptor: QuantizationConfig = None
-        self._optimization_profile: OptimizationProfile = None
+        self._optimization_profile: Optional[OptimizationProfile] = None
+
+        # Quantization
+        self._quantization_config: Optional[QuantizationConfig] = None
+        self._quantization_calibration: Optional[Calibration] = None
 
         # Sampling
         self._beam_width = -1
@@ -135,6 +138,8 @@ class TRTEngineBuilder(ModelHubMixin):
     def shard(self, tp_degree: int, pp_degree: int, world_size: int, num_gpus_per_node: int) -> "TRTEngineBuilder":
         """
 
+        :param tp_degree
+        :param pp_degree
         :param world_size:
         :param num_gpus_per_node:
         :return:
@@ -147,16 +152,23 @@ class TRTEngineBuilder(ModelHubMixin):
 
         return self
 
-    def with_quantization_profile(self, descriptor: QuantMode, group_size: int = -1) -> "TRTEngineBuilder":
-        if not isinstance(self._weight_adapter, SupportsWeightQuantization):
-            raise UnsupportedOperation.quantization(
-                f"{self._weight_adapter} doesn't implement one of the quantization protocols {QUANTIZATION_PROTOCOLS},"
-                f" Please open an issue on huggingface/optimum-nvidia repository to request support."
-            )
+    def with_quantization_profile(
+        self,
+        config: QuantizationConfig,
+        calibration: Optional[Calibration] = None
+    ) -> "TRTEngineBuilder":
+        """
 
-        LOGGER.debug(f"Defining quantization schema: {descriptor}")
-        self._quantization_descriptor = descriptor
+        :param config:
+        :param calibration:
+        :return:
+        """
+        # TODO: validate the calibration is required or not
+        self._quantization_config = config
+        self._quantization_calibration = calibration
+
         return self
+
 
     def with_generation_profile(
         self,
@@ -187,23 +199,33 @@ class TRTEngineBuilder(ModelHubMixin):
         return self
 
     def with_sampling_strategy(self, num_beams: int) -> "TRTEngineBuilder":
+        """
+
+        :param num_beams:
+        :return:
+        """
         LOGGER.debug(f"Enabling sampling with strategy: num_beams={num_beams}")
         self._beam_width = num_beams
         return self
 
     def to(self, dtype: DataType) -> "TRTEngineBuilder":
+        """
+
+        :param dtype:
+        :return:
+        """
         LOGGER.debug(f"Setting target dtype to {str(dtype)}")
         self._dtype = dtype
 
         return self
 
     def validate(self) -> bool:
-        if self._quantization_descriptor is None:
+        if self._quantization_config is None:
             LOGGER.warning(
                 "Quantization descriptor was None, assuming no quantization will be applied. "
                 "If you want to change this behaviour, please use TRTEngineBuilder.with_quantization_schema()"
             )
-            self._quantization_descriptor = QuantizationConfig(QuantMode(0), 0)
+            self._quantization_config = QuantizationConfig(QuantMode(0), 0)
 
         # Optimization profile
         if self._optimization_profile is None:
@@ -250,7 +272,12 @@ class TRTEngineBuilder(ModelHubMixin):
         return True
 
     def build(self, output_path: PathLike) -> PathLike:
-        self._sharding_info = self._sharding_info or NO_SHARDING
+        # Sharding info
+        sharding = self._sharding_info or NO_SHARDING
+        shards_info = [
+            Shard(sharding.world_size, rank, sharding.num_gpus_per_node, sharding.tp_degree, sharding.pp_degree)
+            for rank in range(sharding.world_size)
+        ]
 
         output_path = Path(output_path)
         if not output_path.exists():
@@ -265,21 +292,35 @@ class TRTEngineBuilder(ModelHubMixin):
             LOGGER.debug(f"Loading weights from remote Hugging Face Hub {self._model_id_or_path}")
             fs = HfFileSystem()
 
-        # Check for safetensors preferred serialization format
-        local_files = []
-        if issubclass(self._weight_adapter, SupportsSafetensors):
-            for file in get_safetensors_files(fs, self._model_id_or_path):
-                local_filepath = Path(ensure_file_exists_locally(fs, self._model_id_or_path, file))
-                local_files.append(local_filepath)
-        else:
-            raise NotImplementedError("We only support loading from Safetensors checkpoints for now.")
+        # Handle potential need for computing calibration data to quantize the model
+        if self._quantization_config.has_quantization_step:
+            from optimum.nvidia.quantization.ammo import AmmoQuantizer
+            LOGGER.debug(
+                "Model requires quantization ("
+                f"weight only: {self._quantization_config.mode.is_weight_only()}, "
+                f"mode: {self._quantization_config.mode}"
+                ")"
+            )
 
-        # Sharding info
-        sharding = self._sharding_info
-        shards_info = [
-            Shard(sharding.world_size, rank, sharding.num_gpus_per_node, sharding.tp_degree, sharding.pp_degree)
-            for rank in range(sharding.world_size)
-        ]
+            # Allocate required components for quantization
+            hf_model = AutoModelForCausalLM.from_pretrained(self._model_id_or_path)
+            quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
+
+            # Handle any calibration required for static quantization
+            if self._quantization_calibration:
+                quantizer.calibrate(self._quantization_calibration)
+
+            # Save quantization artifacts
+            quantizer.save(output_path.joinpath("calibration"))
+
+        # local_files = []
+        # # Check for safetensors preferred serialization format
+        # if issubclass(self._weight_adapter, SupportsSafetensors):
+        #     for file in get_safetensors_files(fs, self._model_id_or_path):
+        #         local_filepath = Path(ensure_file_exists_locally(fs, self._model_id_or_path, file))
+        #         local_files.append(local_filepath)
+        # else:
+        #     raise NotImplementedError("We only support loading from Safetensors checkpoints for now.")
 
         if self.validate():
             if self._build_info.parallel and self._build_info.num_parallel_jobs > 1:
@@ -344,24 +385,12 @@ class TRTEngineBuilder(ModelHubMixin):
             pipeline_parallel=shard.pp_size,
             parallel_build=is_parallel,
             use_refit=False,
-            quant_mode=self._quantization_descriptor.mode,
+            quant_mode=self._quantization_config.mode,
             huggingface=dict(**config)
         )
         build_config.trt_builder_config.builder_optimization_level = 5
 
-        qconfig = self._quantization_descriptor
-        # if qconfig.mode.is_weight_only():
-        #     if isinstance(self._weight_adapter, SupportsWeightQuantization):
-        #         weights_compression = self._weight_adapter
-        #
-        #         # Apply AWQ style weight quantization
-        #         model = to_awq_module(
-        #             model,
-        #             qconfig.mode,
-        #             group_size=qconfig.group_size,
-        #             exclude_modules=weights_compression.QUANTIZATION_EXCLUDED_PARAMETERS
-        #         )
-
+        qconfig = self._quantization_config
         if issubclass(self._weight_adapter, SupportsSafetensors):
             self._weight_adapter.from_safetensors(weight_files, model, config, build_config, qconfig, shard)
 
