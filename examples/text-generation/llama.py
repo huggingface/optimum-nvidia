@@ -69,7 +69,6 @@ if __name__ == '__main__':
         .with_sampling_strategy(args.max_beam_width)
 
     # Check if we need to collect calibration samples
-    # TODO: Move elsewhere ... builder?
     if args.has_quantization_step:
         from optimum.nvidia.quantization import HfDatasetCalibration
         calib = HfDatasetCalibration.from_datasets(

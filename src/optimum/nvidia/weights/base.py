@@ -21,6 +21,7 @@ from optimum.nvidia.configs import ModelConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.configs import QuantizationConfig
 from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
+from tensorrt_llm.quantization import QuantMode
 
 
 class WeightAdapter(ABC):
@@ -57,12 +58,13 @@ class WeightAdapter(ABC):
 
     @staticmethod
     @abstractmethod
-    def allocate_model(conf: ModelConfig, sharding: ShardingConfig, dtype: DataType) -> Module:
+    def allocate_model(conf: ModelConfig, sharding: ShardingConfig, dtype: DataType, quant_mode: QuantMode) -> Module:
         """
 
         :param conf:
         :param sharding
         :param dtype
+        :param quant_mode
         :return:
         """
         raise NotImplementedError()

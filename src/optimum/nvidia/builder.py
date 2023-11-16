@@ -14,6 +14,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 import os
+from dataclasses import dataclass
+from enum import IntEnum, auto
+
+import numpy as np
 from fsspec.implementations.local import LocalFileSystem
 from logging import getLogger
 from multiprocessing import Pool
@@ -27,16 +31,19 @@ from transformers import AutoModelForCausalLM
 
 from optimum.nvidia.configs import ModelConfig, TransformersConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
-from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter
+from optimum.nvidia.utils import ensure_file_exists_locally
+from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter, SupportsNpz
 from optimum.nvidia.quantization import Calibration
 from optimum.nvidia.utils.onnx import to_onnx
 
 from tensorrt_llm import Mapping as Shard, graph_rewriting
 from tensorrt_llm.builder import Builder, BuilderConfig
+from tensorrt_llm.models import quantize_model
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
 
+from optimum.nvidia.weights.hub import get_safetensors_files
 
 LOGGER = getLogger(__name__)
 
@@ -66,6 +73,29 @@ NO_SHARDING = ShardingInfo(1, 1, 1, 1)
 
 def create_unique_engine_name(identifier: str, dtype: str, rank: int, tp_degree: int) -> str:
     return f"{identifier}_{dtype}_tp{tp_degree}_rank{rank}.engine"
+
+
+def create_npz_calibration_filename(identifier: str, rank: int, tp_degree: int) -> str:
+    return f"{identifier}_tp{tp_degree}_rank{rank}.npz"
+
+
+class FileFormat(IntEnum):
+    NUMPY_QUANTIZED = auto()
+    SAFETENSORS = auto()
+
+
+@dataclass
+class Weights:
+    files: Union[Path, List[Path]]
+    format: FileFormat
+
+    @property
+    def is_folder(self) -> bool:
+        return isinstance(self.files, Path) and self.files.is_dir()
+
+    @property
+    def is_list_of_files(self) -> bool:
+        return isinstance(self.files, List)
 
 
 class TRTEngineBuilder(ModelHubMixin):
@@ -311,16 +341,20 @@ class TRTEngineBuilder(ModelHubMixin):
                 quantizer.calibrate(self._quantization_calibration)
 
             # Save quantization artifacts
-            quantizer.save(output_path.joinpath("calibration"))
+            calibration_path = output_path.joinpath("calibration")
 
-        # local_files = []
-        # # Check for safetensors preferred serialization format
-        # if issubclass(self._weight_adapter, SupportsSafetensors):
-        #     for file in get_safetensors_files(fs, self._model_id_or_path):
-        #         local_filepath = Path(ensure_file_exists_locally(fs, self._model_id_or_path, file))
-        #         local_files.append(local_filepath)
-        # else:
-        #     raise NotImplementedError("We only support loading from Safetensors checkpoints for now.")
+            files = Weights(calibration_path, FileFormat.NUMPY_QUANTIZED)
+            quantizer.save(calibration_path)
+        else:
+            local_files = []
+            # Check for safetensors preferred serialization format
+            if issubclass(self._weight_adapter, SupportsSafetensors):
+                for file in get_safetensors_files(fs, self._model_id_or_path):
+                    local_filepath = Path(ensure_file_exists_locally(fs, self._model_id_or_path, file))
+                    local_files.append(local_filepath)
+                files = Weights(local_files, FileFormat.SAFETENSORS)
+            else:
+                raise NotImplementedError("We only support loading from Safetensors checkpoints for now.")
 
         if self.validate():
             if self._build_info.parallel and self._build_info.num_parallel_jobs > 1:
@@ -329,14 +363,14 @@ class TRTEngineBuilder(ModelHubMixin):
                 build_func = self._build_serial
 
             # Let's build
-            build_func(shards_info, local_files, output_path)
+            build_func(shards_info, files, output_path)
             return output_path
 
-    def _build_serial(self, shards_info: List[Shard], weight_files: List[PathLike], output_path: Path):
+    def _build_serial(self, shards_info: List[Shard], weights: Weights, output_path: Path):
         LOGGER.debug(f"Building TRT engines sequentially")
 
         for shard in shards_info:
-            self._build_engine_for_rank(shard, weight_files, output_path, is_parallel=False)
+            self._build_engine_for_rank(shard, weights, output_path, is_parallel=False)
 
     def _build_parallel(self, shard_info: List[Shard], weight_files: List[PathLike], output_path: Path):
         build_info = self._build_info
@@ -351,13 +385,15 @@ class TRTEngineBuilder(ModelHubMixin):
             for shard in shard_info:
                 _ = builders.map(self._build_engine_for_rank, shard, weight_files, output_path, is_parallel=True)
 
-    def _build_engine_for_rank(self, shard: Shard, weight_files: List[PathLike], output_path: Path, is_parallel: bool):
+    def _build_engine_for_rank(self, shard: Shard, weights: Weights, output_path: Path, is_parallel: bool):
         LOGGER.debug(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
 
         print(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
 
         config = self._model_config
-        model = self._weight_adapter.allocate_model(config, shard, self._dtype)
+        qconfig = self._quantization_config
+
+        model = self._weight_adapter.allocate_model(config, shard, self._dtype, qconfig.mode)
         ranked_engine_name = create_unique_engine_name(
             config["model_type"],
             self._dtype.value,
@@ -390,9 +426,20 @@ class TRTEngineBuilder(ModelHubMixin):
         )
         build_config.trt_builder_config.builder_optimization_level = 5
 
-        qconfig = self._quantization_config
-        if issubclass(self._weight_adapter, SupportsSafetensors):
-            self._weight_adapter.from_safetensors(weight_files, model, config, build_config, qconfig, shard)
+        # Handle various loading and conversion methods
+        if weights.format == FileFormat.SAFETENSORS and issubclass(self._weight_adapter, SupportsSafetensors):
+            self._weight_adapter.from_safetensors(weights.files, model, config, build_config, qconfig, shard)
+
+        elif weights.format == FileFormat.NUMPY_QUANTIZED and issubclass(self._weight_adapter, SupportsNpz):
+            calibration_filename = create_npz_calibration_filename(config["model_type"], shard.rank, shard.tp_size)
+            qweights = np.load(
+                weights.files.joinpath(calibration_filename),
+                mmap_mode="r",
+                allow_pickle=False
+            )
+
+            scales = self._weight_adapter.get_scaling_factors(qweights, config.num_layers, qconfig.mode)
+            quantize_model(model, qconfig.mode, quant_scales=scales)
 
         # Let's build the network
         network = builder.create_network()

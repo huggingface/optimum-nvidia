@@ -28,6 +28,7 @@ from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 from safetensors import deserialize
 from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
 from tensorrt_llm.models import LLaMAForCausalLM
+from tensorrt_llm.quantization import QuantMode
 
 
 LOGGER = getLogger(__name__)
@@ -163,7 +164,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         return model
 
     @staticmethod
-    def allocate_model(config: ModelConfig, sharding: ShardingConfig, dtype: DataType) -> Module:
+    def allocate_model(config: ModelConfig, sharding: ShardingConfig, dtype: DataType, quant_mode: QuantMode) -> Module:
         LOGGER.debug(f"Allocating {LLaMAForCausalLM.__name__} model")
         return LLaMAForCausalLM(
             num_layers=config.num_layers,
@@ -178,6 +179,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             mapping=sharding,
             rms_norm_eps=config["rms_norm_eps"],
             embedding_sharding_dim=1,  # As Meta does
+            quant_mode=quant_mode
         )
 
     @classmethod
@@ -206,7 +208,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         return np.load(path, "r", allow_pickle=False)
 
     @staticmethod
-    def get_scaling_factors(weights: Mapping[str, np.array]) -> Mapping[str, List[np.array]]:
+    def get_scaling_factors(weights: Mapping[str, np.array], num_layers: int, mode: QuantMode) -> Mapping[str, List[np.array]]:
         # yapf: disable
         scaling_factors = {
             'qkv_act': [],
@@ -224,26 +226,27 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
 
         for layer in range(num_layers):
             scaling_factors['qkv_act'].append(max(
-                weight_dict[f'_np:layers:{layer}:attention:qkv:q:activation_scaling_factor'].item(),
-                weight_dict[f'_np:layers:{layer}:attention:qkv:k:activation_scaling_factor'].item(),
-                weight_dict[f'_np:layers:{layer}:attention:qkv:v:activation_scaling_factor'].item()
+                weights[f'_np:layers:{layer}:attention:qkv:q:activation_scaling_factor'].item(),
+                weights[f'_np:layers:{layer}:attention:qkv:k:activation_scaling_factor'].item(),
+                weights[f'_np:layers:{layer}:attention:qkv:v:activation_scaling_factor'].item()
             ))
             scaling_factors['qkv_weights'].append(max(
-                weight_dict[f'_np:layers:{layer}:attention:qkv:q:weights_scaling_factor'].item(),
-                weight_dict[f'_np:layers:{layer}:attention:qkv:k:weights_scaling_factor'].item(),
-                weight_dict[f'_np:layers:{layer}:attention:qkv:v:weights_scaling_factor'].item()
+                weights[f'_np:layers:{layer}:attention:qkv:q:weights_scaling_factor'].item(),
+                weights[f'_np:layers:{layer}:attention:qkv:k:weights_scaling_factor'].item(),
+                weights[f'_np:layers:{layer}:attention:qkv:v:weights_scaling_factor'].item()
             ))
-            if quant_mode is not None and quant_mode.has_fp8_kv_cache():
+            if mode and mode.has_fp8_kv_cache():
                 # Not calibrarting KV cache.
                 scaling_factors['qkv_output'].append(1.0)
-            scaling_factors['dense_act'].append(weight_dict[f'_np:layers:{layer}:attention:dense:activation_scaling_factor'].item())
-            scaling_factors['dense_weights'].append(weight_dict[f'_np:layers:{layer}:attention:dense:weights_scaling_factor'].item())
-            scaling_factors['fc_act'].append(weight_dict[f'_np:layers:{layer}:mlp:fc:activation_scaling_factor'].item())
-            scaling_factors['fc_weights'].append(weight_dict[f'_np:layers:{layer}:mlp:fc:weights_scaling_factor'].item())
-            scaling_factors['gate_act'].append(weight_dict[f'_np:layers:{layer}:mlp:gate:activation_scaling_factor'].item())
-            scaling_factors['gate_weights'].append(weight_dict[f'_np:layers:{layer}:mlp:gate:weights_scaling_factor'].item())
-            scaling_factors['proj_act'].append(weight_dict[f'_np:layers:{layer}:mlp:proj:activation_scaling_factor'].item())
-            scaling_factors['proj_weights'].append(weight_dict[f'_np:layers:{layer}:mlp:proj:weights_scaling_factor'].item())
+
+            scaling_factors['dense_act'].append(weights[f'_np:layers:{layer}:attention:dense:activation_scaling_factor'].item())
+            scaling_factors['dense_weights'].append(weights[f'_np:layers:{layer}:attention:dense:weights_scaling_factor'].item())
+            scaling_factors['fc_act'].append(weights[f'_np:layers:{layer}:mlp:fc:activation_scaling_factor'].item())
+            scaling_factors['fc_weights'].append(weights[f'_np:layers:{layer}:mlp:fc:weights_scaling_factor'].item())
+            scaling_factors['gate_act'].append(weights[f'_np:layers:{layer}:mlp:gate:activation_scaling_factor'].item())
+            scaling_factors['gate_weights'].append(weights[f'_np:layers:{layer}:mlp:gate:weights_scaling_factor'].item())
+            scaling_factors['proj_act'].append(weights[f'_np:layers:{layer}:mlp:proj:activation_scaling_factor'].item())
+            scaling_factors['proj_weights'].append(weights[f'_np:layers:{layer}:mlp:proj:weights_scaling_factor'].item())
 
         # yapf: enable
         for k, v in scaling_factors.items():
