@@ -44,15 +44,15 @@ if __name__ == '__main__':
     args = postprocess_quantization_parameters(args)
 
     # Ensure the output folder exists or create the folder
-    if args.output.exists():
-        if not args.output.is_dir():
-            raise ValueError(f"Output path {args.output} should be an empty folder")
-
-        if any(args.output.iterdir()):
-            raise ValueError(f"Output path {args.output} is not empty")
-    else:
-        LOGGER.info(f"Creating folder {args.output}")
-        args.output.mkdir()
+    # if args.output.exists():
+    #     if not args.output.is_dir():
+    #         raise ValueError(f"Output path {args.output} should be an empty folder")
+    #
+    #     if any(args.output.iterdir()):
+    #         raise ValueError(f"Output path {args.output} is not empty")
+    # else:
+    #     LOGGER.info(f"Creating folder {args.output}")
+    #     args.output.mkdir()
 
     LOGGER.info(f"Exporting {args.model} to TensorRT-LLM engine at {args.output}")
     if args.hub_token is not None:
@@ -84,7 +84,7 @@ if __name__ == '__main__':
         builder.with_quantization_profile(args.quantization_config, calib)
 
     # Build the engine
-    builder.build(args.output)
+    # builder.build(args.output)
 
     if args.with_triton_structure:
         # generator = TritonLayoutGenerator()
@@ -102,9 +102,18 @@ if __name__ == '__main__':
 
         # while True:
         #     prompt = input("Enter text... ")
-        #     tokens = torch.tensor(tokenizer.encode(prompt).ids).int()
-        #     generated = model.generate(tokens, top_k=40, top_p=0.7, repetition_penalty=10)
-        #
-        #     print(tokenizer.decode(generated.flatten().tolist()))
+
+        prompt = "Who is Nvidia's CEO?"
+        tokens = tokenizer(prompt, return_tensors="pt")
+        generated = model.generate(
+            **tokens,
+            top_k=40,
+            top_p=0.7,
+            repetition_penalty=10,
+            pad_token_id=tokenizer.eos_token_id,
+            eos_token_id=tokenizer.eos_token_id
+        )
+
+        print(tokenizer.decode(generated.flatten().tolist(), remove_special_tokens=True))
 
     print(f"TRTLLM engines have been saved at {args.output}.")
