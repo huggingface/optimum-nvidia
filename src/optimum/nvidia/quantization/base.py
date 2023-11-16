@@ -52,6 +52,9 @@ class HfDatasetCalibration(Calibration):
                 x[fieldname],
                 max_length=max_length,
                 pad_to_multiple_of=pad_to_multiple_of,
+                truncation=True,
+                padding=True,
+                padding_side="left",
                 return_tensors="pt"
             )
         ).remove_columns(fieldname)
