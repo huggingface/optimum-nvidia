@@ -210,7 +210,7 @@ class TRTEngineBuilder(ModelHubMixin):
         if max_output_length is None:
             # TODO: Understand why we can set to a larger value?
             # max_output_length = self._model_config.max_sequence_length
-            max_output_length = 1024
+            max_output_length = max_prompt_length + max_new_tokens
 
         LOGGER.debug(
             f"Defining generation profile: "
@@ -333,7 +333,7 @@ class TRTEngineBuilder(ModelHubMixin):
             )
 
             # Allocate required components for quantization
-            hf_model = AutoModelForCausalLM.from_pretrained(self._model_id_or_path, device_map="auto")
+            hf_model = AutoModelForCausalLM.from_pretrained(self._model_id_or_path)
             quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
 
             # Handle any calibration required for static quantization
@@ -413,7 +413,7 @@ class TRTEngineBuilder(ModelHubMixin):
             num_layers=config.num_layers,
             max_position_embeddings=config.max_sequence_length,
             max_batch_size=self._optimization_profile.max_batch_size,
-            max_input_len=self._model_config.max_sequence_length,
+            max_input_len=self._optimization_profile.max_prompt_length,
             max_output_len=self._optimization_profile.max_output_length,
             max_num_tokens=None,
             strongly_typed=False,
