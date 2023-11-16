@@ -59,7 +59,7 @@ if __name__ == '__main__':
         from huggingface_hub import login
         login(args.hub_token, )
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model, token=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left", token=True)
 
     # Define the target engine details
     builder = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \

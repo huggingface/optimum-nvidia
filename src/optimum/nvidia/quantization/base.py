@@ -58,7 +58,6 @@ class HfDatasetCalibration(Calibration):
                 pad_to_multiple_of=pad_to_multiple_of,
                 truncation=True,
                 padding=tokenizer.pad_token_id is not None,
-                padding_side="left",
                 return_tensors="pt"
             )
         ).remove_columns(fieldname)
