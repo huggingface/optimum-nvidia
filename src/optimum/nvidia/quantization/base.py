@@ -47,13 +47,17 @@ class HfDatasetCalibration(Calibration):
 
     def tokenize(self, tokenizer: PreTrainedTokenizer, max_length: int = None, pad_to_multiple_of: int = 1):
         fieldname = self._dataset.column_names[0]
+
+        if not tokenizer.pad_token_id and tokenizer.eos_token_id:
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+
         self._dataset = self._dataset.map(
             lambda x: tokenizer(
                 x[fieldname],
                 max_length=max_length,
                 pad_to_multiple_of=pad_to_multiple_of,
                 truncation=True,
-                padding=True,
+                padding=tokenizer.pad_token_id is not None,
                 padding_side="left",
                 return_tensors="pt"
             )
