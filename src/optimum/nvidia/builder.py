@@ -333,7 +333,7 @@ class TRTEngineBuilder(ModelHubMixin):
             )
 
             # Allocate required components for quantization
-            hf_model = AutoModelForCausalLM.from_pretrained(self._model_id_or_path)
+            hf_model = AutoModelForCausalLM.from_pretrained(self._model_id_or_path, device_map="auto")
             quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
 
             # Handle any calibration required for static quantization
