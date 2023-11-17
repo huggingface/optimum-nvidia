@@ -44,15 +44,15 @@ if __name__ == '__main__':
     args = postprocess_quantization_parameters(args)
 
     # Ensure the output folder exists or create the folder
-    # if args.output.exists():
-    #     if not args.output.is_dir():
-    #         raise ValueError(f"Output path {args.output} should be an empty folder")
-    #
-    #     if any(args.output.iterdir()):
-    #         raise ValueError(f"Output path {args.output} is not empty")
-    # else:
-    #     LOGGER.info(f"Creating folder {args.output}")
-    #     args.output.mkdir()
+    if args.output.exists():
+        if not args.output.is_dir():
+            raise ValueError(f"Output path {args.output} should be an empty folder")
+
+        if any(args.output.iterdir()):
+            raise ValueError(f"Output path {args.output} is not empty")
+    else:
+        LOGGER.info(f"Creating folder {args.output}")
+        args.output.mkdir()
 
     LOGGER.info(f"Exporting {args.model} to TensorRT-LLM engine at {args.output}")
     if args.hub_token is not None:
@@ -84,7 +84,7 @@ if __name__ == '__main__':
         builder.with_quantization_profile(args.quantization_config, calib)
 
     # Build the engine
-    # builder.build(args.output)
+    builder.build(args.output)
 
     if args.with_triton_structure:
         # generator = TritonLayoutGenerator()
