@@ -85,13 +85,7 @@ if __name__ == '__main__':
 
     # Build the engine
     builder.build(args.output)
-
-    if args.with_triton_structure:
-        # generator = TritonLayoutGenerator()
-        LOGGER.info(f"Exporting Triton Inference Server structure at {args.output}")
-        tokenizer_output = args.output.joinpath("tokenizer/")
-        tokenizer.save_pretrained(tokenizer_output)
-
+    
     with open(args.output.joinpath("config.json"), mode="r", encoding="utf-8") as config_f:
         from json import load
         from transformers import AutoTokenizer, pipeline, TextGenerationPipeline
