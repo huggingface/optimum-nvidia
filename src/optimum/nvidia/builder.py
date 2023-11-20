@@ -323,7 +323,7 @@ class TRTEngineBuilder(ModelHubMixin):
             fs = HfFileSystem()
 
         # Handle potential need for computing calibration data to quantize the model
-        if self._quantization_config.has_quantization_step:
+        if self._quantization_config and self._quantization_config.has_quantization_step:
             from optimum.nvidia.quantization.ammo import AmmoQuantizer
             LOGGER.debug(
                 "Model requires quantization ("
