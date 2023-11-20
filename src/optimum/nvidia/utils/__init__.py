@@ -12,11 +12,18 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import functools
 
-from .logging import DEFAULT_LOGGING_FMT, setup_logging
-from .version import __version__, VERSION
+from .fs import *
 
-from .builder import TRTEngineBuilder
-from .runtime import TRTEnginePretrainedModel, TRTEngineForCausalLM
 
-DEFAULT_HF_HUB_TRT_REVISION: str = "trt-llm"
+def rgetattr(obj, attr):
+    """
+    Recursively get object attribute
+    :param obj: The root object we want to retrieve nested attribute
+    :param attr: The attribute path where nested attribute are comma delimited
+    :return:
+    """
+    def _getattr(obj, attr):
+        return getattr(obj, attr)
+    return functools.reduce(_getattr, [obj] + attr.split('.'))

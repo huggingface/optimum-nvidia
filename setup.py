@@ -18,7 +18,7 @@ from setuptools import find_namespace_packages
 
 
 # Ensure we match the version set in optimum/neuron/version.py
-filepath = "optimum/neuron/version.py"
+filepath = "src/optimum/nvidia/version.py"
 try:
     with open(filepath) as version_file:
         (__version__,) = re.findall('__version__ = "(.*)"', version_file.read())
@@ -26,12 +26,15 @@ except Exception as error:
     assert False, "Error: Could not open '%s' due %s\n" % (filepath, error)
 
 INSTALL_REQUIRES = [
-    "transformers >= 4.32.1",
-    "optimum >= 1.13.0",
+    # "transformers >= 4.32.1",
+    "fsspec",
     "huggingface_hub >= 0.14.0",
+    "numpy >= 1.24.0",
+    "onnx >= 1.12.0",
+    "optimum >= 1.13.0",
 ]
 
-TESTS_REQUIRE = [
+TESTS_REQUIRES = [
     "pytest",
     "psutil",
     "parameterized",
@@ -46,9 +49,18 @@ QUALITY_REQUIRES = [
     "hf_doc_builder @ git+https://github.com/huggingface/doc-builder.git",
 ]
 
+
+QUANTIZATION_REQUIRES = [
+    "ammo"  # This one is a bit harder to install ...
+    "datasets"
+    "transformers",
+    "torch",
+]
+
 EXTRAS_REQUIRE = {
-    "tests": TESTS_REQUIRE,
+    "tests": TESTS_REQUIRES,
     "quality": QUALITY_REQUIRES,
+    "quantization": QUANTIZATION_REQUIRES,
 }
 
 setup(

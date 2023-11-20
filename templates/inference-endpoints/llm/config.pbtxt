@@ -1,0 +1,184 @@
+name: "llm"
+backend: "tensorrtllm"
+max_batch_size: 32
+
+model_transaction_policy {
+  decoupled: false
+}
+
+input [
+  {
+    name: "input_ids"
+    data_type: TYPE_INT32
+    dims: [ -1 ]
+  },
+  {
+    name: "input_lengths"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+  },
+  {
+    name: "request_output_len"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+  },
+  {
+    name: "end_id"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "pad_id"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "beam_width"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "temperature"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "runtime_top_k"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "runtime_top_p"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "len_penalty"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "repetition_penalty"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "min_length"
+    data_type: TYPE_UINT32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "presence_penalty"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "random_seed"
+    data_type: TYPE_UINT64
+    dims: [ 1 ]
+    reshape: { shape: [ ] }
+    optional: true
+  },
+  {
+    name: "stop"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  },
+  {
+    name: "streaming"
+    data_type: TYPE_BOOL
+    dims: [ 1 ]
+    optional: true
+  }
+]
+output [
+  {
+    name: "output_ids"
+    data_type: TYPE_INT32
+    dims: [ -1, -1 ]
+  }
+]
+
+parameters: {
+  key: "max_beam_width"
+  value: {
+    string_value: "1"
+  }
+}
+parameters: {
+  key: "FORCE_CPU_ONLY_INPUT_TENSORS"
+  value: {
+    string_value: "no"
+  }
+}
+parameters: {
+  key: "gpt_model_type"
+  value: {
+    string_value: "inflight_fused_batching"
+  }
+}
+parameters: {
+  key: "gpt_model_path"
+  value: {
+    string_value: "/opt/optimum/templates/inference-endpoints/llm/1"
+  }
+}
+parameters: {
+  key: "max_tokens_in_paged_kv_cache"
+  value: {
+    string_value: ""
+  }
+}
+parameters: {
+  key: "batch_scheduler_policy"
+  value: {
+    string_value: "guaranteed_no_evict"
+  }
+}
+parameters: {
+  key: "kv_cache_free_gpu_mem_fraction"
+  value: {
+    string_value: "0.2"
+  }
+}
+parameters: {
+  key: "max_num_sequences"
+  value: {
+    string_value: "16"
+  }
+}
+parameters: {
+  key: "enable_trt_overlap"
+  value: {
+    string_value: "true"
+  }
+}
+
+instance_group [
+  {
+    count: 1
+    kind : KIND_CPU
+  }
+]
