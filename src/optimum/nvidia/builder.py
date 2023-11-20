@@ -238,13 +238,16 @@ class TRTEngineBuilder(ModelHubMixin):
         self._beam_width = num_beams
         return self
 
-    def to(self, dtype: DataType) -> "TRTEngineBuilder":
+    def to(self, dtype: Union[str, DataType] ) -> "TRTEngineBuilder":
         """
 
         :param dtype:
         :return:
         """
         LOGGER.debug(f"Setting target dtype to {str(dtype)}")
+        if isinstance(dtype, str):
+            dtype = DataType(dtype)
+
         self._dtype = dtype
 
         return self
