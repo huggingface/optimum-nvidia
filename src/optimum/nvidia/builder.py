@@ -42,6 +42,7 @@ from tensorrt_llm.models import quantize_model
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
+from tensorrt_llm._utils import trt_version
 
 from optimum.nvidia.weights.hub import get_safetensors_files
 
@@ -425,7 +426,8 @@ class TRTEngineBuilder(ModelHubMixin):
             parallel_build=is_parallel,
             use_refit=False,
             quant_mode=self._quantization_config.mode,
-            huggingface=dict(**config)
+            huggingface=dict(**config),
+            tensorrt=trt_version()
         )
         build_config.trt_builder_config.builder_optimization_level = 5
 
