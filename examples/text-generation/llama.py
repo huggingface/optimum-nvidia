@@ -89,25 +89,22 @@ if __name__ == '__main__':
 
     with open(args.output.joinpath("config.json"), mode="r", encoding="utf-8") as config_f:
         from json import load
-        from transformers import AutoTokenizer, pipeline, TextGenerationPipeline
 
         config = load(config_f)
         model = TensorRTForCausalLM(config, args.output, args.gpus_per_node)
 
-        # while True:
-        #     prompt = input("Enter text... ")
-
-        prompt = "Who is Nvidia's CEO?"
-        tokens = tokenizer(prompt, return_tensors="pt")
-        generated = model.generate(
+        prompt = "What is the latest generation of Nvidia GPUs?"
+        tokens = tokenizer(prompt, padding=True, return_tensors="pt")
+        generated, lengths = model.generate(
             **tokens,
             top_k=40,
-            top_p=0.7,
+            top_p=0.95,
             repetition_penalty=10,
             pad_token_id=tokenizer.eos_token_id,
-            eos_token_id=tokenizer.eos_token_id
+            eos_token_id=tokenizer.eos_token_id,
+            max_new_tokens=64
         )
 
-        print(tokenizer.decode(generated.flatten().tolist(), remove_special_tokens=True))
+        print(tokenizer.decode(generated.squeeze().tolist(), ))
 
     print(f"TRTLLM engines have been saved at {args.output}.")
