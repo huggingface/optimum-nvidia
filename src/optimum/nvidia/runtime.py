@@ -91,7 +91,7 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         pad_token_id: int = 0,
         bos_token_id: int = 1,
         eos_token_id: int = 2
-    ):
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         # If no GenerationConfig is provided, let's allocate one with default settings
         generation_config = ctrrt.SamplingConfig(min(num_beams, self._max_beam_width))
         generation_config.random_seed = [seed]
@@ -139,5 +139,5 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
             )
             self._session.generate(trt_outputs, trt_inputs, generation_config)
 
-            return trt_outputs.ids
+            return trt_outputs.ids, trt_outputs.lengths
 
