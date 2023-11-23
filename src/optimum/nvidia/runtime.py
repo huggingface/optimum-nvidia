@@ -15,11 +15,11 @@ PackedTensor = List[torch.Tensor]
 
 
 
-class TRTEnginePretrainedModel(ModelHubMixin):
+class TensorRTPreTrainedModel(ModelHubMixin):
     pass
 
 
-class TRTEngineForCausalLM(TRTEnginePretrainedModel):
+class TensorRTForCausalLM(TensorRTPreTrainedModel):
     __slots__ = (
         "_config",
         "_mapping",
