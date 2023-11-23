@@ -20,5 +20,5 @@ DEFAULT_LOGGING_FMT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 
 def setup_logging(verbose: bool = False):
-    logger.set_level("info")
+    logger.set_level("verbose" if verbose else "info")
     basicConfig(format=DEFAULT_LOGGING_FMT, level=DEBUG if verbose else INFO)
