@@ -59,7 +59,8 @@ if __name__ == '__main__':
         from huggingface_hub import login
         login(args.hub_token, )
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left", token=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
+    tokenizer.pad_token = tokenizer.eos_token
 
     # Define the target engine details
     builder = TensorRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
