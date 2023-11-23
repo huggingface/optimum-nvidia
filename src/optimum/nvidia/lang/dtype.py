@@ -15,6 +15,10 @@
 from enum import Enum
 from functools import singledispatch
 
+import numpy as np
+from tensorrt_llm import str_dtype_to_trt
+from tensorrt_llm._utils import str_dtype_to_np
+
 
 class DataType(Enum):
     """
@@ -26,7 +30,11 @@ class DataType(Enum):
     FLOAT16 = "float16"
     BFLOAT16 = "bfloat16"
 
+    def as_trt(self) -> object:
+        return str_dtype_to_trt(self.value)
 
+    def as_numpy(self) -> np.dtype:
+        return str_dtype_to_np(self.value)
 
 
 import torch
