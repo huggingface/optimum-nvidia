@@ -103,18 +103,21 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
 
         with torch.no_grad():
             if isinstance(input_ids, torch.Tensor):
-
+                input_ids = input_ids.int()
                 if attention_mask is not None:
                     lengths = attention_mask.sum(dim=1, dtype=torch.int32)
+                    input_ids = input_ids.view((input_ids.size(0), -1))
                 elif input_ids.ndim == 1:
+                    input_ids = input_ids.view((1, -1))
                     lengths = torch.tensor([input_ids.size(0)], dtype=torch.int32)
                 elif input_ids.ndim == 2 and input_ids.size(0) == 1:
                     lengths = torch.tensor([input_ids.size(1)], dtype=torch.int32)
                 else:
-                    raise NotImplementedError("Cannot compute lengths from torch.Tensor without attention_mask")
+                    raise NotImplementedError(
+                        "Cannot compute lengths from torch.Tensor without attention_mask for batch > 1"
+                    )
             else:
-                input_ids = torch.nested.nested_tensor(input_ids)
-                lengths = torch.tensor([tensor.size(0) for tensor in input_ids], dtype=torch.int32)
+                raise ValueError("input_ids has to be 2D torch.Tensor (batch, sequence)")
 
             if torch.any(torch.gt(lengths, self._max_prompt_length)):
                 raise ValueError(f"Input length is bigger than maximum prompt length ({self._max_prompt_length}).")
