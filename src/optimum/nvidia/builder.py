@@ -350,9 +350,9 @@ class TensorRTEngineBuilder(ModelHubMixin):
             files = Weights(calibration_path, FileFormat.NUMPY_QUANTIZED)
             quantizer.save(calibration_path)
         else:
-            local_files = []
             # Check for safetensors preferred serialization format
             if issubclass(self._weight_adapter, SupportsSafetensors):
+                local_files = []
                 for file in get_safetensors_files(fs, self._model_id_or_path):
                     local_filepath = Path(ensure_file_exists_locally(fs, self._model_id_or_path, file))
                     local_files.append(local_filepath)
@@ -392,12 +392,9 @@ class TensorRTEngineBuilder(ModelHubMixin):
     def _build_engine_for_rank(self, shard: Shard, weights: Weights, output_path: Path, is_parallel: bool):
         LOGGER.debug(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
 
-        print(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
-
         config = self._model_config
         qconfig = self._quantization_config
 
-        model = self._weight_adapter.allocate_model(config, shard, self._dtype, qconfig.mode)
         ranked_engine_name = create_unique_engine_name(
             config["model_type"],
             self._dtype.value,
@@ -431,11 +428,15 @@ class TensorRTEngineBuilder(ModelHubMixin):
         )
         build_config.trt_builder_config.builder_optimization_level = 5
 
+        model = self._weight_adapter.allocate_model(config, shard, self._dtype, qconfig.mode)
+
         # Handle various loading and conversion methods
         if weights.format == FileFormat.SAFETENSORS and issubclass(self._weight_adapter, SupportsSafetensors):
+            LOGGER.debug("Using safetensors as weight provider")
             self._weight_adapter.from_safetensors(weights.files, model, config, build_config, qconfig, shard)
 
         elif weights.format == FileFormat.NUMPY_QUANTIZED and issubclass(self._weight_adapter, SupportsNpz):
+            LOGGER.debug("Using Numpy npz as weight provider (with quantization metadata)")
             calibration_filename = create_npz_calibration_filename(config["model_type"], shard.rank, shard.tp_size)
             qweights = np.load(
                 weights.files.joinpath(calibration_filename),
