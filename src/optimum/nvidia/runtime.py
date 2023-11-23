@@ -122,9 +122,9 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
             trt_inputs = ctrrt.GenerationInput(
                 end_id=eos_token_id,
                 pad_id=pad_token_id,
-                ids=input_ids.view((input_ids.size(0), -1)).int(),
-                lengths=lengths,
-                packed=self._use_packed_inputs
+                ids=input_ids.to("cuda"),
+                lengths=lengths.to("cuda"),
+                packed=self._use_packed_inputs,
             )
 
             # Define some additional parameters based on the above
