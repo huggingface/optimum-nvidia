@@ -340,15 +340,26 @@ class TensorRTEngineBuilder(ModelHubMixin):
             hf_model = AutoModelForCausalLM.from_pretrained(self._model_id_or_path)
             quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
 
-            # Handle any calibration required for static quantization
-            if self._quantization_calibration:
-                quantizer.calibrate(self._quantization_calibration)
-
             # Save quantization artifacts
             calibration_path = output_path.joinpath("calibration")
 
+            # Handle any calibration required for static quantization
+            if self._quantization_calibration:
+                has_json = has_npz = False
+                if calibration_path.exists() and calibration_path.is_dir():
+                    calibration_data = os.listdir(calibration_path)
+                    if len(calibration_data) == 2:
+                        has_json = any(f.endswith(".json") for f in calibration_data)
+                        has_npz = any(f.endswith(".npz") for f in calibration_data)
+
+                if not calibration_path.exists() or not (has_json and has_npz):
+                    LOGGER.info("Calibrating model ...")
+                    quantizer.calibrate(self._quantization_calibration)
+                    quantizer.save(calibration_path)
+                else:
+                    LOGGER.info(f"Reusing already precomputed calibration data at {calibration_path}")
+
             files = Weights(calibration_path, FileFormat.NUMPY_QUANTIZED)
-            quantizer.save(calibration_path)
         else:
             # Check for safetensors preferred serialization format
             if issubclass(self._weight_adapter, SupportsSafetensors):
