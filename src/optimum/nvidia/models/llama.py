@@ -12,6 +12,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from collections import defaultdict
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
@@ -84,11 +85,9 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             # Insert the packed weights inside the weights
             qkv_packed_layers.append(qkv_weight)
 
-        dtype = np.dtype(builder.precision)
+        dtype = DataType(builder.precision).as_numpy()
         layers_per_stage = config.num_layers // shard_info.pp_size
-        layers_range = list(
-            range(shard_info.pp_rank * layers_per_stage, (shard_info.pp_rank + 1) * layers_per_stage, 1)
-        )
+        layers_range = range(shard_info.pp_rank * layers_per_stage, (shard_info.pp_rank + 1) * layers_per_stage, 1)
 
         LOGGER.debug(f"Converting LLama with dtype: {dtype} for rank {rank} and layers: {layers_range}")
 
@@ -113,8 +112,6 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         # Map all the hidden layers
         for layer_idx in layers_range:
             idx = layer_idx - shard_info.pp_rank * layers_per_stage
-            assert idx < model.num_layers, f"Index {idx} >= numlayer {model.num_layers}"
-
             prefix = f"{LAYERS_PREFIX}.{idx}"
 
             # input_layernorm.weight
@@ -137,18 +134,13 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
                     shard(v, rank, shard_info.tp_size, axis=0),
                 )
 
-                qkw_weight = np.concatenate((wq, wk, wv), axis=0)
+                qkv_weight = np.concatenate((wq, wk, wv), axis=0)
             else:
-                qkw_weight = np.concatenate((q_weight, k_weight, v_weight), axis=0)
-                qkv = qkw_weight.reshape(3, config.hidden_size, config.hidden_size)
-                rank_tensor = shard(qkv, rank, shard_info.tp_size, axis=1)
+                qkv_weight = np.stack((q, k, v), axis=0)
+                rank_tensor = shard(qkv_weight, rank, shard_info.tp_size, axis=1)
                 qkv_weight = rank_tensor.reshape(-1, config.hidden_size)
 
-
-            # if qconfig.mode == NO_QUANTIZATION:
-            #     model.layers[idx].attention.qkv.weight.value = np.ascontiguousarray(qkv_weight)
-            # else:
-            #     raise NotImplementedError("quantized weights are not yet implemented")
+            model.layers[idx].attention.qkv.weight.value = np.ascontiguousarray(qkv_weight)
 
             # Common projection logic
             for (src, dst, shard_axis) in [
@@ -175,11 +167,13 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             hidden_size=config.hidden_size,
             mlp_hidden_size=config.intermediate_size,
             hidden_act=config.activation,
-            dtype=dtype.value,
+            dtype=dtype.as_trt(),
             mapping=sharding,
+            quant_mode=quant_mode,
             rms_norm_eps=config["rms_norm_eps"],
+            logits_dtype=DataType.FLOAT32.as_trt(),
             embedding_sharding_dim=1,  # As Meta does
-            quant_mode=quant_mode
+            use_fused_mlp=quant_mode == QuantMode(0)  # Disable if quantization for now as it remove one scaling factor
         )
 
     @classmethod
@@ -197,9 +191,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
 
         accessor = SafetensorsAccessor.from_files(paths)
         adapter = cls(sharding_config)
-        adapter.convert(model, config, builder_config, qconfig, sharding_config.rank, accessor)
-
-        return model
+        return adapter.convert(model, config, builder_config, qconfig, sharding_config.rank, accessor)
 
 
     @classmethod
@@ -210,19 +202,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
     @staticmethod
     def get_scaling_factors(weights: Mapping[str, np.array], num_layers: int, mode: QuantMode) -> Mapping[str, List[np.array]]:
         # yapf: disable
-        scaling_factors = {
-            'qkv_act': [],
-            'qkv_weights': [],
-            'qkv_output': [],
-            'dense_act': [],
-            'dense_weights': [],
-            'fc_act': [],
-            'fc_weights': [],
-            'gate_act': [],
-            'gate_weights': [],
-            'proj_act': [],
-            'proj_weights': [],
-        }
+        scaling_factors = defaultdict(list)
 
         for layer in range(num_layers):
             scaling_factors['qkv_act'].append(max(
@@ -238,6 +218,9 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             if mode and mode.has_fp8_kv_cache():
                 # Not calibrarting KV cache.
                 scaling_factors['qkv_output'].append(1.0)
+            else:
+                # TODO: What happens, were to retrieve the scales?
+                pass
 
             scaling_factors['dense_act'].append(weights[f'_np:layers:{layer}:attention:dense:activation_scaling_factor'].item())
             scaling_factors['dense_weights'].append(weights[f'_np:layers:{layer}:attention:dense:weights_scaling_factor'].item())
