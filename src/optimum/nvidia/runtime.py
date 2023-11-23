@@ -1,7 +1,7 @@
 import json
 import torch
 from logging import getLogger
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 
 from huggingface_hub import ModelHubMixin
@@ -28,7 +28,6 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         "_max_beam_width",
         "_max_batch_size",
         "_max_prompt_length"
-        "_max_new_tokens"
         "_max_output_length"
     )
 
