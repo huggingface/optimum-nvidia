@@ -23,7 +23,7 @@ from optimum.nvidia import setup_logging
 # Setup logging
 setup_logging(False)
 
-from optimum.nvidia import TRTEngineBuilder, TRTEngineForCausalLM
+from optimum.nvidia import TensorRTEngineBuilder, TensorRTForCausalLM
 from optimum.nvidia.models.llama import LlamaWeightAdapter
 from optimum.nvidia.utils.cli import *
 
@@ -62,7 +62,7 @@ if __name__ == '__main__':
     tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left", token=True)
 
     # Define the target engine details
-    builder = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
+    builder = TensorRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
         .to(args.dtype) \
         .shard(args.tensor_parallelism, args.pipeline_parallelism, args.world_size, args.gpus_per_node) \
         .with_generation_profile(args.max_batch_size, args.max_prompt_length, args.max_new_tokens) \
@@ -91,8 +91,7 @@ if __name__ == '__main__':
         from transformers import AutoTokenizer, pipeline, TextGenerationPipeline
 
         config = load(config_f)
-        tokenizer = AutoTokenizer.from_pretrained(args.model, auth_token=args.hub_token)
-        model = TRTEngineForCausalLM(config, args.output, args.gpus_per_node)
+        model = TensorRTForCausalLM(config, args.output, args.gpus_per_node)
 
         # while True:
         #     prompt = input("Enter text... ")

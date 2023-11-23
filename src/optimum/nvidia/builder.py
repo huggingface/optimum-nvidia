@@ -99,7 +99,7 @@ class Weights:
         return isinstance(self.files, List)
 
 
-class TRTEngineBuilder(ModelHubMixin):
+class TensorRTEngineBuilder(ModelHubMixin):
     """
 
     """
@@ -152,7 +152,7 @@ class TRTEngineBuilder(ModelHubMixin):
         # Sampling
         self._beam_width = -1
 
-    def enable_parallel_build(self, num_jobs: int = -1) -> "TRTEngineBuilder":
+    def enable_parallel_build(self, num_jobs: int = -1) -> "TensorRTEngineBuilder":
         """
 
         :param num_jobs:
@@ -166,7 +166,21 @@ class TRTEngineBuilder(ModelHubMixin):
 
         return self
 
-    def shard(self, tp_degree: int, pp_degree: int, world_size: int, num_gpus_per_node: int) -> "TRTEngineBuilder":
+    def to(self, dtype: Union[str, DataType] ) -> "TensorRTEngineBuilder":
+        """
+
+        :param dtype:
+        :return:
+        """
+        LOGGER.debug(f"Setting target dtype to {str(dtype)}")
+        if isinstance(dtype, str):
+            dtype = DataType(dtype)
+
+        self._dtype = dtype
+
+        return self
+
+    def shard(self, tp_degree: int, pp_degree: int, world_size: int, num_gpus_per_node: int) -> "TensorRTEngineBuilder":
         """
 
         :param tp_degree
@@ -187,7 +201,7 @@ class TRTEngineBuilder(ModelHubMixin):
         self,
         config: QuantizationConfig,
         calibration: Optional[Calibration] = None
-    ) -> "TRTEngineBuilder":
+    ) -> "TensorRTEngineBuilder":
         """
 
         :param config:
@@ -207,7 +221,7 @@ class TRTEngineBuilder(ModelHubMixin):
         max_prompt_length: int,
         max_new_tokens: int,
         max_output_length: int = None
-    ) -> "TRTEngineBuilder":
+    ) -> "TensorRTEngineBuilder":
         if max_output_length is None:
             # TODO: Understand why we can set to a larger value?
             # max_output_length = self._model_config.max_sequence_length
@@ -229,7 +243,7 @@ class TRTEngineBuilder(ModelHubMixin):
 
         return self
 
-    def with_sampling_strategy(self, num_beams: int) -> "TRTEngineBuilder":
+    def with_sampling_strategy(self, num_beams: int) -> "TensorRTEngineBuilder":
         """
 
         :param num_beams:
@@ -237,20 +251,6 @@ class TRTEngineBuilder(ModelHubMixin):
         """
         LOGGER.debug(f"Enabling sampling with strategy: num_beams={num_beams}")
         self._beam_width = num_beams
-        return self
-
-    def to(self, dtype: Union[str, DataType] ) -> "TRTEngineBuilder":
-        """
-
-        :param dtype:
-        :return:
-        """
-        LOGGER.debug(f"Setting target dtype to {str(dtype)}")
-        if isinstance(dtype, str):
-            dtype = DataType(dtype)
-
-        self._dtype = dtype
-
         return self
 
     def validate(self) -> bool:
