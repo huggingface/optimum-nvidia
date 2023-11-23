@@ -14,6 +14,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 import os
+
+import torch
 from dataclasses import dataclass
 from enum import IntEnum, auto
 
@@ -337,7 +339,11 @@ class TensorRTEngineBuilder(ModelHubMixin):
             )
 
             # Allocate required components for quantization
-            hf_model = AutoModelForCausalLM.from_pretrained(self._model_id_or_path)
+            hf_model = AutoModelForCausalLM.from_pretrained(
+                self._model_id_or_path,
+                device_map="auto",
+                torch_dtype=self._dtype.as_torch()
+            ).to(memory_format=torch.channels_last)
             quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
 
             # Save quantization artifacts
@@ -469,7 +475,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         network.plugin_config.set_context_fmha(ContextFMHAType.enabled)
         network.plugin_config.enable_remove_input_padding()
-        network.plugin_config.enable_paged_kv_cache(64)
+        # network.plugin_config.enable_paged_kv_cache(64)
 
         if shard.world_size > 1:
             LOGGER.debug(f"Enabling NCCL plugin as world_size = ({shard.world_size})")

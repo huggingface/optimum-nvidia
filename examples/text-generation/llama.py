@@ -72,6 +72,7 @@ if __name__ == '__main__':
     # Check if we need to collect calibration samples
     if args.has_quantization_step:
         from optimum.nvidia.quantization import HfDatasetCalibration
+        max_length = min(args.max_prompt_length + args.max_new_tokens, tokenizer.model_max_length)
         calib = HfDatasetCalibration.from_datasets(
             args.dataset,
             split="train",
@@ -79,7 +80,7 @@ if __name__ == '__main__':
             column="question",
             streaming=True
         )
-        calib.tokenize(tokenizer, tokenizer.model_max_length, pad_to_multiple_of=16)
+        calib.tokenize(tokenizer, max_length=max_length, pad_to_multiple_of=8)
 
         # Add the quantization step
         builder.with_quantization_profile(args.quantization_config, calib)
