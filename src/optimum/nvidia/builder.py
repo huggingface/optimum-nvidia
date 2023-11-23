@@ -468,7 +468,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
             network.set_named_parameters(model.named_parameters())
             inputs = model.prepare_inputs(
                 max_batch_size=self._optimization_profile.max_batch_size,
-                max_input_len=self._model_config.max_sequence_length,
+                max_input_len=self._optimization_profile.max_prompt_length,
                 max_new_tokens=self._optimization_profile.max_new_tokens,
                 max_num_tokens=None,
                 max_beam_width=self._beam_width,

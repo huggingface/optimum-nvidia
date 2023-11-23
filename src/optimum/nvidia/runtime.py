@@ -51,7 +51,7 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         self._session_config = ctrrt.GptSessionConfig(
             max_batch_size=config["builder_config"].get("max_batch_size", 1),
             max_beam_width=config["builder_config"].get("max_beam_width", 1),
-            max_sequence_length=config["builder_config"].get("max_position_embeddings", 512)
+            max_sequence_length=config["builder_config"]["max_output_len"]
         )
         self._session_config.cuda_graph_mode = use_cuda_graph
         # self._session_config.kv_cache_config =
@@ -70,7 +70,6 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         self._max_batch_size = self._config.model_config.max_batch_size
         self._max_prompt_length = self._config.model_config.max_input_len
         self._max_output_length = self._config.model_config.max_output_len
-        self._max_new_tokens = self._max_output_length - self._max_prompt_length
         self._max_beam_width = self._session_config.max_beam_width
 
     @property
@@ -78,7 +77,7 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         return self._config
 
     def generate(self,
-        input_ids: Union[PackedTensor, torch.Tensor],
+        input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         max_new_tokens: int = 64,
         num_beams: int = 1,
@@ -131,15 +130,21 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
             )
 
             # Define some additional parameters based on the above
-            if max_new_tokens > self._max_new_tokens:
-                LOGGER.warning(f"max_new_tokens {max_new_tokens} reduced to {self._max_new_tokens} to match engine.")
+            if max_new_tokens > self._max_output_length:
+                LOGGER.warning(f"max_new_tokens {max_new_tokens} cannot exceed {self._max_output_length}.")
 
-            trt_inputs.max_new_tokens = min(max_new_tokens, self._max_new_tokens)
+            # Shall we reduce the maximum number of token being generated?
+            trt_inputs.max_new_tokens = min(max_new_tokens, self._max_output_length)
 
             trt_outputs = ctrrt.GenerationOutput(
-                ids=torch.empty((self._max_batch_size, self._max_output_length), dtype=torch.int32),
-                lengths=torch.empty(self._max_batch_size, dtype=torch.int32)
+                ids=torch.empty(
+                    (self._max_batch_size, self._max_beam_width, self._max_output_length),
+                    device="cuda",
+                    dtype=torch.int32
+                ),
+                lengths=torch.empty(self._max_batch_size, device="cuda", dtype=torch.int32)
             )
+
             self._session.generate(trt_outputs, trt_inputs, generation_config)
 
             return trt_outputs.ids, trt_outputs.lengths
