@@ -215,7 +215,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
                 weights[f'_np:layers:{layer}:attention:qkv:k:weights_scaling_factor'].item(),
                 weights[f'_np:layers:{layer}:attention:qkv:v:weights_scaling_factor'].item()
             ))
-            if mode and mode.has_fp8_kv_cache():
+            if mode.has_fp8_kv_cache():
                 # Not calibrarting KV cache.
                 scaling_factors['qkv_output'].append(1.0)
             else:

@@ -51,7 +51,6 @@ def register_triton_server_args(parser: ArgumentParser) -> ArgumentParser:
 def register_quantization_args(parser: ArgumentParser) -> ArgumentParser:
     parser.add_argument("--fp8", action="store_true", help="Enable FP8 quantization for Ada & Hopper.")
     parser.add_argument("--fp8-cache", action="store_true", help="Enable KV cache as fp8 for Ada & Hopper.")
-    parser.add_argument("--dataset", type=str, help="🤗 Hub dataset's id to calibrate.")
     parser.add_argument("--num-calibration-samples", type=int, default=512, help="How much samples to use when calibrating.")
     return parser
 
