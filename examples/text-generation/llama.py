@@ -74,10 +74,11 @@ if __name__ == '__main__':
         from optimum.nvidia.quantization import HfDatasetCalibration
         max_length = min(args.max_prompt_length + args.max_new_tokens, tokenizer.model_max_length)
         calib = HfDatasetCalibration.from_datasets(
-            args.dataset,
+            dataset="cnn_dailymail",
+            name="3.0.0",
             split="train",
             num_samples=args.num_calibration_samples,
-            column="question",
+            column="article",
             streaming=True
         )
         calib.tokenize(tokenizer, max_length=max_length, pad_to_multiple_of=8)

@@ -63,7 +63,10 @@ class AmmoQuantizer:
         with torch.inference_mode():
             def _loop():
                 for sample in tqdm(calibration_data):
-                    inputs = {name: tensor[0].view((1, -1)).to(self._model.device) for name, tensor in sample.items()}
+                    inputs = {
+                        name: tensor[0].to(self._model.device)
+                        for name, tensor in sample.items()
+                    }
                     self._model(**inputs)
 
             atq.quantize(self._model, self._ammo_config, _loop)
