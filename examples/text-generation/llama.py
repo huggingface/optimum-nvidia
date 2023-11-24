@@ -87,7 +87,7 @@ if __name__ == '__main__':
         builder.with_quantization_profile(args.quantization_config, calib)
 
     # Build the engine
-    builder.build(args.output)
+    builder.build(args.output, args.optimization_level)
 
     with open(args.output.joinpath("config.json"), mode="r", encoding="utf-8") as config_f:
         from json import load

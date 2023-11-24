@@ -25,6 +25,12 @@ def register_common_model_topology_args(parser: ArgumentParser) -> ArgumentParse
     )
     parser.add_argument("--world-size", type=int, default=1, help="Total number of GPUs over all the nodes.")
     parser.add_argument("--gpus-per-node", type=int, default=1, help="Total number of GPUs on a single node.")
+    parser.add_argument(
+        "-o", "--opt-level",
+        type=int, default=2,
+        dest="optimization_level",
+        help="Optimization level between 0 (no optimization) and 5 (maximum level of optimization)."
+    )
     return parser
 
 

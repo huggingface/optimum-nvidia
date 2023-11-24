@@ -307,7 +307,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         return True
 
-    def build(self, output_path: PathLike) -> PathLike:
+    def build(self, output_path: PathLike, optmization_level: int = None) -> PathLike:
         # Sharding info
         sharding = self._sharding_info or NO_SHARDING
         shards_info = [
@@ -385,16 +385,28 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 build_func = self._build_serial
 
             # Let's build
-            build_func(shards_info, files, output_path)
+            build_func(shards_info, files, output_path, optmization_level)
             return output_path
 
-    def _build_serial(self, shards_info: List[Shard], weights: Union[Weights, List[Weights]], output_path: Path):
+    def _build_serial(
+        self,
+        shards_info: List[Shard],
+        weights: Union[Weights, List[Weights]],
+        output_path: Path,
+        opt_level: Optional[int]
+    ):
         LOGGER.debug(f"Building TRT engines sequentially")
 
         for shard in shards_info:
-            self._build_engine_for_rank(shard, weights, output_path, is_parallel=False)
+            self._build_engine_for_rank(shard, weights, output_path, opt_level, is_parallel=False)
 
-    def _build_parallel(self, shard_info: List[Shard], weight_files: Union[Weights, List[Weights]], output_path: Path):
+    def _build_parallel(
+        self,
+        shard_info: List[Shard],
+        weight_files: Union[Weights, List[Weights]],
+        output_path: Path,
+        opt_level: Optional[int]
+    ):
         build_info = self._build_info
         num_jobs = build_info.num_parallel_jobs if build_info.num_parallel_jobs > 1 else sched_getaffinity(0)
 
@@ -405,9 +417,22 @@ class TensorRTEngineBuilder(ModelHubMixin):
         LOGGER.debug(f"Building TRT engines in parallel ({num_jobs} processes)")
         with Pool(num_jobs) as builders:
             for shard in shard_info:
-                _ = builders.map(self._build_engine_for_rank, shard, weight_files, output_path, is_parallel=True)
+                _ = builders.map(
+                    self._build_engine_for_rank,
+                    shard, weight_files,
+                    output_path,
+                    is_parallel=True,
+                    opt_level=opt_level
+                )
 
-    def _build_engine_for_rank(self, shard: Shard, weights: Union[Weights, List[Weights]], output_path: Path, is_parallel: bool):
+    def _build_engine_for_rank(
+        self,
+        shard: Shard,
+        weights: Union[Weights, List[Weights]],
+        output_path: Path,
+        opt_level: Optional[int],
+        is_parallel: bool
+    ):
         LOGGER.debug(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
 
         config = self._model_config
@@ -442,7 +467,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
             parallel_build=is_parallel,
             use_refit=False,
             quant_mode=self._quantization_config.mode,
-            opt_level=None,
+            opt_level=opt_level,
             huggingface=dict(**config),
             tensorrt=trt_version()
         )
@@ -482,13 +507,13 @@ class TensorRTEngineBuilder(ModelHubMixin):
         # Enable plugins
         network.plugin_config.set_gpt_attention_plugin(dtype=self._dtype.value)
         network.plugin_config.set_context_fmha(ContextFMHAType.enabled)
+        network.plugin_config.set_rmsnorm_plugin(dtype=self._dtype.value)
         network.plugin_config.enable_remove_input_padding()
 
         # GeMM plugin doesn't support float8
         if not build_config.fp8:
             network.plugin_config.set_gemm_plugin(dtype=self._dtype.value)
 
-        # network.plugin_config.set_rmsnorm_plugin(dtype=self._dtype.value)
         # network.plugin_config.enable_paged_kv_cache(64)
 
         if shard.world_size > 1:
