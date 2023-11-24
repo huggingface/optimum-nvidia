@@ -481,7 +481,13 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         # Enable plugins
         network.plugin_config.set_gpt_attention_plugin(dtype=self._dtype.value)
-        network.plugin_config.set_gemm_plugin(dtype=self._dtype.value)
+        network.plugin_config.set_context_fmha(ContextFMHAType.enabled)
+        network.plugin_config.enable_remove_input_padding()
+
+        # GeMM plugin doesn't support float8
+        if not build_config.fp8:
+            network.plugin_config.set_gemm_plugin(dtype=self._dtype.value)
+
         # network.plugin_config.set_rmsnorm_plugin(dtype=self._dtype.value)
         # network.plugin_config.enable_paged_kv_cache(64)
 
