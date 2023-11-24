@@ -328,6 +328,16 @@ class TensorRTEngineBuilder(ModelHubMixin):
             LOGGER.debug(f"Loading weights from remote Hugging Face Hub {self._model_id_or_path}")
             fs = HfFileSystem()
 
+        # Check for safetensors preferred serialization format
+        if issubclass(self._weight_adapter, SupportsSafetensors):
+            local_files = []
+            for file in get_safetensors_files(fs, self._model_id_or_path):
+                local_filepath = Path(ensure_file_exists_locally(fs, self._model_id_or_path, file))
+                local_files.append(local_filepath)
+            files = Weights(local_files, FileFormat.SAFETENSORS)
+        else:
+            raise NotImplementedError("We only support loading from Safetensors checkpoints for now.")
+
         # Handle potential need for computing calibration data to quantize the model
         if self._quantization_config and self._quantization_config.has_quantization_step:
             from optimum.nvidia.quantization.ammo import AmmoQuantizer
@@ -337,14 +347,6 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 f"mode: {self._quantization_config.mode}"
                 ")"
             )
-
-            # Allocate required components for quantization
-            hf_model = AutoModelForCausalLM.from_pretrained(
-                self._model_id_or_path,
-                device_map="auto",
-                torch_dtype=self._dtype.as_torch()
-            ).to(memory_format=torch.channels_last)
-            quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
 
             # Save quantization artifacts
             calibration_path = output_path.joinpath("calibration")
@@ -360,22 +362,21 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
                 if not calibration_path.exists() or not (has_json and has_npz):
                     LOGGER.info("Calibrating model ...")
+
+                    # Allocate required components for quantization
+                    hf_model = AutoModelForCausalLM.from_pretrained(
+                        self._model_id_or_path,
+                        device_map="auto",
+                        torch_dtype=self._dtype.as_torch()
+                    ).to(memory_format=torch.channels_last)
+
+                    quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
                     quantizer.calibrate(self._quantization_calibration)
                     quantizer.save(calibration_path)
                 else:
                     LOGGER.info(f"Reusing already precomputed calibration data at {calibration_path}")
 
-            files = Weights(calibration_path, FileFormat.NUMPY_QUANTIZED)
-        else:
-            # Check for safetensors preferred serialization format
-            if issubclass(self._weight_adapter, SupportsSafetensors):
-                local_files = []
-                for file in get_safetensors_files(fs, self._model_id_or_path):
-                    local_filepath = Path(ensure_file_exists_locally(fs, self._model_id_or_path, file))
-                    local_files.append(local_filepath)
-                files = Weights(local_files, FileFormat.SAFETENSORS)
-            else:
-                raise NotImplementedError("We only support loading from Safetensors checkpoints for now.")
+            files = [files, Weights(calibration_path, FileFormat.NUMPY_QUANTIZED)]
 
         if self.validate():
             if self._build_info.parallel and self._build_info.num_parallel_jobs > 1:
@@ -387,13 +388,13 @@ class TensorRTEngineBuilder(ModelHubMixin):
             build_func(shards_info, files, output_path)
             return output_path
 
-    def _build_serial(self, shards_info: List[Shard], weights: Weights, output_path: Path):
+    def _build_serial(self, shards_info: List[Shard], weights: Union[Weights, List[Weights]], output_path: Path):
         LOGGER.debug(f"Building TRT engines sequentially")
 
         for shard in shards_info:
             self._build_engine_for_rank(shard, weights, output_path, is_parallel=False)
 
-    def _build_parallel(self, shard_info: List[Shard], weight_files: List[PathLike], output_path: Path):
+    def _build_parallel(self, shard_info: List[Shard], weight_files: Union[Weights, List[Weights]], output_path: Path):
         build_info = self._build_info
         num_jobs = build_info.num_parallel_jobs if build_info.num_parallel_jobs > 1 else sched_getaffinity(0)
 
@@ -406,7 +407,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
             for shard in shard_info:
                 _ = builders.map(self._build_engine_for_rank, shard, weight_files, output_path, is_parallel=True)
 
-    def _build_engine_for_rank(self, shard: Shard, weights: Weights, output_path: Path, is_parallel: bool):
+    def _build_engine_for_rank(self, shard: Shard, weights: Union[Weights, List[Weights]], output_path: Path, is_parallel: bool):
         LOGGER.debug(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
 
         config = self._model_config
@@ -423,6 +424,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         build_config = builder.create_builder_config(
             name=config["model_type"],
             precision=self._dtype.value,
+            fp8=qconfig.mode.has_fp8_qdq(),
             vocab_size=config.vocab_size,
             hidden_size=config.hidden_size,
             hidden_act=config.activation,
@@ -434,35 +436,44 @@ class TensorRTEngineBuilder(ModelHubMixin):
             max_input_len=self._optimization_profile.max_prompt_length,
             max_output_len=self._optimization_profile.max_output_length,
             max_num_tokens=None,
-            strongly_typed=False,
+            strongly_typed=qconfig.mode.has_fp8_qdq(),
             tensor_parallel=shard.tp_size,
             pipeline_parallel=shard.pp_size,
             parallel_build=is_parallel,
             use_refit=False,
             quant_mode=self._quantization_config.mode,
+            opt_level=None,
             huggingface=dict(**config),
             tensorrt=trt_version()
         )
-        build_config.trt_builder_config.builder_optimization_level = 5
 
         model = self._weight_adapter.allocate_model(config, shard, self._dtype, qconfig.mode)
 
-        # Handle various loading and conversion methods
-        if weights.format == FileFormat.SAFETENSORS and issubclass(self._weight_adapter, SupportsSafetensors):
-            LOGGER.debug("Using safetensors as weight provider")
-            self._weight_adapter.from_safetensors(weights.files, model, config, build_config, qconfig, shard)
+        if isinstance(weights, Weights):
+            weights = [weights]
 
-        elif weights.format == FileFormat.NUMPY_QUANTIZED and issubclass(self._weight_adapter, SupportsNpz):
-            LOGGER.debug("Using Numpy npz as weight provider (with quantization metadata)")
-            calibration_filename = create_npz_calibration_filename(config["model_type"], shard.rank, shard.tp_size)
-            qweights = np.load(
-                weights.files.joinpath(calibration_filename),
-                mmap_mode="r",
-                allow_pickle=False
-            )
+        for weight in weights:
+            # Handle various loading and conversion methods
+            if weight.format == FileFormat.SAFETENSORS and issubclass(self._weight_adapter, SupportsSafetensors):
+                LOGGER.debug("Using safetensors as weight provider")
+                self._weight_adapter.from_safetensors(weight.files, model, config, build_config, qconfig, shard)
 
-            scales = self._weight_adapter.get_scaling_factors(qweights, config.num_layers, qconfig.mode)
-            quantize_model(model, qconfig.mode, quant_scales=scales)
+            elif weight.format == FileFormat.NUMPY_QUANTIZED and issubclass(self._weight_adapter, SupportsNpz):
+                LOGGER.debug("Using Numpy npz as weight provider (with quantization metadata)")
+                calibration_filename = create_npz_calibration_filename(config["model_type"], shard.rank, shard.tp_size)
+                qweights = np.load(
+                    weight.files.joinpath(calibration_filename),
+                    mmap_mode="r",
+                    allow_pickle=False
+                )
+
+                scales = self._weight_adapter.get_scaling_factors(qweights, config.num_layers, qconfig.mode)
+                quantize_model(model, qconfig.mode, quant_scales=scales)
+            else:
+                raise ValueError(
+                    f"Unknown FileFormat {weight.format}. "
+                    "Please open up an issue on https://github.com/huggingface/optimum-nvidia/issues"
+                )
 
         # Let's build the network
         network = builder.create_network()
@@ -472,9 +483,6 @@ class TensorRTEngineBuilder(ModelHubMixin):
         network.plugin_config.set_gpt_attention_plugin(dtype=self._dtype.value)
         network.plugin_config.set_gemm_plugin(dtype=self._dtype.value)
         # network.plugin_config.set_rmsnorm_plugin(dtype=self._dtype.value)
-
-        network.plugin_config.set_context_fmha(ContextFMHAType.enabled)
-        network.plugin_config.enable_remove_input_padding()
         # network.plugin_config.enable_paged_kv_cache(64)
 
         if shard.world_size > 1:
