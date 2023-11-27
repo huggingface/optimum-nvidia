@@ -20,6 +20,7 @@ from typing import List, Iterable, Mapping, Set, Tuple, Union, Optional
 
 import numpy as np
 
+from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel

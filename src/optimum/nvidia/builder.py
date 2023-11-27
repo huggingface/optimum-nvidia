@@ -266,7 +266,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         # Optimization profile
         if self._optimization_profile is None:
             raise ValueError(
-                "No optimization profile has been defined, please do set the profile you want this engine"
+                "No optimization profile has been defined, please do set the profile you want this engine "
                 "to be optimized for through TRTEngineBuilder.with_optimization_profile()."
             )
 

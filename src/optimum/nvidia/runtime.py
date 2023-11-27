@@ -1,22 +1,81 @@
 import json
 import torch
 from logging import getLogger
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 from pathlib import Path
-
-from huggingface_hub import ModelHubMixin
 
 import tensorrt_llm.bindings as ctrrt
 
+from huggingface_hub import ModelHubMixin
+from optimum.nvidia import TensorRTEngineBuilder
+from optimum.nvidia.configs import TransformersConfig
+from optimum.nvidia.models import ConvertibleModel
+from optimum.nvidia.utils import get_local_empty_folder
 
 LOGGER = getLogger(__name__)
 
 PackedTensor = List[torch.Tensor]
 
 
+DEFAULT_ENGINE_FOLDER = ".engine"
+TENSORRT_ENGINE_EXT = ".engine"
+TENSORRT_CONFIG_EXT = ".json"
+TENSORRT_CONFIG_FILE = f"config{TENSORRT_CONFIG_EXT}"
+
+
 
 class TensorRTPreTrainedModel(ModelHubMixin):
-    pass
+
+    @classmethod
+    def _from_pretrained(
+        cls: Type[ConvertibleModel],
+        *,
+        model_id: str,
+        revision: Optional[str],
+        cache_dir: Optional[Union[str, Path]],
+        force_download: bool,
+        proxies: Optional[Dict],
+        resume_download: bool,
+        local_files_only: bool,
+        token: Optional[Union[str, bool]],
+        **model_kwargs,
+    ) -> ConvertibleModel:
+        model_config = model_kwargs.get("config", None)
+
+        if not model_config:
+            raise ValueError(
+                "Original model configuration (config.json) was not found."
+                "The model configuration is required to build TensorRT-LLM engines."
+            )
+
+        model_config = TransformersConfig(model_config)
+        model_id_or_path = Path(model_id)
+        if model_id_or_path.exists():
+            raise NotImplementedError("Loading local model is not yet supported")
+        else:
+            model_dtype = model_kwargs.get("dtype", "float16")
+            optimization_level = model_kwargs.get("opt_level", 2)
+            max_batch_size = model_kwargs.get("max_batch_size", 1)
+            max_prompt_length = model_kwargs.get("max_prompt_length", 256)
+            max_new_tokens = model_kwargs.get("max_new_tokens", 128)
+            max_beam_width = model_kwargs.get("max_beam_width", 1)
+            gpus_per_node = model_kwargs.get("gpus_per_node", 1)
+            use_cuda_graph = model_kwargs.get("use_cuda_graph", False)
+
+            engine_folder = get_local_empty_folder(DEFAULT_ENGINE_FOLDER)
+            builder = model_kwargs.get("builder", TensorRTEngineBuilder(model_id, model_config, cls.ADAPTER)) \
+                .to(model_dtype) \
+                .with_generation_profile(max_batch_size, max_prompt_length, max_new_tokens) \
+                .with_sampling_strategy(max_beam_width)
+
+            builder.build(engine_folder, optimization_level)
+
+        with open(engine_folder.joinpath(TENSORRT_CONFIG_FILE), "r") as trt_config_f:
+            trt_config = json.load(trt_config_f)
+
+        return cls(trt_config, engine_folder, gpus_per_node, use_cuda_graph)
+            
+
 
 
 class TensorRTForCausalLM(TensorRTPreTrainedModel):
