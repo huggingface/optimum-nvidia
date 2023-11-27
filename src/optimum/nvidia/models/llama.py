@@ -239,8 +239,8 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
 
 
 
-class LLamaForCausalLM(ConvertibleModel):
-    ADAPTER: LlamaWeightAdapter
+class LLamaForCausalLM(ConvertibleModel, TensorRTForCausalLM):
+    ADAPTER = LlamaWeightAdapter
     TARGET = LLaMAForCausalLM
 
 
