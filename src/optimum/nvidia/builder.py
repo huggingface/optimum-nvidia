@@ -543,7 +543,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         # Store the build config for the master (rank = 0) to avoid writing up multiple times the same thing
         if shard.rank == 0:
-            config_path = output_path.joinpath("config.json")
+            config_path = output_path.joinpath("build.json")
             timings_path = output_path.joinpath("timings.cache")
 
             # Save the computed timings
