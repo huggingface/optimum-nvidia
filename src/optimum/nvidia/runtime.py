@@ -1,4 +1,6 @@
 import json
+from os import PathLike
+
 import torch
 from logging import getLogger
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
@@ -7,7 +9,7 @@ from pathlib import Path
 import tensorrt_llm.bindings as ctrrt
 
 from huggingface_hub import ModelHubMixin
-from optimum.nvidia import TensorRTEngineBuilder
+from optimum.nvidia import TensorRTEngineBuilder, OPTIMUM_NVIDIA_CONFIG_FILE, DEFAULT_ENGINE_FOLDER
 from optimum.nvidia.configs import TransformersConfig
 from optimum.nvidia.models import ConvertibleModel
 from optimum.nvidia.utils import get_local_empty_folder
@@ -17,14 +19,25 @@ LOGGER = getLogger(__name__)
 PackedTensor = List[torch.Tensor]
 
 
-DEFAULT_ENGINE_FOLDER = ".engine"
-TENSORRT_ENGINE_EXT = ".engine"
-TENSORRT_CONFIG_EXT = ".json"
-TENSORRT_CONFIG_FILE = f"config{TENSORRT_CONFIG_EXT}"
-
+DEFAULT_BATCH_SIZE: int = 1
+DEFAULT_PROMPT_LENGTH: int = 256
+DEFAULT_MAX_NEW_TOKENS: int = 128
+DEFAULT_BEAM_WIDTH: int = 1
 
 
 class TensorRTPreTrainedModel(ModelHubMixin):
+
+
+    def __init__(self, engines_folder_path: Union[Path, PathLike]):
+        self._engines_folder_path = Path(engines_folder_path)
+
+    @property
+    def engine_path(self) -> Path:
+        """
+        Return the local path where the engine(s) is/are located
+        :return: Path to the folder holding the engine(s) definition(s)
+        """
+        return self._engines_folder_path
 
     @classmethod
     def _from_pretrained(
@@ -40,8 +53,13 @@ class TensorRTPreTrainedModel(ModelHubMixin):
         token: Optional[Union[str, bool]],
         **model_kwargs,
     ) -> ConvertibleModel:
-        model_config = model_kwargs.get("config", None)
+        # Build config
+        optimization_level = model_kwargs.get("opt_level", 2)
+        gpus_per_node = model_kwargs.get("gpus_per_node", 1)
+        use_cuda_graph = model_kwargs.get("use_cuda_graph", False)
 
+        # Let's make sure we have the config
+        model_config = model_kwargs.get("config", None)
         if not model_config:
             raise ValueError(
                 "Original model configuration (config.json) was not found."
@@ -49,34 +67,42 @@ class TensorRTPreTrainedModel(ModelHubMixin):
             )
 
         model_config = TransformersConfig(model_config)
+
         model_id_or_path = Path(model_id)
-        if model_id_or_path.exists():
-            raise NotImplementedError("Loading local model is not yet supported")
+        if model_id_or_path.exists() and model_id_or_path.is_dir():
+            LOGGER.debug(f"Loading prebuild engine(s) from: {model_id_or_path}")
+            engine_folder = model_id_or_path
+
         else:
-            model_dtype = model_kwargs.get("dtype", "float16")
-            optimization_level = model_kwargs.get("opt_level", 2)
-            max_batch_size = model_kwargs.get("max_batch_size", 1)
-            max_prompt_length = model_kwargs.get("max_prompt_length", 256)
-            max_new_tokens = model_kwargs.get("max_new_tokens", 128)
-            max_beam_width = model_kwargs.get("max_beam_width", 1)
-            gpus_per_node = model_kwargs.get("gpus_per_node", 1)
-            use_cuda_graph = model_kwargs.get("use_cuda_graph", False)
+            LOGGER.debug(f"Building engine(s) from model's hub: {model_id_or_path}")
+            builder = model_kwargs.get("builder", None)
 
+            # If the builder is not provided, let's create a new one
+            if not builder:
+                LOGGER.debug("No builder provided, using default one")
+
+                # Define some parameters the user can provide
+                model_dtype = model_kwargs.get("dtype", "float16")
+                max_batch_size = model_kwargs.get("max_batch_size", DEFAULT_BATCH_SIZE)
+                max_prompt_length = model_kwargs.get("max_prompt_length", DEFAULT_PROMPT_LENGTH)
+                max_new_tokens = model_kwargs.get("max_new_tokens", DEFAULT_MAX_NEW_TOKENS)
+                max_beam_width = model_kwargs.get("max_beam_width", DEFAULT_BEAM_WIDTH)
+
+                builder = TensorRTEngineBuilder(model_id, model_config, cls.ADAPTER) \
+                    .to(model_dtype) \
+                    .with_generation_profile(max_batch_size, max_prompt_length, max_new_tokens) \
+                    .with_sampling_strategy(max_beam_width)
+
+            # Retrieve the path where to store and use this to store the TensorRTEngineBuilder artifacts
             engine_folder = get_local_empty_folder(DEFAULT_ENGINE_FOLDER)
-            builder = model_kwargs.get("builder", TensorRTEngineBuilder(model_id, model_config, cls.ADAPTER)) \
-                .to(model_dtype) \
-                .with_generation_profile(max_batch_size, max_prompt_length, max_new_tokens) \
-                .with_sampling_strategy(max_beam_width)
-
             builder.build(engine_folder, optimization_level)
 
-        with open(engine_folder.joinpath(TENSORRT_CONFIG_FILE), "r") as trt_config_f:
+        # Let's load the TensorRT engine config as a JSON file
+        with open(engine_folder.joinpath(OPTIMUM_NVIDIA_CONFIG_FILE), "r") as trt_config_f:
             trt_config = json.load(trt_config_f)
 
         return cls(trt_config, engine_folder, gpus_per_node, use_cuda_graph)
             
-
-
 
 class TensorRTForCausalLM(TensorRTPreTrainedModel):
     __slots__ = (
@@ -97,7 +123,7 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         gpus_per_node: int,
         use_cuda_graph: bool = False
     ):
-        super().__init__()
+        super().__init__(engines_folder)
 
         # TODO avoid the conversion back to str
         self._config = ctrrt.GptJsonConfig.parse(json.dumps(config))

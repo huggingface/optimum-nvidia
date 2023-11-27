@@ -57,7 +57,7 @@ class ModelConfig(Protocol):
 
 class TransformersConfig(UserDict, ModelConfig):
 
-    __slots__ = ("_config", )
+    __slots__ = ("config", )
 
     def __init__(self, pretrained_config: Mapping[str, Any]):
 
@@ -68,6 +68,7 @@ class TransformersConfig(UserDict, ModelConfig):
             pretrained_config["num_layers"] = pretrained_config["num_hidden_layers"]
 
         super().__init__(pretrained_config)
+        self.config = pretrained_config
 
     @property
     def vocab_size(self) -> int:
