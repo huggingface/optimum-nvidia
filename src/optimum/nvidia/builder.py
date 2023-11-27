@@ -533,7 +533,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
             model(*inputs)
 
-            to_onnx(network.trt_network, output_path.joinpath("model.onnx"))
+            # to_onnx(network.trt_network, output_path.joinpath("model.onnx"))
 
         LOGGER.debug("Optimizing network ...")
         graph_rewriting.optimize(network)
