@@ -24,8 +24,7 @@ from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import WeightAdapter, shard
-from optimum.nvidia.weights import SupportsSafetensors, SupportsNpz
+from optimum.nvidia.weights import SupportsSafetensors, SupportsNpz, WeightAdapter, shard
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 from safetensors import deserialize
 from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
