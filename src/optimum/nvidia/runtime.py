@@ -39,6 +39,18 @@ class TensorRTPreTrainedModel(ModelHubMixin):
         """
         return self._engines_folder_path
 
+    def _save_pretrained(self, save_directory: Path) -> None:
+        # All engines are serialized on the disk, let's first check if save_directory is not
+        # just the path where the engines were serialized.
+        # In this case it would just be a no-op
+
+        if save_directory != self._engines_folder_path:
+            if not any(save_directory.iterdir()):
+                from shutil import copytree
+                copytree(self._engines_folder_path, save_directory, dirs_exist_ok=True)
+            else:
+                raise ValueError(f"{save_directory} is not empty")
+
     @classmethod
     def _from_pretrained(
         cls: Type[ConvertibleModel],
