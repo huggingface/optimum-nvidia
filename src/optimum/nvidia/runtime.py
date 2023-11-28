@@ -1,7 +1,7 @@
 import json
 import torch
 from logging import getLogger
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple
 from pathlib import Path
 
 from huggingface_hub import ModelHubMixin
@@ -15,11 +15,11 @@ PackedTensor = List[torch.Tensor]
 
 
 
-class TRTEnginePretrainedModel(ModelHubMixin):
+class TensorRTPreTrainedModel(ModelHubMixin):
     pass
 
 
-class TRTEngineForCausalLM(TRTEnginePretrainedModel):
+class TensorRTForCausalLM(TensorRTPreTrainedModel):
     __slots__ = (
         "_config",
         "_mapping",
@@ -28,7 +28,6 @@ class TRTEngineForCausalLM(TRTEnginePretrainedModel):
         "_max_beam_width",
         "_max_batch_size",
         "_max_prompt_length"
-        "_max_new_tokens"
         "_max_output_length"
     )
 
@@ -51,7 +50,7 @@ class TRTEngineForCausalLM(TRTEnginePretrainedModel):
         self._session_config = ctrrt.GptSessionConfig(
             max_batch_size=config["builder_config"].get("max_batch_size", 1),
             max_beam_width=config["builder_config"].get("max_beam_width", 1),
-            max_sequence_length=config["builder_config"].get("max_position_embeddings", 512)
+            max_sequence_length=config["builder_config"]["max_output_len"]
         )
         self._session_config.cuda_graph_mode = use_cuda_graph
         # self._session_config.kv_cache_config =
@@ -70,7 +69,6 @@ class TRTEngineForCausalLM(TRTEnginePretrainedModel):
         self._max_batch_size = self._config.model_config.max_batch_size
         self._max_prompt_length = self._config.model_config.max_input_len
         self._max_output_length = self._config.model_config.max_output_len
-        self._max_new_tokens = self._max_output_length - self._max_prompt_length
         self._max_beam_width = self._session_config.max_beam_width
 
     @property
@@ -78,7 +76,7 @@ class TRTEngineForCausalLM(TRTEnginePretrainedModel):
         return self._config
 
     def generate(self,
-        input_ids: Union[PackedTensor, torch.Tensor],
+        input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         max_new_tokens: int = 64,
         num_beams: int = 1,
@@ -91,7 +89,7 @@ class TRTEngineForCausalLM(TRTEnginePretrainedModel):
         pad_token_id: int = 0,
         bos_token_id: int = 1,
         eos_token_id: int = 2
-    ):
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         # If no GenerationConfig is provided, let's allocate one with default settings
         generation_config = ctrrt.SamplingConfig(min(num_beams, self._max_beam_width))
         generation_config.random_seed = [seed]
@@ -103,18 +101,21 @@ class TRTEngineForCausalLM(TRTEnginePretrainedModel):
 
         with torch.no_grad():
             if isinstance(input_ids, torch.Tensor):
-
+                input_ids = input_ids.int()
                 if attention_mask is not None:
                     lengths = attention_mask.sum(dim=1, dtype=torch.int32)
+                    input_ids = input_ids.view((input_ids.size(0), -1))
                 elif input_ids.ndim == 1:
+                    input_ids = input_ids.view((1, -1))
                     lengths = torch.tensor([input_ids.size(0)], dtype=torch.int32)
                 elif input_ids.ndim == 2 and input_ids.size(0) == 1:
                     lengths = torch.tensor([input_ids.size(1)], dtype=torch.int32)
                 else:
-                    raise NotImplementedError("Cannot compute lengths from torch.Tensor without attention_mask")
+                    raise NotImplementedError(
+                        "Cannot compute lengths from torch.Tensor without attention_mask for batch > 1"
+                    )
             else:
-                input_ids = torch.nested.nested_tensor(input_ids)
-                lengths = torch.tensor([tensor.size(0) for tensor in input_ids], dtype=torch.int32)
+                raise ValueError("input_ids has to be 2D torch.Tensor (batch, sequence)")
 
             if torch.any(torch.gt(lengths, self._max_prompt_length)):
                 raise ValueError(f"Input length is bigger than maximum prompt length ({self._max_prompt_length}).")
@@ -122,22 +123,28 @@ class TRTEngineForCausalLM(TRTEnginePretrainedModel):
             trt_inputs = ctrrt.GenerationInput(
                 end_id=eos_token_id,
                 pad_id=pad_token_id,
-                ids=input_ids.view((input_ids.size(0), -1)).int(),
-                lengths=lengths,
-                packed=self._use_packed_inputs
+                ids=input_ids.to("cuda"),
+                lengths=lengths.to("cuda"),
+                packed=self._use_packed_inputs,
             )
 
             # Define some additional parameters based on the above
-            if max_new_tokens > self._max_new_tokens:
-                LOGGER.warning(f"max_new_tokens {max_new_tokens} reduced to {self._max_new_tokens} to match engine.")
+            if max_new_tokens > self._max_output_length:
+                LOGGER.warning(f"max_new_tokens {max_new_tokens} cannot exceed {self._max_output_length}.")
 
-            trt_inputs.max_new_tokens = min(max_new_tokens, self._max_new_tokens)
+            # Shall we reduce the maximum number of token being generated?
+            trt_inputs.max_new_tokens = min(max_new_tokens, self._max_output_length)
 
             trt_outputs = ctrrt.GenerationOutput(
-                ids=torch.empty((self._max_batch_size, self._max_output_length), dtype=torch.int32),
-                lengths=torch.empty(self._max_batch_size, dtype=torch.int32)
+                ids=torch.empty(
+                    (self._max_batch_size, self._max_beam_width, self._max_output_length),
+                    device="cuda",
+                    dtype=torch.int32
+                ),
+                lengths=torch.empty(self._max_batch_size, device="cuda", dtype=torch.int32)
             )
+
             self._session.generate(trt_outputs, trt_inputs, generation_config)
 
-            return trt_outputs.ids
+            return trt_outputs.ids, trt_outputs.lengths
 

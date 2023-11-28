@@ -14,6 +14,8 @@ def trt_dtype_to_onnx(dtype):
         return TensorProto.DataType.INT32
     elif dtype == trt.int64:
         return TensorProto.DataType.INT64
+    elif dtype == trt.fp8:
+        return TensorProto.DataType.FLOAT8E4M3FN
     else:
         raise TypeError("%s is not supported" % dtype)
 

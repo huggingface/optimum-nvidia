@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 from ammo.torch import quantization as atq, export as ate
 from optimum.nvidia.configs import QuantizationConfig
-from optimum.nvidia.lang import DataType, as_torch_dtype
+from optimum.nvidia.lang import DataType
 from tensorrt_llm.builder import BuilderConfig
 from tensorrt_llm.quantization import QuantMode
 
@@ -63,7 +63,10 @@ class AmmoQuantizer:
         with torch.inference_mode():
             def _loop():
                 for sample in tqdm(calibration_data):
-                    inputs = {name: tensor[0].view((1, -1)).to(self._model.device) for name, tensor in sample.items()}
+                    inputs = {
+                        name: tensor[0].to(self._model.device)
+                        for name, tensor in sample.items()
+                    }
                     self._model(**inputs)
 
             atq.quantize(self._model, self._ammo_config, _loop)
@@ -72,7 +75,7 @@ class AmmoQuantizer:
         ate.export_model_config(
             self._model,  # The quantized model.
             "llama",  # The type of the model as str, e.g gptj, llama or gptnext.
-            as_torch_dtype(self._dtype),  # The exported weights data type as torch.dtype.
+            self._dtype.as_torch(),  # The exported weights data type as torch.dtype.
             get_quantization_algorithm_name(self._qconfig),  # The quantization algorithm applied, e.g. fp8 or int8_sq.
             path, # The directory where the exported files will be stored.
             self._tp_degree,  # The number of GPUs used in the inference time for tensor parallelism.

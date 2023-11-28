@@ -15,6 +15,10 @@
 from enum import Enum
 from functools import singledispatch
 
+import numpy as np
+from tensorrt_llm import str_dtype_to_trt
+from tensorrt_llm._utils import str_dtype_to_np
+
 
 class DataType(Enum):
     """
@@ -26,47 +30,22 @@ class DataType(Enum):
     FLOAT16 = "float16"
     BFLOAT16 = "bfloat16"
 
+    def as_trt(self) -> object:
+        return str_dtype_to_trt(self.value)
 
+    def as_numpy(self) -> np.dtype:
+        return str_dtype_to_np(self.value)
 
+    def as_torch(self) -> "torch.dtype":
+        import torch
+        if self == DataType.INT8:
+            return torch.int8
+        elif self == DataType.BFLOAT16:
+            return torch.bfloat16
+        elif self == DataType.FLOAT8:
+            return torch.float32  # not supported yet
+        elif self == DataType.FLOAT16:
+            return torch.float16
+        elif self == DataType.FLOAT32:
+            return torch.float32
 
-import torch
-
-
-@singledispatch
-def as_torch_dtype(dtype) -> torch.dtype:
-    pass
-
-
-@as_torch_dtype.register
-def _(dtype: str) -> torch.dtype:
-    dtype_ = dtype.lower()
-    if dtype_ == "float32":
-        return torch.float32
-    elif dtype_ == "float16":
-        return torch.float16
-    elif dtype_ == "bfloat16":
-        return torch.bfloat16
-    elif dtype_ == "int8":
-        return torch.int8
-    elif dtype_ == "int4":
-        return torch.quint4x2
-    elif dtype_ == "fp8":
-        return torch.float32  # not supported yet
-    else:
-        raise ValueError(f"Unsupported dtype: {dtype_} to PyTorch")
-
-
-@as_torch_dtype.register
-def _(dtype: DataType) -> torch.dtype:
-    if dtype == DataType.INT8:
-        return torch.int8
-    elif dtype == DataType.BFLOAT16:
-        return torch.bfloat16
-    elif dtype == DataType.FLOAT8:
-        return torch.float32  # not supported yet
-    elif dtype == DataType.FLOAT16:
-        return torch.float16
-    elif dtype == DataType.FLOAT32:
-        return torch.float32
-    else:
-        raise ValueError(f"Unsupported dtype: {dtype} to PyTorch")

@@ -33,8 +33,8 @@ class Calibration(ABC):
 class HfDatasetCalibration(Calibration):
 
     @classmethod
-    def from_datasets(cls, name: str, split: str, num_samples: int, column: str, streaming: bool = True):
-        dataset = load_dataset(name, split=split, streaming=streaming)
+    def from_datasets(cls, dataset: str, split: str, num_samples: int, column: str, streaming: bool = True, **kwargs):
+        dataset = load_dataset(dataset, split=split, streaming=streaming, **kwargs)
         dataset = dataset.take(num_samples).select_columns([column])
 
         return cls(dataset)

@@ -23,7 +23,7 @@ from optimum.nvidia import setup_logging
 # Setup logging
 setup_logging(False)
 
-from optimum.nvidia import TRTEngineBuilder, TRTEngineForCausalLM
+from optimum.nvidia import TensorRTEngineBuilder, TensorRTForCausalLM
 from optimum.nvidia.models.llama import LlamaWeightAdapter
 from optimum.nvidia.utils.cli import *
 
@@ -59,10 +59,11 @@ if __name__ == '__main__':
         from huggingface_hub import login
         login(args.hub_token, )
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left", token=True)
+    tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
+    tokenizer.pad_token = tokenizer.eos_token
 
     # Define the target engine details
-    builder = TRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
+    builder = TensorRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
         .to(args.dtype) \
         .shard(args.tensor_parallelism, args.pipeline_parallelism, args.world_size, args.gpus_per_node) \
         .with_generation_profile(args.max_batch_size, args.max_prompt_length, args.max_new_tokens) \
@@ -71,43 +72,41 @@ if __name__ == '__main__':
     # Check if we need to collect calibration samples
     if args.has_quantization_step:
         from optimum.nvidia.quantization import HfDatasetCalibration
+        max_length = min(args.max_prompt_length + args.max_new_tokens, tokenizer.model_max_length)
         calib = HfDatasetCalibration.from_datasets(
-            args.dataset,
+            dataset="cnn_dailymail",
+            name="3.0.0",
             split="train",
             num_samples=args.num_calibration_samples,
-            column="question",
+            column="article",
             streaming=True
         )
-        calib.tokenize(tokenizer, tokenizer.model_max_length, pad_to_multiple_of=16)
+        calib.tokenize(tokenizer, max_length=max_length, pad_to_multiple_of=8)
 
         # Add the quantization step
         builder.with_quantization_profile(args.quantization_config, calib)
 
     # Build the engine
-    builder.build(args.output)
+    builder.build(args.output, args.optimization_level)
 
     with open(args.output.joinpath("config.json"), mode="r", encoding="utf-8") as config_f:
         from json import load
-        from transformers import AutoTokenizer, pipeline, TextGenerationPipeline
 
         config = load(config_f)
-        tokenizer = AutoTokenizer.from_pretrained(args.model, auth_token=args.hub_token)
-        model = TRTEngineForCausalLM(config, args.output, args.gpus_per_node)
+        model = TensorRTForCausalLM(config, args.output, args.gpus_per_node)
 
-        # while True:
-        #     prompt = input("Enter text... ")
-
-        prompt = "Who is Nvidia's CEO?"
-        tokens = tokenizer(prompt, return_tensors="pt")
-        generated = model.generate(
+        prompt = "What is the latest generation of Nvidia GPUs?"
+        tokens = tokenizer(prompt, padding=True, return_tensors="pt")
+        generated, lengths = model.generate(
             **tokens,
             top_k=40,
-            top_p=0.7,
+            top_p=0.95,
             repetition_penalty=10,
             pad_token_id=tokenizer.eos_token_id,
-            eos_token_id=tokenizer.eos_token_id
+            eos_token_id=tokenizer.eos_token_id,
+            max_new_tokens=64
         )
 
-        print(tokenizer.decode(generated.flatten().tolist(), remove_special_tokens=True))
+        print(tokenizer.decode(generated.squeeze().tolist(), ))
 
     print(f"TRTLLM engines have been saved at {args.output}.")
