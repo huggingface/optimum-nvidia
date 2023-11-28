@@ -20,6 +20,8 @@ from typing import Union
 
 from huggingface_hub import HfFileSystem, hf_hub_download
 
+from optimum.nvidia.utils.hub import get_user_agent
+
 
 @singledispatch
 def ensure_file_exists_locally(_, root: Union[str, PathLike], file: Union[str, PathLike]) -> Union[str, PathLike]:
@@ -28,7 +30,7 @@ def ensure_file_exists_locally(_, root: Union[str, PathLike], file: Union[str, P
 
 @ensure_file_exists_locally.register
 def _(_: HfFileSystem, repo_id: Union[str, PathLike], file: Union[str, PathLike]) -> Union[str, PathLike]:
-    return hf_hub_download(repo_id, filename=file)
+    return hf_hub_download(repo_id, filename=file, user_agent=get_user_agent())
 
 
 def get_local_empty_folder(base: str) -> Path:
