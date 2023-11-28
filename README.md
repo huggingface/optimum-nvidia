@@ -18,6 +18,7 @@ Optimum-NVIDIA
 Optimum-NVIDIA gives you the best inference performance on the NVIDIA platform through Hugging Face. You can easily access cutting edge optimizations like FP8 post-training quantization and tools like NVIDIA TensorRT-LLM from simple and familiar APIs. You can enable Optimum-NVIDIA by changing just a single line in your existing transformers code.
 
 TODO: Performance Graph (speedup against eager across different HW)
+</div></div>
 
 # Installation
 
