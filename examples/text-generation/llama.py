@@ -89,7 +89,7 @@ if __name__ == '__main__':
     # Build the engine
     builder.build(args.output, args.optimization_level)
 
-    with open(args.output.joinpath("config.json"), mode="r", encoding="utf-8") as config_f:
+    with open(args.output.joinpath("build.json"), mode="r", encoding="utf-8") as config_f:
         from json import load
 
         config = load(config_f)

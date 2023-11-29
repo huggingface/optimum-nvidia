@@ -15,9 +15,12 @@
 import os
 from functools import singledispatch
 from os import PathLike
+from pathlib import Path
 from typing import Union
 
 from huggingface_hub import HfFileSystem, hf_hub_download
+
+from optimum.nvidia.utils.hub import get_user_agent
 
 
 @singledispatch
@@ -27,4 +30,22 @@ def ensure_file_exists_locally(_, root: Union[str, PathLike], file: Union[str, P
 
 @ensure_file_exists_locally.register
 def _(_: HfFileSystem, repo_id: Union[str, PathLike], file: Union[str, PathLike]) -> Union[str, PathLike]:
-    return hf_hub_download(repo_id, filename=file)
+    return hf_hub_download(repo_id, filename=file, user_agent=get_user_agent())
+
+
+def get_local_empty_folder(base: str) -> Path:
+    """
+    Allow to generate an empty folder name with a potential suffix
+    concatenated to the `base` name.
+    :param base: The common prefix used for all the folders
+    :return: A `Path` instance holding the first available, empty, folder name
+    """
+    suffix = 0
+    folder = Path(base)
+
+    while True:
+        if not folder.exists():
+            return folder
+
+        folder = Path(f"{base}.{suffix}")
+        suffix += 1

@@ -13,6 +13,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import json
 import os
 
 import torch
@@ -27,19 +28,19 @@ from os import PathLike, sched_getaffinity
 from pathlib import Path
 from typing import NamedTuple, Optional, Type, Union, Dict, List
 
-from huggingface_hub import ModelHubMixin, HfFileSystem
+from huggingface_hub import ModelHubMixin, HfFileSystem, CONFIG_NAME
 from huggingface_hub.hub_mixin import T
 from transformers import AutoModelForCausalLM
 
+from optimum.nvidia import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
 from optimum.nvidia.configs import ModelConfig, TransformersConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.utils import ensure_file_exists_locally
 from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter, SupportsNpz
 from optimum.nvidia.quantization import Calibration
-from optimum.nvidia.utils.onnx import to_onnx
 
 from tensorrt_llm import Mapping as Shard, graph_rewriting
-from tensorrt_llm.builder import Builder, BuilderConfig
+from tensorrt_llm.builder import Builder
 from tensorrt_llm.models import quantize_model
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
@@ -266,7 +267,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         # Optimization profile
         if self._optimization_profile is None:
             raise ValueError(
-                "No optimization profile has been defined, please do set the profile you want this engine"
+                "No optimization profile has been defined, please do set the profile you want this engine "
                 "to be optimized for through TRTEngineBuilder.with_optimization_profile()."
             )
 
@@ -461,6 +462,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
             max_input_len=self._optimization_profile.max_prompt_length,
             max_output_len=self._optimization_profile.max_output_length,
             max_num_tokens=None,
+            max_beam_width=self._beam_width,
             strongly_typed=qconfig.mode.has_fp8_qdq(),
             tensor_parallel=shard.tp_size,
             pipeline_parallel=shard.pp_size,
@@ -533,7 +535,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
             model(*inputs)
 
-            to_onnx(network.trt_network, output_path.joinpath("model.onnx"))
+            # to_onnx(network.trt_network, output_path.joinpath("model.onnx"))
 
         LOGGER.debug("Optimizing network ...")
         graph_rewriting.optimize(network)
@@ -543,16 +545,23 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         # Store the build config for the master (rank = 0) to avoid writing up multiple times the same thing
         if shard.rank == 0:
-            config_path = output_path.joinpath("config.json")
-            timings_path = output_path.joinpath("timings.cache")
+            hf_config_path = output_path.joinpath(CONFIG_NAME)
+            build_config_path = output_path.joinpath(OPTIMUM_NVIDIA_CONFIG_FILE)
+            timings_path = output_path.joinpath(TENSORRT_TIMINGS_FILE)
+
+            # Save the model's configuration (mainly to restore with from_pretrained without too much pain)
+            with open(hf_config_path, "w", encoding="utf-8") as hf_config_f:
+                config_ = config.config if hasattr(config, "config") else config
+                json.dump(config_, hf_config_f)
+                LOGGER.debug(f"Saved HF model config at {hf_config_path}")
 
             # Save the computed timings
-            builder.save_timing_cache(build_config, timings_path)
+            builder.save_timing_cache(build_config, str(timings_path))
             LOGGER.debug(f"Saved rank 0 timings at {timings_path}")
 
             # Save builder config holding all the engine specificities
-            builder.save_config(build_config, config_path)
-            LOGGER.debug(f"Saved engine config at {config_path}")
+            builder.save_config(build_config, str(build_config_path))
+            LOGGER.debug(f"Saved engine config at {build_config_path}")
 
         self._serialize_engine(engine, output_path.joinpath(ranked_engine_name))
 

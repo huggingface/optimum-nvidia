@@ -13,10 +13,17 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+DEFAULT_HF_HUB_TRT_REVISION: str = "trt-llm"
+
+DEFAULT_ENGINE_FOLDER = ".engine"
+TENSORRT_ENGINE_EXT = "engine"
+TENSORRT_TIMINGS_FILE = "timings.cache"
+OPTIMUM_NVIDIA_CONFIG_FILENAME = "build"
+OPTIMUM_NVIDIA_CONFIG_FILE = f"{OPTIMUM_NVIDIA_CONFIG_FILENAME}.json"
+
+
 from .logging import DEFAULT_LOGGING_FMT, setup_logging
 from .version import __version__, VERSION
 
 from .builder import TensorRTEngineBuilder
 from .runtime import TensorRTPreTrainedModel, TensorRTForCausalLM
-
-DEFAULT_HF_HUB_TRT_REVISION: str = "trt-llm"

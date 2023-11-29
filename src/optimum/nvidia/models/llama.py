@@ -20,11 +20,11 @@ from typing import List, Iterable, Mapping, Set, Tuple, Union, Optional
 
 import numpy as np
 
+from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import WeightAdapter, shard
-from optimum.nvidia.weights import SupportsSafetensors, SupportsNpz
+from optimum.nvidia.weights import SupportsSafetensors, SupportsNpz, WeightAdapter, shard
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 from safetensors import deserialize
 from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
@@ -239,8 +239,8 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
 
 
 
-class LLamaForCausalLM(ConvertibleModel):
-    ADAPTER: LlamaWeightAdapter
+class LLamaForCausalLM(ConvertibleModel, TensorRTForCausalLM):
+    ADAPTER = LlamaWeightAdapter
     TARGET = LLaMAForCausalLM
 
 
