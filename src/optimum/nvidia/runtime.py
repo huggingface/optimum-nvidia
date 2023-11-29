@@ -177,7 +177,7 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
     def generate(self,
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
-        max_new_tokens: int = 64,
+        max_new_tokens: int = -1,
         num_beams: int = 1,
         temperature: float = 1.0,
         top_k: int = 50,
@@ -228,8 +228,7 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
             )
 
             # Define some additional parameters based on the above
-            if max_new_tokens > self._max_output_length:
-                LOGGER.warning(f"max_new_tokens {max_new_tokens} cannot exceed {self._max_output_length}.")
+            max_new_tokens = min(max_new_tokens, max(max_new_tokens, self._max_output_length))
 
             # Shall we reduce the maximum number of token being generated?
             trt_inputs.max_new_tokens = min(max_new_tokens, self._max_output_length)
