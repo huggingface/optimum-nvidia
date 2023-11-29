@@ -179,26 +179,7 @@ class TextGenerationPipeline(Pipeline):
                 clean_up_tokenization_spaces=clean_up_tokenization_spaces,
             )
 
-            # if return_type == ReturnType.NEW_TEXT:
-
             record = {"generated_text": beam_text}
-
-            # # Remove PADDING prompt of the sequence if XLNet or Transfo-XL model is used
-            # if input_ids is None:
-            #     prompt_length = 0
-            # else:
-            #     prompt_length = len(
-            #         self.tokenizer.decode(
-            #             input_ids[0],
-            #             skip_special_tokens=True,
-            #             clean_up_tokenization_spaces=clean_up_tokenization_spaces,
-            #         )
-            #     )
-
-            # all_text = text[prompt_length:]
-            # if return_type == ReturnType.FULL_TEXT:
-            #     all_text = prompt_text + all_text
-
             records.append(record)
 
         return records
