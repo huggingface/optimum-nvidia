@@ -94,12 +94,16 @@ We test Optimum-NVIDIA on 4090, L40S, and H100 GPUs, though it is expected to wo
 
 Note that FP8 support is only available on GPUs based on Hopper and Ada-Lovelace architectures.
 
-Optimum-NVIDIA supports the following model architectures and tasks:
+Optimum-NVIDIA currently works on Linux, and we will expand support to Windows soon.
+
+Optimum-NVIDIA currently supports text-generation with LLaMAForCausalLM, and we are actively working to expand support to include more model architectures and tasks.
+
+<!-- Optimum-NVIDIA supports the following model architectures and tasks:
 
 | Model             | Tasks           |
 | :----             | :----           |
 | LLaMAForCausalLM  | TextGeneration  |
-| Additional Models | Coming soon     |
+| Additional Models | Coming soon     | -->
 
 # Contributing
 
