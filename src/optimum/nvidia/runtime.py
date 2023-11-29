@@ -20,8 +20,7 @@ PackedTensor = List[torch.Tensor]
 
 
 DEFAULT_BATCH_SIZE: int = 1
-DEFAULT_PROMPT_LENGTH: int = 256
-DEFAULT_MAX_NEW_TOKENS: int = 128
+DEFAULT_PROMPT_LENGTH: int = 128
 DEFAULT_BEAM_WIDTH: int = 1
 
 
@@ -97,8 +96,11 @@ class TensorRTPreTrainedModel(ModelHubMixin):
                 model_dtype = model_kwargs.get("dtype", "float16")
                 max_batch_size = model_kwargs.get("max_batch_size", DEFAULT_BATCH_SIZE)
                 max_prompt_length = model_kwargs.get("max_prompt_length", DEFAULT_PROMPT_LENGTH)
-                max_new_tokens = model_kwargs.get("max_new_tokens", DEFAULT_MAX_NEW_TOKENS)
+                max_new_tokens = model_kwargs.get("max_new_tokens", -1)
                 max_beam_width = model_kwargs.get("max_beam_width", DEFAULT_BEAM_WIDTH)
+
+                # max new tokens can be determined from the maximum sequence length supported by the model - len(prompt)
+                max_new_tokens = max(max_new_tokens, model_config.max_sequence_length - max_prompt_length)
 
                 builder = TensorRTEngineBuilder(model_id, model_config, cls.ADAPTER) \
                     .to(model_dtype) \
