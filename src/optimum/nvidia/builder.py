@@ -462,6 +462,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
             max_input_len=self._optimization_profile.max_prompt_length,
             max_output_len=self._optimization_profile.max_output_length,
             max_num_tokens=None,
+            max_beam_width=self._beam_width,
             strongly_typed=qconfig.mode.has_fp8_qdq(),
             tensor_parallel=shard.tp_size,
             pipeline_parallel=shard.pp_size,
