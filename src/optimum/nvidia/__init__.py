@@ -27,3 +27,5 @@ from .version import __version__, VERSION
 
 from .builder import TensorRTEngineBuilder
 from .runtime import TensorRTPreTrainedModel, TensorRTForCausalLM
+from .models import AutoModelForCausalLM
+# from .pipelines import pipeline

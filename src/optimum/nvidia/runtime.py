@@ -100,7 +100,8 @@ class TensorRTPreTrainedModel(ModelHubMixin):
                 max_beam_width = model_kwargs.get("max_beam_width", DEFAULT_BEAM_WIDTH)
 
                 # max new tokens can be determined from the maximum sequence length supported by the model - len(prompt)
-                max_new_tokens = max(max_new_tokens, model_config.max_sequence_length - max_prompt_length)
+                if max_new_tokens < 1:
+                    max_new_tokens = min(max_new_tokens, model_config.max_sequence_length - max_prompt_length)
 
                 builder = TensorRTEngineBuilder(model_id, model_config, cls.ADAPTER) \
                     .to(model_dtype) \
@@ -228,10 +229,14 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
             )
 
             # Define some additional parameters based on the above
-            max_new_tokens = min(max_new_tokens, max(max_new_tokens, self._max_output_length))
 
             # Shall we reduce the maximum number of token being generated?
-            trt_inputs.max_new_tokens = min(max_new_tokens, self._max_output_length)
+            if max_new_tokens == -1:
+                max_new_tokens = self._max_output_length - input_ids.size(1)
+            else:
+                max_new_tokens = min(max_new_tokens, self._max_output_length - input_ids.size(1))
+            
+            trt_inputs.max_new_tokens = max_new_tokens
 
             trt_outputs = ctrrt.GenerationOutput(
                 ids=torch.empty(
