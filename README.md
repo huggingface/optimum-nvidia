@@ -15,14 +15,14 @@ Optimum-NVIDIA
 ---
 <div align="left">
 
-Optimum-NVIDIA gives you the best inference performance on the NVIDIA platform through Hugging Face. You can easily access cutting edge optimizations like FP8 post-training quantization and tools like NVIDIA TensorRT-LLM from simple and familiar APIs. You can enable Optimum-NVIDIA by changing just a single line in your existing transformers code.
+Optimum-NVIDIA delivers the best inference performance on the NVIDIA platform through Hugging Face. Easily access cutting edge optimizations like FP8 post-training quantization and tools like NVIDIA TensorRT-LLM through simple and familiar APIs. Unlock peak performance with Optimum-NVIDIA by changing just a single line in your existing transformers code.
 
 TODO: Performance Graph (speedup against eager across different HW)
 </div></div>
 
 # Installation
 
-You can use a Docker container to try out Optimum-NVIDIA today. Images are available on the Hugging Face Docker Hub.
+You can use a Docker container to try Optimum-NVIDIA today. Images are available on the Hugging Face Docker Hub.
 
 ```bash
 docker pull huggingface/optimum-nvidia
@@ -83,6 +83,23 @@ tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
 To learn more about text generation with LLMs, check out [this guide](https://huggingface.co/docs/transformers/llm_tutorial)!
 
 For more details, read our [documentation](https://huggingface.com/docs/optimum/nvidia/index).
+
+# Support Matrix
+We test Optimum-NVIDIA on 4090, L40S, and H100 GPUs, though it is expected to work on any GPU based on the following architectures:
+* Volta
+* Turing
+* Ampere
+* Hopper
+* Ada-Lovelace
+
+Note that FP8 support is only available on GPUs based on Hopper and Ada-Lovelace architectures.
+
+Optimum-NVIDIA supports the following model architectures and tasks:
+
+| Model             | Tasks           |
+| :----             | :----           |
+| LLaMAForCausalLM  | TextGeneration  |
+| Additional Models | Coming soon     |
 
 # Contributing
 
