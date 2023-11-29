@@ -240,7 +240,11 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
                     device="cuda",
                     dtype=torch.int32
                 ),
-                lengths=torch.empty(self._max_batch_size, device="cuda", dtype=torch.int32)
+                lengths=torch.empty(
+                    (self._max_batch_size, self._max_beam_width),
+                    device="cuda",
+                    dtype=torch.int32
+                )
             )
 
             self._session.generate(trt_outputs, trt_inputs, generation_config)
