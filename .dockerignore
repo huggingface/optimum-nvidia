@@ -1,1 +1,4 @@
 **/*.engine
+**/*.pyc
+.idea/
+**/*.iml
