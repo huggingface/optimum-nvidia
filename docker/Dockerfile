@@ -1,0 +1,28 @@
+FROM tensorrt_llm/release:latest
+
+COPY . /opt/optimum-nvidia
+
+# Install tensorrt-llm
+# TODO: Reduce the container size removing build artifacts
+WORKDIR /opt/optimum-nvidia/third-party/tensorrt-llm
+RUN git lfs install --force && git lfs pull && \
+    python3 scripts/build_wheel.py -j --trt_root /usr/local/tensorrt --python_bindings && \
+    pip install --no-cache-dir build/tensorrt_llm*.whl
+
+# Install NVIDIA Ammo Quantization Framework
+ARG NVIDIA_AMMO_VERSION=0.3.0
+ARG NVIDIA_AMMO_DOWNLOAD_URL=https://developer.nvidia.com/downloads/assets/cuda/files/nvidia-ammo/nvidia_ammo-${NVIDIA_AMMO_VERSION}.tar.gz
+
+RUN cuda_version=$(nvcc --version | grep 'release' | awk '{print $6}' | awk -F'[V.]' '{print $2$3}') && \
+    # Obtain the python version from the system.
+    python_version=$(python3 --version 2>&1 | awk '{print $2}' | awk -F. '{print $1$2}') && \
+    # Download and install the AMMO package from the DevZone.
+    wget ${NVIDIA_AMMO_DOWNLOAD_URL} && \
+    tar -xzf nvidia_ammo-${NVIDIA_AMMO_VERSION}.tar.gz && \
+    pip install --no-cache-dir nvidia_ammo-${NVIDIA_AMMO_VERSION}/nvidia_ammo-${NVIDIA_AMMO_VERSION}+cu$cuda_version-cp$python_version-cp$python_version-linux_x86_64.whl && \
+    rm -rf nvidia_ammo-${NVIDIA_AMMO_VERSION}*
+
+# Install dependencies
+RUN python -m pip install --upgrade --no-cache-dir datasets huggingface_hub hf-transfer transformers pynvml
+
+WORKDIR /opt/optimum-nvidia
