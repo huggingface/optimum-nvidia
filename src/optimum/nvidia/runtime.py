@@ -9,10 +9,13 @@ from pathlib import Path
 import tensorrt_llm.bindings as ctrrt
 
 from huggingface_hub import ModelHubMixin
+from transformers import AutoTokenizer
+
 from optimum.nvidia import TensorRTEngineBuilder, OPTIMUM_NVIDIA_CONFIG_FILE, DEFAULT_ENGINE_FOLDER
 from optimum.nvidia.configs import TransformersConfig
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.utils import get_local_empty_folder
+from optimum.nvidia.utils import get_local_empty_folder, get_user_agent
+from optimum.nvidia.utils.nvml import get_device_compute_capabilities
 
 LOGGER = getLogger(__name__)
 
@@ -94,6 +97,7 @@ class TensorRTPreTrainedModel(ModelHubMixin):
 
                 # Define some parameters the user can provide
                 model_dtype = model_kwargs.get("dtype", "float16")
+                use_fp8 = model_kwargs.get("use_fp8", False)
                 max_batch_size = model_kwargs.get("max_batch_size", DEFAULT_BATCH_SIZE)
                 max_prompt_length = model_kwargs.get("max_prompt_length", DEFAULT_PROMPT_LENGTH)
                 max_new_tokens = model_kwargs.get("max_new_tokens", -1)
@@ -107,6 +111,25 @@ class TensorRTPreTrainedModel(ModelHubMixin):
                     .to(model_dtype) \
                     .with_generation_profile(max_batch_size, max_prompt_length, max_new_tokens) \
                     .with_sampling_strategy(max_beam_width)
+
+                if use_fp8:
+                    from tensorrt_llm.quantization import QuantMode
+                    from optimum.nvidia.configs import QuantizationConfig
+                    from optimum.nvidia.quantization import get_default_calibration_dataset
+
+                    num_calibration_samples = model_kwargs.get("num_calibration_samples", 512)
+                    calibration = get_default_calibration_dataset(num_calibration_samples)
+
+                    LOGGER.debug(f"Calibrating for float8 (num_calibration_samples={num_calibration_samples}).")
+
+                    if hasattr(calibration, "tokenize"):
+                        tokenizer = AutoTokenizer.from_pretrained(model_id, use_agent=get_user_agent())
+                        calibration.tokenize(tokenizer, max_length=max_prompt_length + max_new_tokens)
+
+                    builder.with_quantization_profile(
+                        QuantizationConfig(QuantMode.from_description(use_fp8_qdq=True, use_fp8_kv_cache=True)),
+                        calibration
+                    )
 
             # Retrieve the path where to store and use this to store the TensorRTEngineBuilder artifacts
             engine_folder = get_local_empty_folder(DEFAULT_ENGINE_FOLDER)

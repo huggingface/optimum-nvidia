@@ -1,6 +1,7 @@
 from os import PathLike
 from typing import Dict, Optional, Type, Tuple, Union
 
+from huggingface_hub import model_info
 from tensorrt_llm import Module
 from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast, AutoTokenizer, AutoConfig
 
@@ -33,8 +34,8 @@ def get_target_class_for_model_and_task(task: str, architecture: str) -> Optiona
 
 
 def pipeline(
-    task: str,
-    model_or_path: Union[str, PathLike, Module],
+    task: str = None,
+    model: Union[str, PathLike, Module] = None,
     tokenizer: Optional[Union[str, PreTrainedTokenizer, PreTrainedTokenizerFast]] = None,
     **kwargs
 ):
@@ -51,7 +52,7 @@ def pipeline(
         task (`str`):
             The task defining which pipeline will be returned. Currently accepted tasks are:
                 - `"text-generation"`: will return a [`TextGenerationPipeline`]:.
-        model_or_path (`str` or [`PreTrainedModel`] or [`TFPreTrainedModel`], *optional*):
+        model (`str` or [`PreTrainedModel`] or [`TFPreTrainedModel`], *optional*):
             The model that will be used by the pipeline to make predictions. This can be a model identifier or an
             actual instance of a pretrained model inheriting from [`PreTrainedModel`] (for PyTorch) or
             [`TFPreTrainedModel`] (for TensorFlow).
@@ -68,24 +69,33 @@ def pipeline(
 
     """
 
-    config = AutoConfig.from_pretrained(model_or_path, user_agent=get_user_agent())
-    model_type = config.model_type
+    try:
+        info = model_info(model)
+    except Exception as e:
+        raise RuntimeError(f"Failed to instantiate the pipeline inferring the task for model {model}: {e}")
 
-    if model_type not in SUPPORTED_MODEL_WITH_TASKS:
+    # Retrieve the model type
+    model_type = info.config.get("model_type", None)
+    if not model_type:
+        raise RuntimeError(f"Failed to infer model type for model {model}")
+    elif model_type not in SUPPORTED_MODEL_WITH_TASKS:
         raise NotImplementedError(f"Model type {model_type} is not currently supported")
 
+    if not task and getattr(info, "library_name", "transformers") == "transformers":
+        if not info.pipeline_tag:
+            raise RuntimeError(f"Failed to infer the task for model {model}, please use `task` parameter")
+        task = info.pipeline_tag
+
     if task not in SUPPORTED_MODEL_WITH_TASKS[model_type]:
-        raise ValueError(f"Task {task} is not supported yet for {model_type}.")
+        raise NotImplementedError(f"Task {task} is not supported yet for {model_type}.")
 
     if tokenizer is None:
-        tokenizer = AutoTokenizer.from_pretrained(model_or_path, use_fast=True)
+        tokenizer = AutoTokenizer.from_pretrained(model, use_fast=True)
 
     # Allocate
     pipeline_factory, model_factory = SUPPORTED_MODEL_WITH_TASKS[model_type][task]
 
-    if not isinstance(model_or_path, TensorRTForCausalLM):
-        model = model_factory.from_pretrained(model_or_path, **kwargs)
-    else:
-        model = model_or_path
+    if not isinstance(model, TensorRTForCausalLM):
+        model = model_factory.from_pretrained(model, **kwargs)
 
     return pipeline_factory(model, tokenizer)
