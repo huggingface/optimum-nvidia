@@ -1,5 +1,6 @@
 import functools
 
+from .nvml import get_device_compute_capabilities
 from ..version import __version__
 from sys import version as pyversion
 
@@ -31,9 +32,10 @@ def get_user_agent() -> str:
         if num_gpus > 0:
             sm = []
             for device_idx in range(num_gpus):
-                nvml_device_handle = nvmlDeviceGetHandleByIndex(device_idx)
-                compute_capabilities = nvmlDeviceGetCudaComputeCapability(nvml_device_handle)
-                sm.append(f"{compute_capabilities[0]}{compute_capabilities[1]}")
+                compute_capabilities = get_device_compute_capabilities(device_idx)
+                if compute_capabilities:
+                    major, minor = compute_capabilities
+                    sm.append(f"{major}{minor}")
 
             ua.append(f"gpus/{num_gpus}")
             ua.append(f"sm/{'|'.join(sm)}")

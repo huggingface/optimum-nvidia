@@ -52,6 +52,8 @@ from optimum.nvidia.weights.hub import get_safetensors_files
 LOGGER = getLogger(__name__)
 
 
+SM_FP8_SUPPORTED = {89, 90}
+
 # Utility classes to store build information
 BuildInfo = NamedTuple("BuildInfo", [("parallel", bool), ("num_parallel_jobs", int)])
 SERIAL_BUILD = BuildInfo(False, 1)
@@ -211,6 +213,19 @@ class TensorRTEngineBuilder(ModelHubMixin):
         :param calibration:
         :return:
         """
+        if config.mode.has_fp8_qdq() or config.mode.has_fp8_kv_cache():
+            from optimum.nvidia.utils.nvml import get_device_compute_capabilities
+            compute_capabilities = get_device_compute_capabilities(0)
+
+            if compute_capabilities:
+                compute_capabilities_ = compute_capabilities[0] * 10 + compute_capabilities[1]
+
+                if compute_capabilities_ not in SM_FP8_SUPPORTED:
+                    raise ValueError(
+                        f"float8 is not supported on your device (compute capabilities = {compute_capabilities_}). "
+                        f"Please use a device with compute capabilities {SM_FP8_SUPPORTED}"
+                    )
+
         # TODO: validate the calibration is required or not
         self._quantization_config = config
         self._quantization_calibration = calibration
