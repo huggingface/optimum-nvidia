@@ -389,6 +389,10 @@ class TensorRTEngineBuilder(ModelHubMixin):
                     quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
                     quantizer.calibrate(self._quantization_calibration)
                     quantizer.save(calibration_path)
+
+                    # Release the memory
+                    del hf_model
+                    torch.cuda.empty_cache()
                 else:
                     LOGGER.info(f"Reusing already precomputed calibration data at {calibration_path}")
 
