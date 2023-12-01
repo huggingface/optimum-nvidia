@@ -99,6 +99,7 @@ class TextGenerationPipeline(Pipeline):
 
         in_b = input_ids.shape[0]
         max_new_tokens = generate_kwargs.pop("max_new_tokens", -1)
+        min_length = generate_kwargs.pop("min_length", -1)
         num_beams = generate_kwargs.pop("num_beams", 1)
         temperature = generate_kwargs.pop("temperature", 1.0)
         top_k = generate_kwargs.pop("top_k", 50)
@@ -130,6 +131,7 @@ class TextGenerationPipeline(Pipeline):
             input_ids=input_ids,
             attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
+            min_length=min_length,
             num_beams=num_beams,
             temperature=temperature,
             top_k=top_k,
