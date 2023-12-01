@@ -152,7 +152,11 @@ class TextGenerationPipeline(Pipeline):
     def preprocess(
         self, prompt_text, prefix="", handle_long_generation=None, add_special_tokens=False, **generate_kwargs
     ) -> Dict[str, torch.Tensor]:
-        text = prefix + prompt_text
+        if isinstance(prompt_text, List):
+            text = [prefix + prompt for prompt in prompt_text]
+        else:
+            text = prefix + prompt_text
+
         inputs = self.tokenizer(
             text, padding=False, add_special_tokens=add_special_tokens, return_tensors=TensorType.PYTORCH
         )
