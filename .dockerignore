@@ -1,4 +1,8 @@
 **/*.engine
 **/*.pyc
+
+hub/
+
+.git/
 .idea/
 **/*.iml
