@@ -8,8 +8,7 @@ COPY . /opt/optimum-nvidia
 # TODO: Reduce the container size removing build artifacts
 WORKDIR /opt/optimum-nvidia/third-party/tensorrt-llm
 RUN git lfs install --force && git lfs pull && \
-    python3 scripts/build_wheel.py -j --trt_root /usr/local/tensorrt --python_bindings --cuda_architectures=${TARGET_CUDA_ARCHS} && \
-    pip install --no-cache-dir build/tensorrt_llm*.whl
+    python3 scripts/build_wheel.py -j --trt_root /usr/local/tensorrt --python_bindings --cuda_architectures=${TARGET_CUDA_ARCHS}
 
 FROM tensorrt_llm/release
 
@@ -18,7 +17,9 @@ RUN rm -rf /app/tensorrt_llm/examples
 
 # Install TRTLLM
 COPY --from=BUILDER /opt/optimum-nvidia/third-party/tensorrt-llm/build /opt/trtllm/build
-RUN python3 -m pip install --no-cache-dir /opt/trtllm/build/tensorrt_llm*.whl && \
+
+RUN cp /opt/trtllm/build/lib/tensorrt_llm/bindings*.so /usr/local/lib/python3.10/dist-packages/tensorrt_llm/ && \
+    python3 -m pip install --no-cache-dir /opt/trtllm/build/tensorrt_llm*.whl && \
     rm -rf /opt/trtllm
 
 # Install NVIDIA Ammo Quantization Framework
@@ -34,10 +35,10 @@ RUN cuda_version=$(nvcc --version | grep 'release' | awk '{print $6}' | awk -F'[
     pip install --no-cache-dir nvidia_ammo-${NVIDIA_AMMO_VERSION}/nvidia_ammo-${NVIDIA_AMMO_VERSION}+cu$cuda_version-cp$python_version-cp$python_version-linux_x86_64.whl && \
     rm -rf nvidia_ammo-${NVIDIA_AMMO_VERSION}*
 
-COPY . /opt/optimu-nvidia
+COPY . /opt/optimum-nvidia
 
 # Install dependencies
-RUN python -m pip install --upgrade --no-cache-dir datasets huggingface_hub hf-transfer transformers pynvml && \
-    python -m pip install --no-cache-dir -e /opt/optimum-nvidia
+RUN python -m pip install --upgrade --no-cache-dir datasets huggingface_hub hf-transfer transformers pynvml
+ENV PYTHONPATH=/opt/optimum-nvidia/src:$PYTHONPATH
 
 WORKDIR /opt/optimum-nvidia/examples
