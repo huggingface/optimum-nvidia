@@ -26,10 +26,11 @@ def get_trtllm_pipeline(args: Namespace):
     )
 
 def create_prompt_for_length(batch: int, length: int) -> Union[str, List[str]]:
-    tokens = " ".join(["I"] * length)
+    tokens = ["I"] * length
+    tokens = " ".join(tokens)
     if batch == 1:
         return tokens
-    return [tokens * batch]
+    return [tokens] * batch
 
 if __name__ == '__main__':
     parser = ArgumentParser("Hugging Face Optimum-Nvidia Pipelines Benchmarking tool")
@@ -61,18 +62,18 @@ if __name__ == '__main__':
         args.min_length = args.output_length
         args.max_new_tokens = args.output_length - args.prompt_length
 
-    pipe = get_transformers_pipeline(args) if args.use_transformers else get_trtllm_pipeline(args)
     prompt = create_prompt_for_length(args.batch_size, args.prompt_length)
+    pipe = get_transformers_pipeline(args) if args.use_transformers else get_trtllm_pipeline(args)
 
     # Warm up
     for _ in trange(args.warmup, desc="Warming up..."):
-        _ = pipe(prompt, max_new_tokens=args.max_new_tokens, min_length=args.min_length)
+        _ = pipe(prompt, max_new_tokens=args.max_new_tokens, min_length=args.min_length, use_cache=True)
 
     # Benchmark
     latencies = []
     for _ in trange(args.repeat, desc="Benchmarking..."):
         start = monotonic_ns()
-        _ = pipe(prompt, max_new_tokens=args.max_new_tokens, min_length=args.min_length)
+        _ = pipe(prompt, max_new_tokens=args.max_new_tokens, min_length=args.min_length, use_cache=True)
         end = monotonic_ns()
 
         latencies.append((end - start))
@@ -81,15 +82,15 @@ if __name__ == '__main__':
 
     if args.time_to_first_token:
         print(
-            "Time-To-First-Token Latency (ms): "
-            f"{latencies.mean().astype(np.uint64) / 1e6} "
+            "Time-To-First-Token Latency: "
+            f"{latencies.mean().astype(np.uint64) / 1e6} ms "
             f"(+/- {latencies.std().astype(np.uint64) / 1e6})"
         )
     else:
         num_tokens = (args.batch_size * args.output_length)
-        tokens_per_sec = num_tokens / (1000.0 / latencies)
+        tokens_per_sec = num_tokens / (latencies / 1e9)
         print(
-            "Throughput (tokens/s): "
-            f"{tokens_per_sec.mean().astype(np.uint64) }"
-            f"(+/- {tokens_per_sec.std().astype(np.uint64)}"
+            "Throughput: "
+            f"{tokens_per_sec.mean().astype(np.uint64)} tokens/s "
+            f"(+/- {tokens_per_sec.std().astype(np.uint64)})"
         )
