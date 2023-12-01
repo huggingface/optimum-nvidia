@@ -202,6 +202,7 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         max_new_tokens: int = -1,
+        min_length: int = -1,
         num_beams: int = 1,
         temperature: float = 1.0,
         top_k: int = 50,
@@ -221,6 +222,9 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         generation_config.top_p = [top_p]
         generation_config.repetition_penalty = [repetition_penalty]
         generation_config.length_penalty = [length_penalty]
+
+        if min_length > 0:
+            generation_config.min_length = min_length
 
         with torch.no_grad():
             if isinstance(input_ids, torch.Tensor):
