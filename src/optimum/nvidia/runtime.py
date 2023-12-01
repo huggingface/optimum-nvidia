@@ -224,19 +224,19 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         generation_config.length_penalty = [length_penalty]
 
         if min_length > 0:
-            generation_config.min_length = min_length
+            generation_config.min_length = [min_length]
 
         with torch.no_grad():
             if isinstance(input_ids, torch.Tensor):
                 input_ids = input_ids.int()
                 if attention_mask is not None:
-                    lengths = attention_mask.sum(dim=1, dtype=torch.int32)
+                    lengths = attention_mask.sum(dim=1, dtype=torch.int32).to("cuda")
                     input_ids = input_ids.view((input_ids.size(0), -1))
                 elif input_ids.ndim == 1:
                     input_ids = input_ids.view((1, -1))
-                    lengths = torch.tensor([input_ids.size(0)], dtype=torch.int32)
+                    lengths = torch.tensor([input_ids.size(0)], device="cuda", dtype=torch.int32)
                 elif input_ids.ndim == 2 and input_ids.size(0) == 1:
-                    lengths = torch.tensor([input_ids.size(1)], dtype=torch.int32)
+                    lengths = torch.tensor([input_ids.size(1)], device="cuda", dtype=torch.int32)
                 else:
                     raise NotImplementedError(
                         "Cannot compute lengths from torch.Tensor without attention_mask for batch > 1"
@@ -245,13 +245,17 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
                 raise ValueError("input_ids has to be 2D torch.Tensor (batch, sequence)")
 
             if torch.any(torch.gt(lengths, self._max_prompt_length)):
-                raise ValueError(f"Input length is bigger than maximum prompt length ({self._max_prompt_length}).")
+                raise ValueError(f"Input length {lengths} is bigger than maximum prompt length ({self._max_prompt_length}).")
+
+            if self._use_packed_inputs:
+                input_ids = input_ids.view((1, -1))
+                lengths = lengths.flatten()
 
             trt_inputs = ctrrt.GenerationInput(
                 end_id=eos_token_id,
                 pad_id=pad_token_id,
-                ids=input_ids.to("cuda"),
-                lengths=lengths.to("cuda"),
+                ids=input_ids,
+                lengths=lengths,
                 packed=self._use_packed_inputs,
             )
 
