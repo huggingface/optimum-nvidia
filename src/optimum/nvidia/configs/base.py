@@ -66,6 +66,12 @@ class TransformersConfig(UserDict, ModelConfig):
 
         if "num_layers" not in pretrained_config:
             pretrained_config["num_layers"] = pretrained_config["num_hidden_layers"]
+        
+        if "max_sequence_length" not in pretrained_config:
+            if "max_position_embeddings" in pretrained_config:
+                pretrained_config["max_sequence_length"] = pretrained_config["max_position_embeddings"]
+            else:
+                raise ValueError("Unable to determine max_sequence_length from model config.")
 
         super().__init__(pretrained_config)
         self.config = pretrained_config
