@@ -26,12 +26,16 @@ except Exception as error:
     assert False, "Error: Could not open '%s' due %s\n" % (filepath, error)
 
 INSTALL_REQUIRES = [
-    # "transformers >= 4.32.1",
+    "accelerate",
+    "dataset"
     "fsspec",
     "huggingface_hub >= 0.14.0",
+    "hf-transfer",
     "numpy >= 1.24.0",
     "onnx >= 1.12.0",
     "optimum >= 1.13.0",
+    "transformers >= 4.32.1",
+    "pynvml"
 ]
 
 TESTS_REQUIRES = [
