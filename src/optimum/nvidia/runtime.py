@@ -123,8 +123,21 @@ class TensorRTPreTrainedModel(ModelHubMixin):
                     LOGGER.debug(f"Calibrating for float8 (num_calibration_samples={num_calibration_samples}).")
 
                     if hasattr(calibration, "tokenize"):
-                        tokenizer = AutoTokenizer.from_pretrained(model_id, use_agent=get_user_agent())
-                        calibration.tokenize(tokenizer, max_length=max_prompt_length + max_new_tokens)
+                        tokenizer = AutoTokenizer.from_pretrained(model_id, use_agent=get_user_agent(), padding_side="left")
+
+                        # Let's make sure the calibration see some padding
+                        # TODO: Do we need this? We use the remove_input_padding plugins most of the time ...
+                        if not tokenizer.pad_token and tokenizer.eos_token:
+                            tokenizer.pad_token = tokenizer.eos_token
+                            pad_to_multiple_of = 8
+                        else:
+                            pad_to_multiple_of = None
+
+                        calibration.tokenize(
+                            tokenizer, 
+                            max_length=max_prompt_length + max_new_tokens,
+                            pad_to_multiple_of=pad_to_multiple_of
+                        )
 
                     builder.with_quantization_profile(
                         QuantizationConfig(QuantMode.from_description(use_fp8_qdq=True, use_fp8_kv_cache=True)),
