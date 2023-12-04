@@ -5,8 +5,8 @@ COPY . /opt/optimum-nvidia
 # Install tensorrt-llm
 # TODO: Reduce the container size removing build artifacts
 WORKDIR /opt/optimum-nvidia/third-party/tensorrt-llm
-RUN git lfs install --force && git lfs pull && \
-    python3 scripts/build_wheel.py -j --trt_root /usr/local/tensorrt --python_bindings && \
+# RUN git lfs install --force && git lfs pull && \
+RUN python3 scripts/build_wheel.py -j --trt_root /usr/local/tensorrt --python_bindings && \
     pip install build/tensorrt_llm*.whl
 
 # Install NVIDIA Ammo Quantization Framework
@@ -23,6 +23,6 @@ RUN cuda_version=$(nvcc --version | grep 'release' | awk '{print $6}' | awk -F'[
     rm -rf nvidia_ammo-${NVIDIA_AMMO_VERSION}*
 
 # Install dependencies
-RUN python -m pip install --no-cache-dir --upgrade datasets huggingface_hub hf-transfer transformers pynvml
+RUN python -m pip install --no-cache-dir --upgrade accelerate datasets huggingface_hub hf-transfer optimum transformers pynvml
 
 WORKDIR /opt/optimum-nvidia
