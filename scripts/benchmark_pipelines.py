@@ -87,8 +87,8 @@ if __name__ == '__main__':
     if args.time_to_first_token:
         print(
             "Time-To-First-Token Latency: "
-            f"{latencies.mean().astype(np.uint64) / 1e6} ms "
-            f"(+/- {latencies.std().astype(np.uint64) / 1e6})"
+            f"{latencies.mean().astype(np.uint64)} ms "
+            f"(+/- {latencies.std().astype(np.uint64)})"
         )
     else:
         num_tokens = (args.batch_size * args.output_length)
