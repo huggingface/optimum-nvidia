@@ -276,12 +276,6 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
                 packed=self._use_packed_inputs,
             )
 
-            # Shall we reduce the maximum number of token being generated?
-            if max_new_tokens == -1:
-                max_new_tokens = self._max_output_length - input_ids.size(1)
-            else:
-                max_new_tokens = min(max_new_tokens, self._max_output_length - input_ids.size(1))
-            
             trt_inputs.max_new_tokens = max_new_tokens
 
             trt_outputs = ctrrt.GenerationOutput(
