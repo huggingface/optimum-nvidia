@@ -71,23 +71,19 @@ if __name__ == '__main__':
 
     # Check if we need to collect calibration samples
     if args.has_quantization_step:
-        from optimum.nvidia.quantization import HfDatasetCalibration
+        from optimum.nvidia.quantization import get_default_calibration_dataset
+
         max_length = min(args.max_prompt_length + args.max_new_tokens, tokenizer.model_max_length)
-        calib = HfDatasetCalibration.from_datasets(
-            dataset="cnn_dailymail",
-            name="3.0.0",
-            split="train",
-            num_samples=args.num_calibration_samples,
-            column="article",
-            streaming=True
-        )
-        calib.tokenize(tokenizer, max_length=max_length, pad_to_multiple_of=8)
+        calib = get_default_calibration_dataset(args.num_calibration_samples)
+
+        if hasattr(calib, "tokenize"):
+            calib.tokenize(tokenizer, max_length=max_length, pad_to_multiple_of=8)
 
         # Add the quantization step
         builder.with_quantization_profile(args.quantization_config, calib)
 
     # Build the engine
-    builder.build(args.output, args.optimization_level)
+    # builder.build(args.output, args.optimization_level)
 
     with open(args.output.joinpath("build.json"), mode="r", encoding="utf-8") as config_f:
         from json import load
@@ -95,7 +91,8 @@ if __name__ == '__main__':
         config = load(config_f)
         model = TensorRTForCausalLM(config, args.output, args.gpus_per_node)
 
-        prompt = "What is the latest generation of Nvidia GPUs?"
+        # prompt = "What is the latest generation of Nvidia GPUs?"
+        prompt = " ".join(["I"] * 256)
         tokens = tokenizer(prompt, padding=True, return_tensors="pt")
         generated, lengths = model.generate(
             **tokens,
@@ -104,7 +101,8 @@ if __name__ == '__main__':
             repetition_penalty=10,
             pad_token_id=tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id,
-            max_new_tokens=64
+            max_new_tokens=512,
+            min_length=768
         )
 
         print(tokenizer.decode(generated.squeeze().tolist(), ))
