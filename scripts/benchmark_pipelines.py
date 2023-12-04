@@ -69,14 +69,18 @@ if __name__ == '__main__':
     for _ in trange(args.warmup, desc="Warming up..."):
         _ = pipe(prompt, max_new_tokens=args.max_new_tokens, min_length=args.min_length, use_cache=True)
 
+    start = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
+
     # Benchmark
     latencies = []
     for _ in trange(args.repeat, desc="Benchmarking..."):
-        start = monotonic_ns()
+        start.record()
         _ = pipe(prompt, max_new_tokens=args.max_new_tokens, min_length=args.min_length, use_cache=True)
-        end = monotonic_ns()
+        end.record()
+        torch.cuda.synchronize()
 
-        latencies.append((end - start))
+        latencies.append(start.elapsed_time(end))
 
     latencies = np.array(latencies)
 
