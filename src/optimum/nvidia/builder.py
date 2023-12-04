@@ -35,7 +35,7 @@ from transformers import AutoModelForCausalLM
 from optimum.nvidia import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
 from optimum.nvidia.configs import ModelConfig, TransformersConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
-from optimum.nvidia.utils import ensure_file_exists_locally
+from optimum.nvidia.utils import ensure_file_exists_locally, maybe_offload_weights_to_cpu
 from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter, SupportsNpz
 from optimum.nvidia.quantization import Calibration
 
@@ -386,10 +386,11 @@ class TensorRTEngineBuilder(ModelHubMixin):
                         torch_dtype=self._dtype.as_torch()
                     ).to(memory_format=torch.channels_last)
 
+                    hf_model = maybe_offload_weights_to_cpu(hf_model)
+
                     quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
                     quantizer.calibrate(self._quantization_calibration)
                     quantizer.save(calibration_path)
-
                     # Release the memory
                     del hf_model
                     torch.cuda.empty_cache()

@@ -230,7 +230,7 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
             if isinstance(input_ids, torch.Tensor):
                 input_ids = input_ids.int()
                 if attention_mask is not None:
-                    lengths = attention_mask.sum(dim=1, dtype=torch.int32).to("cuda")
+                    lengths = attention_mask.sum(dim=1, dtype=torch.int32)
                     input_ids = input_ids.view((input_ids.size(0), -1))
                 elif input_ids.ndim == 1:
                     input_ids = input_ids.view((1, -1))
@@ -251,6 +251,10 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
                 input_ids = input_ids.view((1, -1))
                 lengths = lengths.flatten()
 
+            if input_ids.device.type != "cuda" or lengths.device.type != "cuda":
+                input_ids = input_ids.to("cuda")
+                lengths = lengths.to("cuda")
+
             trt_inputs = ctrrt.GenerationInput(
                 end_id=eos_token_id,
                 pad_id=pad_token_id,
@@ -258,8 +262,6 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
                 lengths=lengths,
                 packed=self._use_packed_inputs,
             )
-
-            # Define some additional parameters based on the above
 
             # Shall we reduce the maximum number of token being generated?
             if max_new_tokens == -1:
