@@ -1,0 +1,15 @@
+name: test-GPU
+on:
+  workflow_dispatch:
+
+jobs:
+  test-a10: 
+    name: test-gpu-4a10
+    runs-on: [multiple-gpu, nvidia-gpu, 4-a10, ci]
+    steps:
+      - run: nvidia-smi
+  test-a10s: 
+    name: test-gpu-2l4
+    runs-on: [multi-gpu, nvidia-gpu, 2-l4, ci]
+    steps:
+      - run: nvidia-smi
