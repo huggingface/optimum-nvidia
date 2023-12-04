@@ -88,7 +88,7 @@ if __name__ == '__main__':
         )
     else:
         num_tokens = (args.batch_size * args.output_length)
-        tokens_per_sec = num_tokens / (latencies / 1e9)
+        tokens_per_sec = num_tokens / (latencies / 1e6)
         print(
             "Throughput: "
             f"{tokens_per_sec.mean().astype(np.uint64)} tokens/s "
