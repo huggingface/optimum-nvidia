@@ -19,11 +19,18 @@ class ReturnType(Enum):
 class TextGenerationPipeline(Pipeline):
     TARGET_FACTORY = AutoModelForCausalLM
 
-    __slots__ = ("tokenizer", "_runtime")
+    __slots__ = ("tokenizer", "_runtime", "_bos_token_id", "_eos_token_id", "_pad_token_id")
 
     def __init__(self, model: TensorRTForCausalLM, tokenizer: PreTrainedTokenizer):
+        if tokenizer.eos_token and not tokenizer.pad_token:
+            tokenizer.pad_token = tokenizer.eos_token
+
         self.tokenizer = tokenizer
         self._runtime = model
+
+        self._bos_token_id = tokenizer.bos_token_id
+        self._eos_token_id = tokenizer.eos_token_id
+        self._pad_token_id = tokenizer.pad_token_id
 
     def __call__(self, inputs: Union[str, List[str]], **kwargs):
         preprocess_params, forward_params, postprocess_params = self._sanitize_parameters(**kwargs)
@@ -139,6 +146,9 @@ class TextGenerationPipeline(Pipeline):
             repetition_penalty=repetition_penalty,
             length_penalty=length_penalty,
             seed=seed,
+            bos_token_id=self._bos_token_id,
+            eos_token_id=self._eos_token_id,
+            pad_token_id=self._pad_token_id,
         )
 
         out_b = generated_sequence.shape[0]
