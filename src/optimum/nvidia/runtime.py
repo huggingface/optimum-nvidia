@@ -127,16 +127,16 @@ class TensorRTPreTrainedModel(ModelHubMixin):
 
                         # Let's make sure the calibration see some padding
                         # TODO: Do we need this? We use the remove_input_padding plugins most of the time ...
-                        if not tokenizer.pad_token and tokenizer.eos_token:
-                            tokenizer.pad_token = tokenizer.eos_token
-                            pad_to_multiple_of = 8
-                        else:
-                            pad_to_multiple_of = None
+                        # if not tokenizer.pad_token and tokenizer.eos_token:
+                        #     tokenizer.pad_token = tokenizer.eos_token
+                        #     pad_to_multiple_of = 8
+                        # else:
+                        #     pad_to_multiple_of = None
 
                         calibration.tokenize(
                             tokenizer, 
                             max_length=max_prompt_length + max_new_tokens,
-                            pad_to_multiple_of=pad_to_multiple_of
+                            pad_to_multiple_of=1
                         )
 
                     builder.with_quantization_profile(
