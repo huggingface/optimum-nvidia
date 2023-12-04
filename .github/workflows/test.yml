@@ -5,7 +5,7 @@ on:
 jobs:
   test-a10: 
     name: test-gpu-4a10
-    runs-on: [multiple-gpu, nvidia-gpu, 4-a10, ci]
+    runs-on: [multi-gpu, nvidia-gpu, 4-a10, ci]
     steps:
       - run: nvidia-smi
   test-a10s: 
