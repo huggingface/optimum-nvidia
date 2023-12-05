@@ -12,7 +12,13 @@ from time import monotonic_ns
 
 
 def get_transformers_pipeline(args: Namespace):
-    return raw_pipeline(model=args.model, torch_dtype=torch.float16, model_kwargs={"device_map": "auto"})
+    return raw_pipeline(
+        model=args.model,
+        torch_dtype=torch.float16,
+        model_kwargs={
+            "device_map": "balanced",
+            "max_memory": {0: "20GiB", "cpu": "64GiB"},
+        })
 
 
 def get_trtllm_pipeline(args: Namespace):
@@ -22,7 +28,11 @@ def get_trtllm_pipeline(args: Namespace):
         use_cuda_graph=args.use_cuda_graph,
         max_batch_size=args.batch_size,
         max_prompt_length=args.prompt_length,
-        max_new_tokens=args.max_new_tokens
+        max_new_tokens=args.max_new_tokens,
+        tp=args.tp,
+        pp=args.pp,
+        gpus_per_node=args.gpus_per_node,
+        world_size=args.world_size
     )
 
 def create_prompt_for_length(batch: int, length: int) -> Union[str, List[str]]:
@@ -44,6 +54,10 @@ if __name__ == '__main__':
     parser.add_argument("--use-transformers", action="store_true", help="Use transformers pipeline as baseline.")
     parser.add_argument("--use-cuda-graph", action="store_true", help="Turn on CUDA Graph.")
     parser.add_argument("--use-fp8", action="store_true", help="Attempt to benchmark in float8 precision.")
+    parser.add_argument("--tp", type=int, default=1, help="Degree of tensor parallelism to apply.")
+    parser.add_argument("--pp", type=int, default=1, help="Degree of pipeline parallelism to apply.")
+    parser.add_argument("--gpus-per-node", type=int, default=1, help="Number of GPUs per node.")
+    parser.add_argument("--world-size", type=int, default=1, help="Total number of GPUs over all the node.")
     parser.add_argument("--time-to-first-token", action="store_true",
                         help="Indicate we will only generating a single token.")
     parser.add_argument("model", type=str, help="Model's id to use for the benchmark.")

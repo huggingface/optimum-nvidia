@@ -69,7 +69,10 @@ class TensorRTPreTrainedModel(ModelHubMixin):
     ) -> ConvertibleModel:
         # Build config
         optimization_level = model_kwargs.get("opt_level", 2)
+        tp_degree = model_kwargs.get("tp", 1)
+        pp_degree = model_kwargs.get("pp", 1)
         gpus_per_node = model_kwargs.get("gpus_per_node", 1)
+        world_size = model_kwargs.get("world_size", gpus_per_node)
         use_cuda_graph = model_kwargs.get("use_cuda_graph", False)
 
         # Let's make sure we have the config
@@ -109,6 +112,7 @@ class TensorRTPreTrainedModel(ModelHubMixin):
 
                 builder = TensorRTEngineBuilder(model_id, model_config, cls.ADAPTER) \
                     .to(model_dtype) \
+                    .shard(tp_degree, pp_degree, world_size, gpus_per_node) \
                     .with_generation_profile(max_batch_size, max_prompt_length, max_new_tokens) \
                     .with_sampling_strategy(max_beam_width)
 
