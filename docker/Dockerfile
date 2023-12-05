@@ -7,8 +7,7 @@ COPY . /opt/optimum-nvidia
 # Install tensorrt-llm
 # TODO: Reduce the container size removing build artifacts
 WORKDIR /opt/optimum-nvidia/third-party/tensorrt-llm
-RUN git lfs install --force && git lfs pull && \
-    python3 scripts/build_wheel.py -j --trt_root /usr/local/tensorrt --python_bindings --cuda_architectures=${TARGET_CUDA_ARCHS}
+RUN python3 scripts/build_wheel.py -j --trt_root /usr/local/tensorrt --python_bindings --cuda_architectures=${TARGET_CUDA_ARCHS}
 
 FROM tensorrt_llm/release
 
