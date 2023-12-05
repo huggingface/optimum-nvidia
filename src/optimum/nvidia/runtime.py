@@ -108,7 +108,7 @@ class TensorRTPreTrainedModel(ModelHubMixin):
 
                 # max new tokens can be determined from the maximum sequence length supported by the model - len(prompt)
                 if max_new_tokens < 1:
-                    max_new_tokens = min(max_new_tokens, model_config.max_sequence_length - max_prompt_length)
+                    max_new_tokens = max(max_new_tokens, model_config.max_sequence_length - max_prompt_length)
 
                 builder = TensorRTEngineBuilder(model_id, model_config, cls.ADAPTER) \
                     .to(model_dtype) \
