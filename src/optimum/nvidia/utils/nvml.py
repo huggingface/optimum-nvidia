@@ -42,4 +42,5 @@ def get_device_memory(device: int) -> Optional[int]:
 @functools.cache
 @nvml_guard
 def get_device_count() -> int:
-    return nvmlDeviceGetCount()
+    import torch
+    return torch.cuda.device_count()
