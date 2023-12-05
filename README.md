@@ -5,7 +5,7 @@ Optimum-NVIDIA
 ===========================
 <h4> Optimized inference with NVIDIA and Hugging Face </h4>
 
-[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://huggingface.com/docs/optimum/nvidia/index)
+[![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://huggingface.co/docs/optimum/index)
 [![python](https://img.shields.io/badge/python-3.10.12-green)](https://www.python.org/downloads/release/python-31012/)
 [![cuda](https://img.shields.io/badge/cuda-12.2-green)](https://developer.nvidia.com/cuda-downloads)
 [![trt-llm](https://img.shields.io/badge/TensorRT--LLM-0.5.0-green)](https://github.com/nvidia/tensorrt-llm)
@@ -15,9 +15,8 @@ Optimum-NVIDIA
 ---
 <div align="left">
 
-Optimum-NVIDIA delivers the best inference performance on the NVIDIA platform through Hugging Face. Easily access cutting edge optimizations like FP8 post-training quantization and tools like NVIDIA TensorRT-LLM through simple and familiar APIs. Unlock peak performance with Optimum-NVIDIA by changing just a single line in your existing transformers code.
+Optimum-NVIDIA delivers the best inference performance on the NVIDIA platform through Hugging Face. Run LLaMA 2 at 1,200 tokens/second (up to 28x faster than the framework) by changing just a single line in your existing transformers code.
 
-TODO: Performance Graph (speedup against eager across different HW)
 </div></div>
 
 # Installation
@@ -28,14 +27,14 @@ You can use a Docker container to try Optimum-NVIDIA today. Images are available
 docker pull huggingface/optimum-nvidia
 ```
 
-You can also build from source with the Dockerfile provided here. 
+<!-- You can also build from source with the Dockerfile provided here. 
 
 ```bash
-git clone git@github.com/huggingface/optimum-nvidia.git
+git clone git@github.com:huggingface/optimum-nvidia.git
 cd optimum-nvidia
 docker build Dockerfile
 docker run optimum-nvidia
-```
+``` -->
 
 An Optimum-NVIDIA package that can be installed with `pip` will be made available soon. 
 
@@ -48,7 +47,7 @@ Hugging Face pipelines provide a simple yet powerful abstraction to quickly set 
 - from transformers.pipelines import pipeline
 + from optimum.nvidia.pipelines import pipeline
 
-pipe = pipeline('text-generation', 'meta-llama/Llama-2-7b-chat-hf')
+pipe = pipeline('text-generation', 'meta-llama/Llama-2-7b-chat-hf', use_fp8=True)
 pipe("Describe a real-world application of AI in sustainable energy.")
 ```
 
@@ -65,7 +64,7 @@ tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf", paddi
 
 model = LlamaForCausalLM.from_pretrained(
   "meta-llama/Llama-2-7b-chat-hf",
-+ fp8=True,  
++ use_fp8=True,  
 )
 
 model_inputs = tokenizer(["How is autonomous vehicle technology transforming the future of transportation and urban planning?"], return_tensors="pt").to("cuda")
@@ -82,10 +81,10 @@ tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
 
 To learn more about text generation with LLMs, check out [this guide](https://huggingface.co/docs/transformers/llm_tutorial)!
 
-For more details, read our [documentation](https://huggingface.com/docs/optimum/nvidia/index).
+<!-- For more details, read our [documentation](https://huggingface.com/docs/optimum/nvidia/index). -->
 
 # Support Matrix
-We test Optimum-NVIDIA on 4090, L40S, and H100 GPUs, though it is expected to work on any GPU based on the following architectures:
+We test Optimum-NVIDIA on 4090, L40S, and H100 Tensor Core GPUs, though it is expected to work on any GPU based on the following architectures:
 * Volta
 * Turing
 * Ampere
@@ -94,9 +93,9 @@ We test Optimum-NVIDIA on 4090, L40S, and H100 GPUs, though it is expected to wo
 
 Note that FP8 support is only available on GPUs based on Hopper and Ada-Lovelace architectures.
 
-Optimum-NVIDIA currently works on Linux, and we will expand support to Windows soon.
+Optimum-NVIDIA works on Linux will support Windows soon.
 
-Optimum-NVIDIA currently supports text-generation with LLaMAForCausalLM, and we are actively working to expand support to include more model architectures and tasks.
+Optimum-NVIDIA currently accelerates text-generation with LLaMAForCausalLM, and we are actively working to expand support to include more model architectures and tasks.
 
 <!-- Optimum-NVIDIA supports the following model architectures and tasks:
 
