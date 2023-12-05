@@ -83,7 +83,7 @@ if __name__ == '__main__':
         builder.with_quantization_profile(args.quantization_config, calib)
 
     # Build the engine
-    # builder.build(args.output, args.optimization_level)
+    builder.build(args.output, args.optimization_level)
 
     with open(args.output.joinpath("build.json"), mode="r", encoding="utf-8") as config_f:
         from json import load
@@ -91,8 +91,7 @@ if __name__ == '__main__':
         config = load(config_f)
         model = TensorRTForCausalLM(config, args.output, args.gpus_per_node)
 
-        # prompt = "What is the latest generation of Nvidia GPUs?"
-        prompt = " ".join(["I"] * 256)
+        prompt = "What is the latest generation of Nvidia GPUs?"
         tokens = tokenizer(prompt, padding=True, return_tensors="pt")
         generated, lengths = model.generate(
             **tokens,
@@ -101,8 +100,7 @@ if __name__ == '__main__':
             repetition_penalty=10,
             pad_token_id=tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id,
-            max_new_tokens=512,
-            min_length=768
+            max_new_tokens=args.max_new_tokens,
         )
 
         print(tokenizer.decode(generated.squeeze().tolist(), ))
