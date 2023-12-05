@@ -8,7 +8,6 @@ from huggingface_hub import login
 from optimum.nvidia.pipelines import pipeline
 from transformers import pipeline as raw_pipeline
 from tqdm import trange
-from time import monotonic_ns
 
 
 def get_transformers_pipeline(args: Namespace):
@@ -57,7 +56,7 @@ if __name__ == '__main__':
     parser.add_argument("--tp", type=int, default=1, help="Degree of tensor parallelism to apply.")
     parser.add_argument("--pp", type=int, default=1, help="Degree of pipeline parallelism to apply.")
     parser.add_argument("--gpus-per-node", type=int, default=1, help="Number of GPUs per node.")
-    parser.add_argument("--world-size", type=int, default=1, help="Total number of GPUs over all the node.")
+    parser.add_argument("--world-size", type=int, help="Total number of GPUs over all the node.")
     parser.add_argument("--time-to-first-token", action="store_true",
                         help="Indicate we will only generating a single token.")
     parser.add_argument("model", type=str, help="Model's id to use for the benchmark.")
