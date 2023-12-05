@@ -26,6 +26,7 @@ from logging import getLogger
 from multiprocessing import Pool
 from os import PathLike, sched_getaffinity
 from pathlib import Path
+from psutil import virtual_memory
 from typing import NamedTuple, Optional, Type, Union, Dict, List
 
 from huggingface_hub import ModelHubMixin, HfFileSystem, CONFIG_NAME
@@ -36,6 +37,7 @@ from optimum.nvidia import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
 from optimum.nvidia.configs import ModelConfig, TransformersConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.utils import ensure_file_exists_locally, maybe_offload_weights_to_cpu
+from optimum.nvidia.utils.nvml import get_device_memory, get_device_count
 from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter, SupportsNpz
 from optimum.nvidia.quantization import Calibration
 
@@ -379,11 +381,20 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 if not calibration_path.exists() or not (has_json and has_npz):
                     LOGGER.info("Calibrating model ...")
 
+                    # Retrieve device total memory
+                    fraction_device_map = {
+                        device_id: get_device_memory(device_id) * 0.7
+                        for device_id in range(get_device_count())
+                    }
+
+                    cpu_device_map = {"cpu": virtual_memory().available * 0.8}
+
                     # Allocate required components for quantization
                     hf_model = AutoModelForCausalLM.from_pretrained(
                         self._model_id_or_path,
-                        device_map="auto",
-                        torch_dtype=self._dtype.as_torch()
+                        device_map="balanced",
+                        torch_dtype=self._dtype.as_torch(),
+                        max_memory=fraction_device_map | cpu_device_map
                     ).to(memory_format=torch.channels_last)
 
                     hf_model = maybe_offload_weights_to_cpu(hf_model)
