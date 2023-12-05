@@ -2,7 +2,7 @@ FROM tensorrt_llm/release:latest as BUILDER
 
 ARG TARGET_CUDA_ARCHS="80-real;86-real;89-real;90-real"
 
-COPY . /opt/optimum-nvidia
+ADD . /opt/optimum-nvidia
 
 # Install tensorrt-llm
 # TODO: Reduce the container size removing build artifacts
@@ -34,7 +34,7 @@ RUN cuda_version=$(nvcc --version | grep 'release' | awk '{print $6}' | awk -F'[
     pip install --no-cache-dir nvidia_ammo-${NVIDIA_AMMO_VERSION}/nvidia_ammo-${NVIDIA_AMMO_VERSION}+cu$cuda_version-cp$python_version-cp$python_version-linux_x86_64.whl && \
     rm -rf nvidia_ammo-${NVIDIA_AMMO_VERSION}*
 
-COPY . /opt/optimum-nvidia
+ADD . /opt/optimum-nvidia
 
 # Install dependencies
 RUN python -m pip install --upgrade --no-cache-dir datasets huggingface_hub hf-transfer transformers pynvml
