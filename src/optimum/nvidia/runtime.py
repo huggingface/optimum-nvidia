@@ -69,7 +69,10 @@ class TensorRTPreTrainedModel(ModelHubMixin):
     ) -> ConvertibleModel:
         # Build config
         optimization_level = model_kwargs.get("opt_level", 2)
+        tp_degree = model_kwargs.get("tp", 1)
+        pp_degree = model_kwargs.get("pp", 1)
         gpus_per_node = model_kwargs.get("gpus_per_node", 1)
+        world_size = model_kwargs.get("world_size", gpus_per_node)
         use_cuda_graph = model_kwargs.get("use_cuda_graph", False)
 
         # Let's make sure we have the config
@@ -109,6 +112,7 @@ class TensorRTPreTrainedModel(ModelHubMixin):
 
                 builder = TensorRTEngineBuilder(model_id, model_config, cls.ADAPTER) \
                     .to(model_dtype) \
+                    .shard(tp_degree, pp_degree, world_size, gpus_per_node) \
                     .with_generation_profile(max_batch_size, max_prompt_length, max_new_tokens) \
                     .with_sampling_strategy(max_beam_width)
 
@@ -123,8 +127,21 @@ class TensorRTPreTrainedModel(ModelHubMixin):
                     LOGGER.debug(f"Calibrating for float8 (num_calibration_samples={num_calibration_samples}).")
 
                     if hasattr(calibration, "tokenize"):
-                        tokenizer = AutoTokenizer.from_pretrained(model_id, use_agent=get_user_agent())
-                        calibration.tokenize(tokenizer, max_length=max_prompt_length + max_new_tokens)
+                        tokenizer = AutoTokenizer.from_pretrained(model_id, use_agent=get_user_agent(), padding_side="left")
+
+                        # Let's make sure the calibration see some padding
+                        # TODO: Do we need this? We use the remove_input_padding plugins most of the time ...
+                        # if not tokenizer.pad_token and tokenizer.eos_token:
+                        #     tokenizer.pad_token = tokenizer.eos_token
+                        #     pad_to_multiple_of = 8
+                        # else:
+                        #     pad_to_multiple_of = None
+
+                        calibration.tokenize(
+                            tokenizer, 
+                            max_length=max_prompt_length + max_new_tokens,
+                            pad_to_multiple_of=1
+                        )
 
                     builder.with_quantization_profile(
                         QuantizationConfig(QuantMode.from_description(use_fp8_qdq=True, use_fp8_kv_cache=True)),
@@ -202,6 +219,7 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         input_ids: torch.Tensor,
         attention_mask: Optional[torch.Tensor] = None,
         max_new_tokens: int = -1,
+        min_length: int = -1,
         num_beams: int = 1,
         temperature: float = 1.0,
         top_k: int = 50,
@@ -222,6 +240,9 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         generation_config.repetition_penalty = [repetition_penalty]
         generation_config.length_penalty = [length_penalty]
 
+        if min_length > 0:
+            generation_config.min_length = [min_length]
+
         with torch.no_grad():
             if isinstance(input_ids, torch.Tensor):
                 input_ids = input_ids.int()
@@ -230,9 +251,9 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
                     input_ids = input_ids.view((input_ids.size(0), -1))
                 elif input_ids.ndim == 1:
                     input_ids = input_ids.view((1, -1))
-                    lengths = torch.tensor([input_ids.size(0)], dtype=torch.int32)
+                    lengths = torch.tensor([input_ids.size(0)], device="cuda", dtype=torch.int32)
                 elif input_ids.ndim == 2 and input_ids.size(0) == 1:
-                    lengths = torch.tensor([input_ids.size(1)], dtype=torch.int32)
+                    lengths = torch.tensor([input_ids.size(1)], device="cuda", dtype=torch.int32)
                 else:
                     raise NotImplementedError(
                         "Cannot compute lengths from torch.Tensor without attention_mask for batch > 1"
@@ -241,24 +262,24 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
                 raise ValueError("input_ids has to be 2D torch.Tensor (batch, sequence)")
 
             if torch.any(torch.gt(lengths, self._max_prompt_length)):
-                raise ValueError(f"Input length is bigger than maximum prompt length ({self._max_prompt_length}).")
+                raise ValueError(f"Input length {lengths} is bigger than maximum prompt length ({self._max_prompt_length}).")
+
+            if self._use_packed_inputs:
+                input_ids = input_ids.view((1, -1))
+                lengths = lengths.flatten()
+
+            if input_ids.device.type != "cuda" or lengths.device.type != "cuda":
+                input_ids = input_ids.to("cuda")
+                lengths = lengths.to("cuda")
 
             trt_inputs = ctrrt.GenerationInput(
                 end_id=eos_token_id,
                 pad_id=pad_token_id,
-                ids=input_ids.to("cuda"),
-                lengths=lengths.to("cuda"),
+                ids=input_ids,
+                lengths=lengths,
                 packed=self._use_packed_inputs,
             )
 
-            # Define some additional parameters based on the above
-
-            # Shall we reduce the maximum number of token being generated?
-            if max_new_tokens == -1:
-                max_new_tokens = self._max_output_length - input_ids.size(1)
-            else:
-                max_new_tokens = min(max_new_tokens, self._max_output_length - input_ids.size(1))
-            
             trt_inputs.max_new_tokens = max_new_tokens
 
             trt_outputs = ctrrt.GenerationOutput(

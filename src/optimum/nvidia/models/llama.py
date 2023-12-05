@@ -70,15 +70,15 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             k_weight = weights[prefix + 'k_proj.weight']
             v_weight = weights[prefix + 'v_proj.weight']
 
-            if config.use_multi_query_attention:
+            if not config.use_multi_head_attention:
                 head_size = config.hidden_size // config.num_heads
                 if config.num_kv_heads < shard_info.tp_size:
-                    LOGGER.debug(f"Dupplicate KV heads ({config.num_kv_heads}) up to TP-degree ({shard_info.tp_size})")
+                    LOGGER.debug(f"Duplicate KV heads ({config.num_kv_heads}) up to TP-degree ({shard_info.tp_size})")
 
                     for weight in (k_weight, v_weight):
-                        factor = tp_size // num_head
-                        weight = weight.reshape(num_head, 1, head_size, -1).repeat(factor, axis=1)
-                        weight = weight.reshape(num_head * reps * head_size, -1).clone()
+                        factor = shard_info.tp_size // config.num_kv_heads
+                        weight = weight.reshape(config.num_kv_heads, 1, head_size, -1).repeat(factor, axis=1)
+                        weight = weight.reshape(config.num_kv_heads * factor * head_size, -1).clone()
 
             qkv_weight = [q_weight, k_weight, v_weight]
 
@@ -127,7 +127,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             q, k, v = qkv
 
             # Shard
-            if config.use_multi_query_attention:  # TODO: support GQA
+            if not config.use_multi_head_attention:  # TODO: support GQA
                 wq, wk, wv = (
                     shard(q, rank, shard_info.tp_size, axis=0),
                     shard(k, rank, shard_info.tp_size, axis=0),

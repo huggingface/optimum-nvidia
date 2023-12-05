@@ -64,7 +64,7 @@ class AmmoQuantizer:
             def _loop():
                 for sample in tqdm(calibration_data):
                     inputs = {
-                        name: tensor[0].to(self._model.device)
+                        name: tensor[0].to("cuda")
                         for name, tensor in sample.items()
                     }
                     self._model(**inputs)

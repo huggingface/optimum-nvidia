@@ -43,7 +43,7 @@ class ModelConfig(Protocol):
         ...
 
     @property
-    def use_multi_query_attention(self) -> bool:
+    def use_multi_head_attention(self) -> bool:
         ...
 
     @property
@@ -52,7 +52,7 @@ class ModelConfig(Protocol):
 
     @property
     def num_kv_heads(self) -> int:
-        return 1 if self.use_multi_query_attention else self.num_heads
+        ...
 
 
 class TransformersConfig(UserDict, ModelConfig):
@@ -101,9 +101,12 @@ class TransformersConfig(UserDict, ModelConfig):
         return self.data["num_attention_heads"]
 
     @property
-    def use_multi_query_attention(self) -> bool:
-        return self.get("num_key_value_heads", self.num_heads) == 1
+    def num_kv_heads(self) -> int:
+        return self.get("num_key_value_heads", self.num_heads)
 
+    @property
+    def use_multi_head_attention(self) -> bool:
+        return self.num_kv_heads == self.num_heads
     @property
     def activation(self) -> str:
         return self.data["hidden_act"]

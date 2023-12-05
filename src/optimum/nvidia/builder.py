@@ -26,6 +26,7 @@ from logging import getLogger
 from multiprocessing import Pool
 from os import PathLike, sched_getaffinity
 from pathlib import Path
+from psutil import virtual_memory
 from typing import NamedTuple, Optional, Type, Union, Dict, List
 
 from huggingface_hub import ModelHubMixin, HfFileSystem, CONFIG_NAME
@@ -35,7 +36,8 @@ from transformers import AutoModelForCausalLM
 from optimum.nvidia import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
 from optimum.nvidia.configs import ModelConfig, TransformersConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
-from optimum.nvidia.utils import ensure_file_exists_locally
+from optimum.nvidia.utils import ensure_file_exists_locally, maybe_offload_weights_to_cpu
+from optimum.nvidia.utils.nvml import get_device_memory, get_device_count
 from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter, SupportsNpz
 from optimum.nvidia.quantization import Calibration
 
@@ -379,16 +381,30 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 if not calibration_path.exists() or not (has_json and has_npz):
                     LOGGER.info("Calibrating model ...")
 
+                    # Retrieve device total memory
+                    fraction_device_map = {
+                        device_id: get_device_memory(device_id) * 0.7
+                        for device_id in range(get_device_count())
+                    }
+
+                    cpu_device_map = {"cpu": virtual_memory().available * 0.8}
+
                     # Allocate required components for quantization
                     hf_model = AutoModelForCausalLM.from_pretrained(
                         self._model_id_or_path,
-                        device_map="auto",
-                        torch_dtype=self._dtype.as_torch()
+                        device_map="balanced",
+                        torch_dtype=self._dtype.as_torch(),
+                        max_memory=fraction_device_map | cpu_device_map
                     ).to(memory_format=torch.channels_last)
+
+                    hf_model = maybe_offload_weights_to_cpu(hf_model)
 
                     quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
                     quantizer.calibrate(self._quantization_calibration)
                     quantizer.save(calibration_path)
+                    # Release the memory
+                    del hf_model
+                    torch.cuda.empty_cache()
                 else:
                     LOGGER.info(f"Reusing already precomputed calibration data at {calibration_path}")
 
@@ -578,6 +594,8 @@ class TensorRTEngineBuilder(ModelHubMixin):
             builder.save_config(build_config, str(build_config_path))
             LOGGER.debug(f"Saved engine config at {build_config_path}")
 
+        if not engine:
+            raise RuntimeError("TRT Engine build failed... Please check the logs and open up an issue.")
         self._serialize_engine(engine, output_path.joinpath(ranked_engine_name))
 
     def _serialize_engine(self, engine, path: Path):

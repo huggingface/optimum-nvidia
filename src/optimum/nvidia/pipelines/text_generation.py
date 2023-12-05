@@ -19,11 +19,18 @@ class ReturnType(Enum):
 class TextGenerationPipeline(Pipeline):
     TARGET_FACTORY = AutoModelForCausalLM
 
-    __slots__ = ("tokenizer", "_runtime")
+    __slots__ = ("tokenizer", "_runtime", "_bos_token_id", "_eos_token_id", "_pad_token_id")
 
     def __init__(self, model: TensorRTForCausalLM, tokenizer: PreTrainedTokenizer):
+        if tokenizer.eos_token and not tokenizer.pad_token:
+            tokenizer.pad_token = tokenizer.eos_token
+
         self.tokenizer = tokenizer
         self._runtime = model
+
+        self._bos_token_id = tokenizer.bos_token_id
+        self._eos_token_id = tokenizer.eos_token_id
+        self._pad_token_id = tokenizer.pad_token_id
 
     def __call__(self, inputs: Union[str, List[str]], **kwargs):
         preprocess_params, forward_params, postprocess_params = self._sanitize_parameters(**kwargs)
@@ -99,6 +106,7 @@ class TextGenerationPipeline(Pipeline):
 
         in_b = input_ids.shape[0]
         max_new_tokens = generate_kwargs.pop("max_new_tokens", -1)
+        min_length = generate_kwargs.pop("min_length", -1)
         num_beams = generate_kwargs.pop("num_beams", 1)
         temperature = generate_kwargs.pop("temperature", 1.0)
         top_k = generate_kwargs.pop("top_k", 50)
@@ -130,6 +138,7 @@ class TextGenerationPipeline(Pipeline):
             input_ids=input_ids,
             attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
+            min_length=min_length,
             num_beams=num_beams,
             temperature=temperature,
             top_k=top_k,
@@ -137,6 +146,9 @@ class TextGenerationPipeline(Pipeline):
             repetition_penalty=repetition_penalty,
             length_penalty=length_penalty,
             seed=seed,
+            bos_token_id=self._bos_token_id,
+            eos_token_id=self._eos_token_id,
+            pad_token_id=self._pad_token_id,
         )
 
         out_b = generated_sequence.shape[0]
@@ -152,7 +164,11 @@ class TextGenerationPipeline(Pipeline):
     def preprocess(
         self, prompt_text, prefix="", handle_long_generation=None, add_special_tokens=False, **generate_kwargs
     ) -> Dict[str, torch.Tensor]:
-        text = prefix + prompt_text
+        if isinstance(prompt_text, List):
+            text = [prefix + prompt for prompt in prompt_text]
+        else:
+            text = prefix + prompt_text
+
         inputs = self.tokenizer(
             text, padding=False, add_special_tokens=add_special_tokens, return_tensors=TensorType.PYTORCH
         )
