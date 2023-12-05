@@ -47,7 +47,7 @@ Hugging Face pipelines provide a simple yet powerful abstraction to quickly set 
 - from transformers.pipelines import pipeline
 + from optimum.nvidia.pipelines import pipeline
 
-pipe = pipeline('text-generation', 'meta-llama/Llama-2-7b-chat-hf')
+pipe = pipeline('text-generation', 'meta-llama/Llama-2-7b-chat-hf', use_fp8=True)
 pipe("Describe a real-world application of AI in sustainable energy.")
 ```
 
@@ -64,7 +64,7 @@ tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf", paddi
 
 model = LlamaForCausalLM.from_pretrained(
   "meta-llama/Llama-2-7b-chat-hf",
-+ fp8=True,  
++ use_fp8=True,  
 )
 
 model_inputs = tokenizer(["How is autonomous vehicle technology transforming the future of transportation and urban planning?"], return_tensors="pt").to("cuda")
