@@ -12,7 +12,7 @@ from time import monotonic_ns
 
 
 def get_transformers_pipeline(args: Namespace):
-    return raw_pipeline(model=args.model, torch_dtype=torch.float16, device="cuda")
+    return raw_pipeline(model=args.model, torch_dtype=torch.float16, model_kwargs={"device_map": "auto"})
 
 
 def get_trtllm_pipeline(args: Namespace):
