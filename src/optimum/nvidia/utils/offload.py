@@ -29,7 +29,7 @@ def recurse_getattr(obj, attr: str):
 
 def maybe_offload_weights_to_cpu(model: Module):
     if hasattr(model, "hf_device_map"):
-        devices = list(model.hf_device_map.values())
+        devices = set(model.hf_device_map.values())
         if "disk" in devices:
             raise ValueError("disk offload is not supported with quantization")
         if "cpu" in devices and len(model.hf_device_map) > 1:
