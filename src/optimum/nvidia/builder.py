@@ -594,6 +594,8 @@ class TensorRTEngineBuilder(ModelHubMixin):
             builder.save_config(build_config, str(build_config_path))
             LOGGER.debug(f"Saved engine config at {build_config_path}")
 
+        if not engine:
+            raise RuntimeError("TRT Engine build failed... Please check the logs and open up an issue.")
         self._serialize_engine(engine, output_path.joinpath(ranked_engine_name))
 
     def _serialize_engine(self, engine, path: Path):
