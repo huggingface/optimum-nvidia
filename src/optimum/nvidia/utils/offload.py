@@ -3,10 +3,27 @@ from logging import getLogger
 from torch.nn import Module
 from accelerate import cpu_offload_with_hook
 from accelerate.hooks import remove_hook_from_module
-# from optimum.utils import recurse_getattr
 
 
 LOGGER = getLogger(__name__)
+
+
+# Copied from optimum.utils._modeling_utils
+def recurse_getattr(obj, attr: str):
+    """
+    Recursive `getattr`.
+
+    Args:
+        obj:
+            A class instance holding the attribute.
+        attr (`str`):
+            The attribute that is to be retrieved, e.g. 'attribute1.attribute2'.
+    """
+
+    def _getattr(obj, attr):
+        return getattr(obj, attr)
+
+    return functools.reduce(_getattr, [obj] + attr.split("."))
 
 
 def maybe_offload_weights_to_cpu(model: Module):
