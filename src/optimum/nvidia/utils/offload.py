@@ -1,3 +1,4 @@
+import functools
 from logging import getLogger
 
 from torch.nn import Module
