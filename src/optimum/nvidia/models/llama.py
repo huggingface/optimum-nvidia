@@ -28,8 +28,8 @@ from tensorrt_llm.quantization import QuantMode
 from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
-from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard
+from optimum.nvidia.models import ConvertibleModel, repeat_heads
+from optimum.nvidia.weights import SupportsSafetensors, SupportsNpz, WeightAdapter, shard
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 
 
@@ -55,7 +55,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         builder: BuilderConfig,
         qconfig: QuantizationConfig,
         rank: int,
-        weights: Mapping[str, torch.Tensor],
+        weights: Mapping[str, np.array]
     ) -> Module:
         shard_info = self._sharding_config
         precision = DataType(builder.precision)
@@ -71,14 +71,12 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             v_weight = as_numpy(weights[prefix + "v_proj.weight"], precision)
 
             if not config.use_multi_head_attention:
-                head_size = config.hidden_size // config.num_heads
                 if config.num_kv_heads < shard_info.tp_size:
-                    LOGGER.debug(f"Duplicate KV heads ({config.num_kv_heads}) up to TP-degree ({shard_info.tp_size})")
+                    LOGGER.debug(f"Duplicating KV heads ({config.num_kv_heads}) up to TP-degree ({shard_info.tp_size})")
 
-                    for weight in (k_weight, v_weight):
-                        factor = shard_info.tp_size // config.num_kv_heads
-                        weight = weight.reshape(config.num_kv_heads, 1, head_size, -1).repeat(factor, axis=1)
-                        weight = weight.reshape(config.num_kv_heads * factor * head_size, -1).clone()
+                    factor = shard_info.tp_size // config.num_kv_heads
+                    k_weight = repeat_heads(k_weight, factor, axis=1)
+                    v_weight = repeat_heads(v_weight, factor, axis=1)
 
             qkv_weight = [q_weight, k_weight, v_weight]
 
@@ -130,7 +128,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
                 wq, wk, wv = (
                     shard(q, rank, shard_info.tp_size, axis=0),
                     shard(k, rank, shard_info.tp_size, axis=0),
-                    shard(k, rank, shard_info.tp_size, axis=0),
+                    shard(v, rank, shard_info.tp_size, axis=0),
                 )
 
                 qkv_weight = np.concatenate((wq, wk, wv), axis=0)
