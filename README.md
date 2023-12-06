@@ -24,7 +24,7 @@ Optimum-NVIDIA delivers the best inference performance on the NVIDIA platform th
 You can use a Docker container to try Optimum-NVIDIA today. Images are available on the Hugging Face Docker Hub.
 
 ```bash
-docker pull huggingface/optimum-nvidia
+docker pull huggingface/optimum-nvidia:0.1.0b1
 ```
 
 <!-- You can also build from source with the Dockerfile provided here. 
