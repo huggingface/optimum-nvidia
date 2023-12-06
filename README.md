@@ -56,13 +56,13 @@ pipe("Describe a real-world application of AI in sustainable energy.")
 If you want control over advanced features like quantization and token seleciton strategies, we recommend using the `generate()` API. Just like with `pipelines`, switching from existing transformers code is super simple.
 
 ```diff
-- from transformers import LlamaForCausalLM
-+ from optimum.nvidia import LlamaForCausalLM
+- from transformers import AutoModelForCausalLM
++ from optimum.nvidia import AutoModelForCausalLM
 from transformers import AutoTokenizer
 
 tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf", padding_side="left")
 
-model = LlamaForCausalLM.from_pretrained(
+model = AutoModelForCausalLM.from_pretrained(
   "meta-llama/Llama-2-7b-chat-hf",
 + use_fp8=True,  
 )
