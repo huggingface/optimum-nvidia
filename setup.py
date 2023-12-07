@@ -18,7 +18,7 @@ from distutils.core import setup
 from setuptools import find_namespace_packages
 
 
-# Ensure we match the version set in optimum/neuron/version.py
+# Ensure we match the version set in optimum/nvidia/version.py
 filepath = "src/optimum/nvidia/version.py"
 try:
     with open(filepath) as version_file:
