@@ -1,11 +1,7 @@
 import functools
 from sys import version as pyversion
 
-from pynvml import (
-    nvmlDeviceGetCount,
-    nvmlInit,
-    nvmlSystemGetDriverVersion,
-)
+from pynvml import nvmlDeviceGetCount, nvmlInit, nvmlSystemGetDriverVersion
 
 from ..version import __version__
 from .nvml import get_device_compute_capabilities

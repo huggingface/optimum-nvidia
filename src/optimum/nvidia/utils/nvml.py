@@ -1,12 +1,7 @@
 import functools
 from typing import NamedTuple, Optional, Tuple
 
-from pynvml import (
-    nvmlDeviceGetCudaComputeCapability,
-    nvmlDeviceGetHandleByIndex,
-    nvmlDeviceGetMemoryInfo,
-    nvmlInit,
-)
+from pynvml import nvmlDeviceGetCudaComputeCapability, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo, nvmlInit
 
 
 _NVML_INITIALIZED = False
