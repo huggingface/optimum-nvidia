@@ -27,7 +27,7 @@ except Exception as error:
 
 INSTALL_REQUIRES = [
     "accelerate",
-    "dataset"
+    "dataset",
     "fsspec",
     "huggingface_hub >= 0.14.0",
     "hf-transfer",
@@ -55,8 +55,8 @@ QUALITY_REQUIRES = [
 
 
 QUANTIZATION_REQUIRES = [
-    "ammo"  # This one is a bit harder to install ...
-    "datasets"
+    "ammo",  # This one is a bit harder to install ...
+    "datasets",
     "transformers",
     "torch",
 ]
