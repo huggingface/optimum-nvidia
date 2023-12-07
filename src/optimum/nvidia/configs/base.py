@@ -13,7 +13,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from collections import UserDict
-from typing import Protocol, Any, Mapping
+from typing import Any, Mapping, Protocol
 
 
 class ModelConfig(Protocol):
@@ -66,7 +66,7 @@ class TransformersConfig(UserDict, ModelConfig):
 
         if "num_layers" not in pretrained_config:
             pretrained_config["num_layers"] = pretrained_config["num_hidden_layers"]
-        
+
         if "max_sequence_length" not in pretrained_config:
             if "max_position_embeddings" in pretrained_config:
                 pretrained_config["max_sequence_length"] = pretrained_config["max_position_embeddings"]

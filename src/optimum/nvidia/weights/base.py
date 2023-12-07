@@ -16,12 +16,12 @@ from abc import ABC, abstractmethod
 from typing import Mapping
 
 import numpy as np
-
-from optimum.nvidia.configs import ModelConfig
-from optimum.nvidia.lang import DataType
-from optimum.nvidia.configs import QuantizationConfig
-from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
+from tensorrt_llm import BuilderConfig, Module
+from tensorrt_llm import Mapping as ShardingConfig
 from tensorrt_llm.quantization import QuantMode
+
+from optimum.nvidia.configs import ModelConfig, QuantizationConfig
+from optimum.nvidia.lang import DataType
 
 
 class WeightAdapter(ABC):

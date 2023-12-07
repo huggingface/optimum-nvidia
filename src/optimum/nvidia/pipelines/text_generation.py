@@ -1,12 +1,12 @@
 import warnings
 from enum import Enum
-from os import PathLike
-from typing import Dict, Any, Union, List
+from typing import Dict, List, Union
 
 import torch
 from transformers import PreTrainedTokenizer, TensorType
 
-from optimum.nvidia import TensorRTForCausalLM, AutoModelForCausalLM
+from optimum.nvidia import AutoModelForCausalLM, TensorRTForCausalLM
+
 from .base import Pipeline
 
 

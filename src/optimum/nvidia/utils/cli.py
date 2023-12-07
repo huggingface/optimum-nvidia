@@ -1,9 +1,9 @@
 from argparse import ArgumentParser, Namespace
 
-from optimum.nvidia.lang import DataType
-from optimum.nvidia.configs import QuantizationConfig
-
 from tensorrt_llm.quantization import QuantMode
+
+from optimum.nvidia.configs import QuantizationConfig
+from optimum.nvidia.lang import DataType
 
 
 # Model topology (sharding, pipelining, dtype)

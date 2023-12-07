@@ -15,41 +15,39 @@
 #  limitations under the License.
 import json
 import os
-
-import torch
 from dataclasses import dataclass
 from enum import IntEnum, auto
-
-import numpy as np
-from fsspec.implementations.local import LocalFileSystem
 from logging import getLogger
 from multiprocessing import Pool
 from os import PathLike, sched_getaffinity
 from pathlib import Path
-from psutil import virtual_memory
-from typing import NamedTuple, Optional, Type, Union, Dict, List
+from typing import Dict, List, NamedTuple, Optional, Type, Union
 
-from huggingface_hub import ModelHubMixin, HfFileSystem, CONFIG_NAME
+import numpy as np
+import torch
+from fsspec.implementations.local import LocalFileSystem
+from huggingface_hub import CONFIG_NAME, HfFileSystem, ModelHubMixin
 from huggingface_hub.hub_mixin import T
-from transformers import AutoModelForCausalLM
-
-from optimum.nvidia import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
-from optimum.nvidia.configs import ModelConfig, TransformersConfig, QuantizationConfig
-from optimum.nvidia.lang import DataType
-from optimum.nvidia.utils import ensure_file_exists_locally, maybe_offload_weights_to_cpu
-from optimum.nvidia.utils.nvml import get_device_memory, get_device_count
-from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter, SupportsNpz
-from optimum.nvidia.quantization import Calibration
-
-from tensorrt_llm import Mapping as Shard, graph_rewriting
+from psutil import virtual_memory
+from tensorrt_llm import Mapping as Shard
+from tensorrt_llm import graph_rewriting
+from tensorrt_llm._utils import trt_version
 from tensorrt_llm.builder import Builder
 from tensorrt_llm.models import quantize_model
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
-from tensorrt_llm._utils import trt_version
+from transformers import AutoModelForCausalLM
 
+from optimum.nvidia import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
+from optimum.nvidia.configs import ModelConfig, QuantizationConfig, TransformersConfig
+from optimum.nvidia.lang import DataType
+from optimum.nvidia.quantization import Calibration
+from optimum.nvidia.utils import ensure_file_exists_locally, maybe_offload_weights_to_cpu
+from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter
 from optimum.nvidia.weights.hub import get_safetensors_files
+
 
 LOGGER = getLogger(__name__)
 
@@ -427,7 +425,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         output_path: Path,
         opt_level: Optional[int]
     ):
-        LOGGER.debug(f"Building TRT engines sequentially")
+        LOGGER.debug("Building TRT engines sequentially")
 
         for shard in shards_info:
             self._build_engine_for_rank(shard, weights, output_path, opt_level, is_parallel=False)

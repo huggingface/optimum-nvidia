@@ -1,21 +1,19 @@
 import json
-from os import PathLike
-
-import torch
 from logging import getLogger
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from os import PathLike
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 import tensorrt_llm.bindings as ctrrt
-
+import torch
 from huggingface_hub import ModelHubMixin
 from transformers import AutoTokenizer
 
-from optimum.nvidia import TensorRTEngineBuilder, OPTIMUM_NVIDIA_CONFIG_FILE, DEFAULT_ENGINE_FOLDER
+from optimum.nvidia import DEFAULT_ENGINE_FOLDER, OPTIMUM_NVIDIA_CONFIG_FILE, TensorRTEngineBuilder
 from optimum.nvidia.configs import TransformersConfig
 from optimum.nvidia.models import ConvertibleModel
 from optimum.nvidia.utils import get_local_empty_folder, get_user_agent
-from optimum.nvidia.utils.nvml import get_device_compute_capabilities
+
 
 LOGGER = getLogger(__name__)
 
@@ -118,6 +116,7 @@ class TensorRTPreTrainedModel(ModelHubMixin):
 
                 if use_fp8:
                     from tensorrt_llm.quantization import QuantMode
+
                     from optimum.nvidia.configs import QuantizationConfig
                     from optimum.nvidia.quantization import get_default_calibration_dataset
 
@@ -138,7 +137,7 @@ class TensorRTPreTrainedModel(ModelHubMixin):
                         #     pad_to_multiple_of = None
 
                         calibration.tokenize(
-                            tokenizer, 
+                            tokenizer,
                             max_length=max_prompt_length + max_new_tokens,
                             pad_to_multiple_of=1
                         )
@@ -157,7 +156,7 @@ class TensorRTPreTrainedModel(ModelHubMixin):
             trt_config = json.load(trt_config_f)
 
         return cls(trt_config, engine_folder, gpus_per_node, use_cuda_graph)
-            
+
 
 class TensorRTForCausalLM(TensorRTPreTrainedModel):
     __slots__ = (

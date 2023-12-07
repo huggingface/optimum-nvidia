@@ -12,20 +12,20 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-import sys
-from io import BytesIO
 from itertools import chain
 from logging import getLogger
-from mmap import mmap, ACCESS_READ
+from mmap import ACCESS_READ, mmap
 from os import PathLike
 from sys import platform
-from typing import Protocol, runtime_checkable, Union, TypeVar, List, Mapping, Iterable, Tuple, Any
+from typing import Iterable, List, Mapping, Protocol, TypeVar, Union, runtime_checkable
 
 import numpy as np
 from safetensors.numpy import load, safe_open
-from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
+from tensorrt_llm import BuilderConfig, Module
+from tensorrt_llm import Mapping as ShardingConfig
 
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
+
 
 LOGGER = getLogger(__name__)
 
@@ -64,7 +64,7 @@ class SafetensorsAccessor(Mapping[str, np.array]):
                 is_linux = platform == "linux"
                 with mmap(fd.fileno(), length=0, access=ACCESS_READ) as mm:
                     if is_linux:
-                        from mmap import MADV_SEQUENTIAL, MADV_HUGEPAGE, MADV_WILLNEED
+                        from mmap import MADV_HUGEPAGE, MADV_SEQUENTIAL, MADV_WILLNEED
                         LOGGER.debug("[mmap] advising MADV_RANDOM | MADV_HUGEPAGE | MADV_WILLNEED")
                         mm.madvise(MADV_SEQUENTIAL | MADV_HUGEPAGE | MADV_WILLNEED)
 

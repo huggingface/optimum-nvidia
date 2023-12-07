@@ -16,20 +16,20 @@ from collections import defaultdict
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import List, Iterable, Mapping, Set, Tuple, Union, Optional
+from typing import List, Mapping, Union
 
 import numpy as np
+from tensorrt_llm import BuilderConfig, Module
+from tensorrt_llm import Mapping as ShardingConfig
+from tensorrt_llm.models import LLaMAForCausalLM
+from tensorrt_llm.quantization import QuantMode
 
 from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import SupportsSafetensors, SupportsNpz, WeightAdapter, shard
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, shard
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
-from safetensors import deserialize
-from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
-from tensorrt_llm.models import LLaMAForCausalLM
-from tensorrt_llm.quantization import QuantMode
 
 
 LOGGER = getLogger(__name__)
@@ -41,7 +41,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
 
     """
 
-    QUANTIZATION_EXCLUDED_PARAMETERS = set(["lm_head"])
+    QUANTIZATION_EXCLUDED_PARAMETERS = {"lm_head"}
     NAMED_WEIGHT_PARAMETERS = {
         "self_attn.o_proj.weight": ("attention.dense", 1),
         "mlp.up_proj.weight": ("mlp.gate.weight", 0),

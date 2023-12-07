@@ -13,12 +13,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from pathlib import Path
-from typing import Type, Optional, Union, Dict
+from typing import Dict, Optional, Type, Union
 
 from huggingface_hub import ModelHubMixin
+from tensorrt_llm import Module
 
 from optimum.nvidia.weights import WeightAdapter
-from tensorrt_llm import Module
 
 
 class ConvertibleModel:

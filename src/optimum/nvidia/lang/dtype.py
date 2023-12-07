@@ -13,9 +13,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from enum import Enum
-from functools import singledispatch
 
 import numpy as np
+import torch
 from tensorrt_llm import str_dtype_to_trt
 from tensorrt_llm._utils import str_dtype_to_np
 

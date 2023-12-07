@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from logging import getLogger
 
-from datasets import load_dataset, IterableDataset
+from datasets import IterableDataset, load_dataset
 from transformers import PreTrainedTokenizer
+
 
 LOGGER = getLogger(__name__)
 

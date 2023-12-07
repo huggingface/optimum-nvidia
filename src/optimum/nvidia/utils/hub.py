@@ -1,11 +1,14 @@
 import functools
-
-from .nvml import get_device_compute_capabilities
-from ..version import __version__
 from sys import version as pyversion
 
-from pynvml import nvmlInit, nvmlDeviceGetHandleByIndex, nvmlDeviceGetCudaComputeCapability, \
-                    nvmlDeviceGetCount, nvmlSystemGetDriverVersion
+from pynvml import (
+    nvmlDeviceGetCount,
+    nvmlInit,
+    nvmlSystemGetDriverVersion,
+)
+
+from ..version import __version__
+from .nvml import get_device_compute_capabilities
 
 
 USER_AGENT_BASE = [
@@ -26,9 +29,7 @@ def get_user_agent() -> str:
         nvmlInit()
         ua.append(f"nvidia/{nvmlSystemGetDriverVersion()}")
 
-
         num_gpus = nvmlDeviceGetCount()
-
         if num_gpus > 0:
             sm = []
             for device_idx in range(num_gpus):
@@ -39,8 +40,8 @@ def get_user_agent() -> str:
 
             ua.append(f"gpus/{num_gpus}")
             ua.append(f"sm/{'|'.join(sm)}")
-    except:
-        ua.append(f"nvidia/unknown")
+    except (RuntimeError, ImportError):
+        ua.append("nvidia/unknown")
 
     try:
         from torch import __version__ as pt_version

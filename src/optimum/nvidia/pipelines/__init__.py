@@ -1,15 +1,16 @@
 from os import PathLike
-from typing import Dict, Optional, Type, Tuple, Union
+from typing import Dict, Optional, Tuple, Type, Union
 
 from huggingface_hub import model_info
 from tensorrt_llm import Module
-from transformers import PreTrainedTokenizer, PreTrainedTokenizerFast, AutoTokenizer, AutoConfig
+from transformers import AutoConfig, AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from optimum.nvidia import TensorRTForCausalLM, AutoModelForCausalLM
+from optimum.nvidia import AutoModelForCausalLM, TensorRTForCausalLM
 from optimum.nvidia.pipelines.text_generation import TextGenerationPipeline
 from optimum.nvidia.utils import get_user_agent
 
 from .base import Pipeline
+
 
 SUPPORTED_MODEL_WITH_TASKS: Dict[str, Dict[str, Tuple[Type[Pipeline], Type]]] = {
     "llama": {

@@ -1,7 +1,7 @@
-import numpy as np
 from pathlib import Path
 from typing import Dict, List, Mapping, Protocol, runtime_checkable
 
+import numpy as np
 from tensorrt_llm import Module
 from tensorrt_llm.quantization import QuantMode
 

@@ -63,6 +63,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    if not args.world_size:
+        args.world_size = args.gpus_per_node
+
     if args.token:
         login(args.token)
 

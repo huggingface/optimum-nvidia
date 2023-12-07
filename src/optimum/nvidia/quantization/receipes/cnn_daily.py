@@ -1,6 +1,5 @@
-from datasets import Dataset
 
-from optimum.nvidia.quantization import HfDatasetCalibration, Calibration
+from optimum.nvidia.quantization import Calibration, HfDatasetCalibration
 
 
 def get_cnn_daily_calibration_dataset(num_calibration_samples: int = 512) -> Calibration:
