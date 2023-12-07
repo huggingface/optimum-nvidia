@@ -18,14 +18,23 @@ from logging import getLogger
 from pathlib import Path
 
 from transformers import AutoTokenizer
+
 from optimum.nvidia import setup_logging
 
-# Setup logging
+
+# Setup logging needs to happen before importing TRT ...
 setup_logging(False)
 
+# ruff: disable=E402
 from optimum.nvidia import TensorRTEngineBuilder, TensorRTForCausalLM
 from optimum.nvidia.models.llama import LlamaWeightAdapter
-from optimum.nvidia.utils.cli import *
+from optimum.nvidia.utils.cli import (
+    postprocess_quantization_parameters,
+    register_common_model_topology_args,
+    register_optimization_profiles_args,
+    register_quantization_args,
+)
+
 
 LOGGER = getLogger(__name__)
 
@@ -36,7 +45,6 @@ if __name__ == '__main__':
     register_common_model_topology_args(parser)
     register_optimization_profiles_args(parser)
     register_quantization_args(parser)  # Inject params.quantization_config
-    register_triton_server_args(parser)
 
     parser.add_argument("model", type=str, help="The model's id or path to use.")
     parser.add_argument("output", type=Path, help="Path to store generated TensorRT engine.")
