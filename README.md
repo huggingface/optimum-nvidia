@@ -8,7 +8,7 @@ Optimum-NVIDIA
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://huggingface.co/docs/optimum/index)
 [![python](https://img.shields.io/badge/python-3.10.12-green)](https://www.python.org/downloads/release/python-31012/)
 [![cuda](https://img.shields.io/badge/cuda-12.2-green)](https://developer.nvidia.com/cuda-downloads)
-[![trt-llm](https://img.shields.io/badge/TensorRT--LLM-0.5.0-green)](https://github.com/nvidia/tensorrt-llm)
+[![trt-llm](https://img.shields.io/badge/TensorRT--LLM-0.6.1-green)](https://github.com/nvidia/tensorrt-llm)
 [![version](https://img.shields.io/badge/release-0.1.0-green)]()
 [![license](https://img.shields.io/badge/license-Apache%202-blue)](./LICENSE)
 
