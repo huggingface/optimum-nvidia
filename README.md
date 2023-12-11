@@ -53,7 +53,7 @@ pipe("Describe a real-world application of AI in sustainable energy.")
 
 ## Generate
 
-If you want control over advanced features like quantization and token seleciton strategies, we recommend using the `generate()` API. Just like with `pipelines`, switching from existing transformers code is super simple.
+If you want control over advanced features like quantization and token selection strategies, we recommend using the `generate()` API. Just like with `pipelines`, switching from existing transformers code is super simple.
 
 ```diff
 - from transformers import LlamaForCausalLM
