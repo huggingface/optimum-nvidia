@@ -104,7 +104,6 @@ class TextGenerationPipeline(Pipeline):
         prompt_text = model_inputs.pop("prompt_text")
         attention_mask = model_inputs.get("attention_mask", None)
 
-        in_b = input_ids.shape[0]
         max_new_tokens = generate_kwargs.pop("max_new_tokens", -1)
         min_length = generate_kwargs.pop("min_length", -1)
         num_beams = generate_kwargs.pop("num_beams", 1)
@@ -151,9 +150,6 @@ class TextGenerationPipeline(Pipeline):
             pad_token_id=self._pad_token_id,
         )
 
-        out_b = generated_sequence.shape[0]
-        generated_sequence = generated_sequence.reshape(in_b, out_b // in_b, *generated_sequence.shape[1:])
-
         return {
             "generated_sequence": generated_sequence,
             "lengths": lengths,
@@ -177,7 +173,7 @@ class TextGenerationPipeline(Pipeline):
         return inputs
 
     def postprocess(self, model_outputs, return_type=ReturnType.FULL_TEXT, clean_up_tokenization_spaces=True):
-        generated_sequence = model_outputs["generated_sequence"][0]
+        generated_sequence = model_outputs["generated_sequence"]
         # lengths = model_outputs["lengths"]
         # input_ids = model_outputs["input_ids"]
         # prompt_text = model_outputs["prompt_text"]
