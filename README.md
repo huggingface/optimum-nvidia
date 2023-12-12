@@ -87,7 +87,7 @@ To learn more about text generation with LLMs, check out [this guide](https://hu
 We test Optimum-NVIDIA on 4090, L40S, and H100 Tensor Core GPUs, though it is expected to work on any GPU based on the following architectures:
 * Volta
 * Turing (with experimental support for T4 / RTX Quadro x000)
-* Ampere (A100 is supported. Experimental support for A10, A40, RTX Ax000)
+* Ampere (A100/A30 are supported. Experimental support for A10, A40, RTX Ax000)
 * Hopper
 * Ada-Lovelace
 
