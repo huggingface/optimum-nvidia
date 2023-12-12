@@ -15,41 +15,39 @@
 #  limitations under the License.
 import json
 import os
-
-import torch
 from dataclasses import dataclass
 from enum import IntEnum, auto
-
-import numpy as np
-from fsspec.implementations.local import LocalFileSystem
 from logging import getLogger
 from multiprocessing import Pool
 from os import PathLike, sched_getaffinity
 from pathlib import Path
-from psutil import virtual_memory
-from typing import NamedTuple, Optional, Type, Union, Dict, List
+from typing import Dict, List, NamedTuple, Optional, Type, Union
 
-from huggingface_hub import ModelHubMixin, HfFileSystem, CONFIG_NAME
+import numpy as np
+import torch
+from fsspec.implementations.local import LocalFileSystem
+from huggingface_hub import CONFIG_NAME, HfFileSystem, ModelHubMixin
 from huggingface_hub.hub_mixin import T
-from transformers import AutoModelForCausalLM
-
-from optimum.nvidia import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
-from optimum.nvidia.configs import ModelConfig, TransformersConfig, QuantizationConfig
-from optimum.nvidia.lang import DataType
-from optimum.nvidia.utils import ensure_file_exists_locally, maybe_offload_weights_to_cpu
-from optimum.nvidia.utils.nvml import get_device_memory, get_device_count
-from optimum.nvidia.weights import SupportsSafetensors, WeightAdapter, SupportsNpz
-from optimum.nvidia.quantization import Calibration
-
-from tensorrt_llm import Mapping as Shard, graph_rewriting
+from psutil import virtual_memory
+from tensorrt_llm import Mapping as Shard
+from tensorrt_llm import graph_rewriting
+from tensorrt_llm._utils import trt_version
 from tensorrt_llm.builder import Builder
 from tensorrt_llm.models import quantize_model
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
-from tensorrt_llm._utils import trt_version
+from transformers import AutoModelForCausalLM
 
+from optimum.nvidia import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
+from optimum.nvidia.configs import ModelConfig, QuantizationConfig, TransformersConfig
+from optimum.nvidia.lang import DataType
+from optimum.nvidia.quantization import Calibration
+from optimum.nvidia.utils import ensure_file_exists_locally, maybe_offload_weights_to_cpu
+from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter
 from optimum.nvidia.weights.hub import get_safetensors_files
+
 
 LOGGER = getLogger(__name__)
 
@@ -61,21 +59,16 @@ BuildInfo = NamedTuple("BuildInfo", [("parallel", bool), ("num_parallel_jobs", i
 SERIAL_BUILD = BuildInfo(False, 1)
 
 # Utility classes to store shape information
-OptimizationProfile = NamedTuple("OptimizationProfile", [
-    ("max_batch_size", int),
-    ("max_prompt_length", int),
-    ("max_new_tokens", int),
-    ("max_output_length", int)
-])
+OptimizationProfile = NamedTuple(
+    "OptimizationProfile",
+    [("max_batch_size", int), ("max_prompt_length", int), ("max_new_tokens", int), ("max_output_length", int)],
+)
 
 
 # Utility classes to store sharding information
-ShardingInfo = NamedTuple("ShardingInfo", [
-    ("tp_degree", int),
-    ("pp_degree", int),
-    ("world_size", int),
-    ("num_gpus_per_node", int)
-])
+ShardingInfo = NamedTuple(
+    "ShardingInfo", [("tp_degree", int), ("pp_degree", int), ("world_size", int), ("num_gpus_per_node", int)]
+)
 NO_SHARDING = ShardingInfo(1, 1, 1, 1)
 
 
@@ -107,9 +100,7 @@ class Weights:
 
 
 class TensorRTEngineBuilder(ModelHubMixin):
-    """
-
-    """
+    """ """
 
     @classmethod
     def _from_pretrained(
@@ -173,7 +164,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         return self
 
-    def to(self, dtype: Union[str, DataType] ) -> "TensorRTEngineBuilder":
+    def to(self, dtype: Union[str, DataType]) -> "TensorRTEngineBuilder":
         """
 
         :param dtype:
@@ -187,7 +178,9 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         return self
 
-    def shard(self, tp_degree: int, pp_degree: int, world_size: int, num_gpus_per_node: int) -> "TensorRTEngineBuilder":
+    def shard(
+        self, tp_degree: int, pp_degree: int, world_size: int, num_gpus_per_node: int
+    ) -> "TensorRTEngineBuilder":
         """
 
         :param tp_degree
@@ -205,9 +198,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         return self
 
     def with_quantization_profile(
-        self,
-        config: QuantizationConfig,
-        calibration: Optional[Calibration] = None
+        self, config: QuantizationConfig, calibration: Optional[Calibration] = None
     ) -> "TensorRTEngineBuilder":
         """
 
@@ -217,6 +208,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         """
         if config.mode.has_fp8_qdq() or config.mode.has_fp8_kv_cache():
             from optimum.nvidia.utils.nvml import get_device_compute_capabilities
+
             compute_capabilities = get_device_compute_capabilities(0)
 
             if compute_capabilities:
@@ -234,13 +226,8 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         return self
 
-
     def with_generation_profile(
-        self,
-        max_batch_size: int,
-        max_prompt_length: int,
-        max_new_tokens: int,
-        max_output_length: int = None
+        self, max_batch_size: int, max_prompt_length: int, max_new_tokens: int, max_output_length: int = None
     ) -> "TensorRTEngineBuilder":
         if max_output_length is None:
             # TODO: Understand why we can set to a larger value?
@@ -252,13 +239,10 @@ class TensorRTEngineBuilder(ModelHubMixin):
             f"max_batch_size={max_batch_size}, "
             f"max_prompt_length={max_prompt_length}, "
             f"max_new_tokens={max_new_tokens}",
-            f"max_output_length={max_output_length}"
+            f"max_output_length={max_output_length}",
         )
         self._optimization_profile = OptimizationProfile(
-            max_batch_size,
-            max_prompt_length,
-            max_new_tokens,
-            max_output_length
+            max_batch_size, max_prompt_length, max_new_tokens, max_output_length
         )
 
         return self
@@ -295,10 +279,10 @@ class TensorRTEngineBuilder(ModelHubMixin):
             ("max_batch_size", (1, None)),
             ("max_prompt_length", (1, model_config.max_sequence_length - 1)),
             ("max_new_tokens", (1, model_config.max_sequence_length - 1)),
-            ("max_output_length", (
-                    optim_profile.max_prompt_length + optim_profile.max_new_tokens,
-                    model_config.max_sequence_length
-            ))
+            (
+                "max_output_length",
+                (optim_profile.max_prompt_length + optim_profile.max_new_tokens, model_config.max_sequence_length),
+            ),
         ]:
             prop_value = getattr(optim_profile, prop)
             if prop_value < min_value:
@@ -359,6 +343,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         # Handle potential need for computing calibration data to quantize the model
         if self._quantization_config and self._quantization_config.has_quantization_step:
             from optimum.nvidia.quantization.ammo import AmmoQuantizer
+
             LOGGER.debug(
                 "Model requires quantization ("
                 f"weight only: {self._quantization_config.mode.is_weight_only()}, "
@@ -383,8 +368,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
                     # Retrieve device total memory
                     fraction_device_map = {
-                        device_id: get_device_memory(device_id) * 0.7
-                        for device_id in range(get_device_count())
+                        device_id: get_device_memory(device_id) * 0.7 for device_id in range(get_device_count())
                     }
 
                     cpu_device_map = {"cpu": virtual_memory().available * 0.8}
@@ -394,7 +378,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
                         self._model_id_or_path,
                         device_map="balanced",
                         torch_dtype=self._dtype.as_torch(),
-                        max_memory=fraction_device_map | cpu_device_map
+                        max_memory=fraction_device_map | cpu_device_map,
                     ).to(memory_format=torch.channels_last)
 
                     hf_model = maybe_offload_weights_to_cpu(hf_model)
@@ -425,9 +409,9 @@ class TensorRTEngineBuilder(ModelHubMixin):
         shards_info: List[Shard],
         weights: Union[Weights, List[Weights]],
         output_path: Path,
-        opt_level: Optional[int]
+        opt_level: Optional[int],
     ):
-        LOGGER.debug(f"Building TRT engines sequentially")
+        LOGGER.debug("Building TRT engines sequentially")
 
         for shard in shards_info:
             self._build_engine_for_rank(shard, weights, output_path, opt_level, is_parallel=False)
@@ -437,7 +421,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         shard_info: List[Shard],
         weight_files: Union[Weights, List[Weights]],
         output_path: Path,
-        opt_level: Optional[int]
+        opt_level: Optional[int],
     ):
         build_info = self._build_info
         num_jobs = build_info.num_parallel_jobs if build_info.num_parallel_jobs > 1 else sched_getaffinity(0)
@@ -451,10 +435,11 @@ class TensorRTEngineBuilder(ModelHubMixin):
             for shard in shard_info:
                 _ = builders.map(
                     self._build_engine_for_rank,
-                    shard, weight_files,
+                    shard,
+                    weight_files,
                     output_path,
                     is_parallel=True,
-                    opt_level=opt_level
+                    opt_level=opt_level,
                 )
 
     def _build_engine_for_rank(
@@ -463,7 +448,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         weights: Union[Weights, List[Weights]],
         output_path: Path,
         opt_level: Optional[int],
-        is_parallel: bool
+        is_parallel: bool,
     ):
         LOGGER.debug(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
 
@@ -471,10 +456,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         qconfig = self._quantization_config
 
         ranked_engine_name = create_unique_engine_name(
-            config["model_type"],
-            self._dtype.value,
-            shard.rank,
-            shard.tp_size
+            config["model_type"], self._dtype.value, shard.rank, shard.tp_size
         )
 
         builder = Builder()
@@ -502,7 +484,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
             quant_mode=self._quantization_config.mode,
             opt_level=opt_level,
             huggingface=dict(**config),
-            tensorrt=trt_version()
+            tensorrt=trt_version(),
         )
 
         model = self._weight_adapter.allocate_model(config, shard, self._dtype, qconfig.mode)
@@ -519,11 +501,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
             elif weight.format == FileFormat.NUMPY_QUANTIZED and issubclass(self._weight_adapter, SupportsNpz):
                 LOGGER.debug("Using Numpy npz as weight provider (with quantization metadata)")
                 calibration_filename = create_npz_calibration_filename(config["model_type"], shard.rank, shard.tp_size)
-                qweights = np.load(
-                    weight.files.joinpath(calibration_filename),
-                    mmap_mode="r",
-                    allow_pickle=False
-                )
+                qweights = np.load(weight.files.joinpath(calibration_filename), mmap_mode="r", allow_pickle=False)
 
                 scales = self._weight_adapter.get_scaling_factors(qweights, config.num_layers, qconfig.mode)
                 quantize_model(model, qconfig.mode, quant_scales=scales)
@@ -561,7 +539,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 max_new_tokens=self._optimization_profile.max_new_tokens,
                 max_num_tokens=None,
                 max_beam_width=self._beam_width,
-                use_cache=True
+                use_cache=True,
             )
 
             model(*inputs)
@@ -599,7 +577,6 @@ class TensorRTEngineBuilder(ModelHubMixin):
         self._serialize_engine(engine, output_path.joinpath(ranked_engine_name))
 
     def _serialize_engine(self, engine, path: Path):
-        LOGGER.info(f'Saving engine to {path}...')
-        with open(path, 'wb') as f:
+        LOGGER.info(f"Saving engine to {path}...")
+        with open(path, "wb") as f:
             f.write(bytearray(engine))
-

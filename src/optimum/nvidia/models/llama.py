@@ -16,20 +16,20 @@ from collections import defaultdict
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import List, Iterable, Mapping, Set, Tuple, Union, Optional
+from typing import List, Mapping, Union
 
 import numpy as np
+from tensorrt_llm import BuilderConfig, Module
+from tensorrt_llm import Mapping as ShardingConfig
+from tensorrt_llm.models import LLaMAForCausalLM
+from tensorrt_llm.quantization import QuantMode
 
 from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import SupportsSafetensors, SupportsNpz, WeightAdapter, shard
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, shard
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
-from safetensors import deserialize
-from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
-from tensorrt_llm.models import LLaMAForCausalLM
-from tensorrt_llm.quantization import QuantMode
 
 
 LOGGER = getLogger(__name__)
@@ -37,16 +37,14 @@ LAYERS_PREFIX = "model.layers"
 
 
 class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
-    """
+    """ """
 
-    """
-
-    QUANTIZATION_EXCLUDED_PARAMETERS = set(["lm_head"])
+    QUANTIZATION_EXCLUDED_PARAMETERS = {"lm_head"}
     NAMED_WEIGHT_PARAMETERS = {
         "self_attn.o_proj.weight": ("attention.dense", 1),
         "mlp.up_proj.weight": ("mlp.gate.weight", 0),
         "mlp.down_proj.weight": ("mlp.proj.weight", 1),
-        "mlp.gate_proj.weight": ("mlp.fc.weight", 0)
+        "mlp.gate_proj.weight": ("mlp.fc.weight", 0),
     }
 
     def convert(
@@ -56,7 +54,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         builder: BuilderConfig,
         qconfig: QuantizationConfig,
         rank: int,
-        weights: Mapping[str, np.array]
+        weights: Mapping[str, np.array],
     ) -> Module:
         shard_info = self._sharding_config
 
@@ -66,9 +64,9 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             prefix = f"{LAYERS_PREFIX}.{layer_idx}.self_attn."
 
             # Merge QKV
-            q_weight = weights[prefix + 'q_proj.weight']
-            k_weight = weights[prefix + 'k_proj.weight']
-            v_weight = weights[prefix + 'v_proj.weight']
+            q_weight = weights[prefix + "q_proj.weight"]
+            k_weight = weights[prefix + "k_proj.weight"]
+            v_weight = weights[prefix + "v_proj.weight"]
 
             if not config.use_multi_head_attention:
                 head_size = config.hidden_size // config.num_heads
@@ -93,7 +91,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
 
         # Convert specific tensors
         if shard_info.is_first_pp_rank():
-            embeddings = weights['model.embed_tokens.weight'].astype(dtype)
+            embeddings = weights["model.embed_tokens.weight"].astype(dtype)
             if model.use_parallel_embedding:
                 embeddings = shard(embeddings, rank, shard_info.tp_size, model.embedding_sharding_dim)
 
@@ -101,7 +99,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
 
         if shard_info.is_last_pp_rank():
             # Final layer norm
-            final_norm = weights['model.norm.weight'].astype(dtype)
+            final_norm = weights["model.norm.weight"].astype(dtype)
             model.ln_f.weight.value = final_norm
 
             # Final vocab projection
@@ -143,11 +141,11 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             model.layers[idx].attention.qkv.weight.value = np.ascontiguousarray(qkv_weight)
 
             # Common projection logic
-            for (src, dst, shard_axis) in [
+            for src, dst, shard_axis in [
                 ("self_attn.o_proj.weight", model.layers[idx].attention.dense.weight, 1),
                 ("mlp.up_proj.weight", model.layers[idx].mlp.gate.weight, 0),
                 ("mlp.down_proj.weight", model.layers[idx].mlp.proj.weight, 1),
-                ("mlp.gate_proj.weight", model.layers[idx].mlp.fc.weight, 0)
+                ("mlp.gate_proj.weight", model.layers[idx].mlp.fc.weight, 0),
             ]:
                 tensor = weights[f"{prefix}.{src}"]
                 rank_tensor = shard(tensor, rank, shard_info.tp_size, shard_axis)
@@ -156,7 +154,9 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         return model
 
     @staticmethod
-    def allocate_model(config: ModelConfig, sharding: ShardingConfig, dtype: DataType, quant_mode: QuantMode) -> Module:
+    def allocate_model(
+        config: ModelConfig, sharding: ShardingConfig, dtype: DataType, quant_mode: QuantMode
+    ) -> Module:
         LOGGER.debug(f"Allocating {LLaMAForCausalLM.__name__} model")
         return LLaMAForCausalLM(
             num_layers=config.num_layers,
@@ -173,7 +173,8 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             rms_norm_eps=config["rms_norm_eps"],
             logits_dtype=DataType.FLOAT32.as_trt(),
             embedding_sharding_dim=1,  # As Meta does
-            use_fused_mlp=quant_mode == QuantMode(0)  # Disable if quantization for now as it remove one scaling factor
+            use_fused_mlp=quant_mode
+            == QuantMode(0),  # Disable if quantization for now as it remove one scaling factor
         )
 
     @classmethod
@@ -193,14 +194,15 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         adapter = cls(sharding_config)
         return adapter.convert(model, config, builder_config, qconfig, sharding_config.rank, accessor)
 
-
     @classmethod
     def from_numpy(cls, path: Path) -> Module:
         # TODO: Currently only used to load quantized models, might need to change later on
         return np.load(path, "r", allow_pickle=False)
 
     @staticmethod
-    def get_scaling_factors(weights: Mapping[str, np.array], num_layers: int, mode: QuantMode) -> Mapping[str, List[np.array]]:
+    def get_scaling_factors(
+        weights: Mapping[str, np.array], num_layers: int, mode: QuantMode
+    ) -> Mapping[str, List[np.array]]:
         # yapf: disable
         scaling_factors = defaultdict(list)
 
@@ -233,7 +235,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
 
         # yapf: enable
         for k, v in scaling_factors.items():
-            assert len(v) == num_layers, f'Expect scaling factor {k} of length {num_layers}, got {len(v)}'
+            assert len(v) == num_layers, f"Expect scaling factor {k} of length {num_layers}, got {len(v)}"
 
         return scaling_factors
 
@@ -241,4 +243,3 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
 class LLamaForCausalLM(ConvertibleModel, TensorRTForCausalLM):
     ADAPTER = LlamaWeightAdapter
     TARGET = LLaMAForCausalLM
-

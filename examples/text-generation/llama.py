@@ -18,25 +18,33 @@ from logging import getLogger
 from pathlib import Path
 
 from transformers import AutoTokenizer
+
 from optimum.nvidia import setup_logging
 
-# Setup logging
+
+# Setup logging needs to happen before importing TRT ...
 setup_logging(False)
 
+# ruff: disable=E402
 from optimum.nvidia import TensorRTEngineBuilder, TensorRTForCausalLM
 from optimum.nvidia.models.llama import LlamaWeightAdapter
-from optimum.nvidia.utils.cli import *
+from optimum.nvidia.utils.cli import (
+    postprocess_quantization_parameters,
+    register_common_model_topology_args,
+    register_optimization_profiles_args,
+    register_quantization_args,
+)
+
 
 LOGGER = getLogger(__name__)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = ArgumentParser("🤗 TensorRT-LLM Llama implementation")
     parser.add_argument("--hub-token", type=str, help="Hugging Face Hub Token to retrieve private weights.")
     register_common_model_topology_args(parser)
     register_optimization_profiles_args(parser)
     register_quantization_args(parser)  # Inject params.quantization_config
-    register_triton_server_args(parser)
 
     parser.add_argument("model", type=str, help="The model's id or path to use.")
     parser.add_argument("output", type=Path, help="Path to store generated TensorRT engine.")
@@ -57,17 +65,22 @@ if __name__ == '__main__':
     LOGGER.info(f"Exporting {args.model} to TensorRT-LLM engine at {args.output}")
     if args.hub_token is not None:
         from huggingface_hub import login
-        login(args.hub_token, )
+
+        login(
+            args.hub_token,
+        )
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
     tokenizer.pad_token = tokenizer.eos_token
 
     # Define the target engine details
-    builder = TensorRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter) \
-        .to(args.dtype) \
-        .shard(args.tensor_parallelism, args.pipeline_parallelism, args.world_size, args.gpus_per_node) \
-        .with_generation_profile(args.max_batch_size, args.max_prompt_length, args.max_new_tokens) \
+    builder = (
+        TensorRTEngineBuilder.from_pretrained(args.model, adapter=LlamaWeightAdapter)
+        .to(args.dtype)
+        .shard(args.tensor_parallelism, args.pipeline_parallelism, args.world_size, args.gpus_per_node)
+        .with_generation_profile(args.max_batch_size, args.max_prompt_length, args.max_new_tokens)
         .with_sampling_strategy(args.max_beam_width)
+    )
 
     # Check if we need to collect calibration samples
     if args.has_quantization_step:
@@ -103,6 +116,10 @@ if __name__ == '__main__':
             max_new_tokens=args.max_new_tokens,
         )
 
-        print(tokenizer.decode(generated.squeeze().tolist(), ))
+        print(
+            tokenizer.decode(
+                generated.squeeze().tolist(),
+            )
+        )
 
     print(f"TRTLLM engines have been saved at {args.output}.")

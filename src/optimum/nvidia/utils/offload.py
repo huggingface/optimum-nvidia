@@ -1,9 +1,9 @@
 import functools
 from logging import getLogger
 
-from torch.nn import Module
 from accelerate import cpu_offload_with_hook
 from accelerate.hooks import remove_hook_from_module
+from torch.nn import Module
 
 
 LOGGER = getLogger(__name__)

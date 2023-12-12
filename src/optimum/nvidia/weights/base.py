@@ -16,20 +16,18 @@ from abc import ABC, abstractmethod
 from typing import Mapping
 
 import numpy as np
-
-from optimum.nvidia.configs import ModelConfig
-from optimum.nvidia.lang import DataType
-from optimum.nvidia.configs import QuantizationConfig
-from tensorrt_llm import BuilderConfig, Mapping as ShardingConfig, Module
+from tensorrt_llm import BuilderConfig, Module
+from tensorrt_llm import Mapping as ShardingConfig
 from tensorrt_llm.quantization import QuantMode
+
+from optimum.nvidia.configs import ModelConfig, QuantizationConfig
+from optimum.nvidia.lang import DataType
 
 
 class WeightAdapter(ABC):
-    """
+    """ """
 
-    """
-
-    __slots__ = ("_sharding_config", )
+    __slots__ = ("_sharding_config",)
 
     def __init__(self, sharding_config: ShardingConfig):
         self._sharding_config = sharding_config
@@ -42,7 +40,7 @@ class WeightAdapter(ABC):
         builder: BuilderConfig,
         qconfig: QuantizationConfig,
         rank: int,
-        weights: Mapping[str, np.array]
+        weights: Mapping[str, np.array],
     ) -> Module:
         """
 

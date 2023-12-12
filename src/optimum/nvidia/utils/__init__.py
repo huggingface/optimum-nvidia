@@ -25,6 +25,8 @@ def rgetattr(obj, attr):
     :param attr: The attribute path where nested attribute are comma delimited
     :return:
     """
+
     def _getattr(obj, attr):
         return getattr(obj, attr)
-    return functools.reduce(_getattr, [obj] + attr.split('.'))
+
+    return functools.reduce(_getattr, [obj] + attr.split("."))

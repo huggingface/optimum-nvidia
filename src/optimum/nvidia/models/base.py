@@ -13,25 +13,22 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from pathlib import Path
-from typing import Type, Optional, Union, Dict
+from typing import Dict, Optional, Type, Union
 
 from huggingface_hub import ModelHubMixin
+from tensorrt_llm import Module
 
 from optimum.nvidia.weights import WeightAdapter
-from tensorrt_llm import Module
 
 
 class ConvertibleModel:
-    """
+    """ """
 
-    """
     ADAPTER: Type[WeightAdapter]
     TARGET: Type[Module]
 
 
-
 class AutoModelForCausalLM(ModelHubMixin):
-
     @classmethod
     def _from_pretrained(
         cls: Type,
@@ -55,6 +52,7 @@ class AutoModelForCausalLM(ModelHubMixin):
         if model_type == "llama":
             # TODO: Fix circular import
             from .llama import LLamaForCausalLM
+
             model_class = LLamaForCausalLM
         else:
             raise NotImplementedError(f"Model architecture {model_type} is not supported yet.")
@@ -68,5 +66,5 @@ class AutoModelForCausalLM(ModelHubMixin):
             resume_download=resume_download,
             local_files_only=local_files_only,
             token=token,
-            **model_kwargs
+            **model_kwargs,
         )

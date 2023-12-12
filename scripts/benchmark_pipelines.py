@@ -4,10 +4,10 @@ from typing import List, Union
 import numpy as np
 import torch
 from huggingface_hub import login
+from tqdm import trange
+from transformers import pipeline as raw_pipeline
 
 from optimum.nvidia.pipelines import pipeline
-from transformers import pipeline as raw_pipeline
-from tqdm import trange
 
 
 def get_transformers_pipeline(args: Namespace):
@@ -17,7 +17,8 @@ def get_transformers_pipeline(args: Namespace):
         model_kwargs={
             "device_map": "balanced",
             "max_memory": {0: "20GiB", "cpu": "64GiB"},
-        })
+        },
+    )
 
 
 def get_trtllm_pipeline(args: Namespace):
@@ -31,8 +32,9 @@ def get_trtllm_pipeline(args: Namespace):
         tp=args.tp,
         pp=args.pp,
         gpus_per_node=args.gpus_per_node,
-        world_size=args.world_size
+        world_size=args.world_size,
     )
+
 
 def create_prompt_for_length(batch: int, length: int) -> Union[str, List[str]]:
     tokens = ["I"] * length
@@ -41,7 +43,8 @@ def create_prompt_for_length(batch: int, length: int) -> Union[str, List[str]]:
         return tokens
     return [tokens] * batch
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     parser = ArgumentParser("Hugging Face Optimum-Nvidia Pipelines Benchmarking tool")
     parser.add_argument("--token", type=str, help="Hugging Face Hub token to authenticate the request.")
     parser.add_argument("--warmup", type=int, default=10, help="Number of warmup runs before collecting metrics.")
@@ -57,11 +60,16 @@ if __name__ == '__main__':
     parser.add_argument("--pp", type=int, default=1, help="Degree of pipeline parallelism to apply.")
     parser.add_argument("--gpus-per-node", type=int, default=1, help="Number of GPUs per node.")
     parser.add_argument("--world-size", type=int, help="Total number of GPUs over all the node.")
-    parser.add_argument("--time-to-first-token", action="store_true",
-                        help="Indicate we will only generating a single token.")
+    parser.add_argument(
+        "--time-to-first-token", action="store_true", help="Indicate we will only generating a single token."
+    )
     parser.add_argument("model", type=str, help="Model's id to use for the benchmark.")
 
     args = parser.parse_args()
+    args.world_size = args.world_size or args.gpus_per_node
+
+    if not args.world_size:
+        args.world_size = args.gpus_per_node
 
     if args.token:
         login(args.token)
@@ -104,7 +112,7 @@ if __name__ == '__main__':
             f"(+/- {latencies.std().astype(np.uint64)})"
         )
     else:
-        num_tokens = (args.batch_size * args.output_length)
+        num_tokens = args.batch_size * args.output_length
         tokens_per_sec = num_tokens / (latencies / 1e3)
         print(
             "Throughput: "

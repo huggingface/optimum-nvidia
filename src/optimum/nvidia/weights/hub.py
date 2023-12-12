@@ -16,7 +16,7 @@ import json
 import os
 from logging import getLogger
 from os import PathLike
-from typing import Union, List, Iterable
+from typing import Iterable, Union
 
 from fsspec import AbstractFileSystem
 
@@ -34,7 +34,7 @@ def get_safetensors_files(fs: AbstractFileSystem, model_id_or_path: Union[str, P
         # Retrieve the index
         with fs.open(os.path.join(model_id_or_path, SAFETENSORS_INDEX_FILENAME), "r") as index_f:
             index_content = json.load(index_f)
-            total_size, weight_map = index_content["metadata"]["total_size"], index_content["weight_map"]
+            weight_map = index_content["weight_map"]
             shards = set(weight_map.values())
 
             LOGGER.debug(f"Detected {len(shards)} shards for {model_id_or_path}")
@@ -47,4 +47,3 @@ def get_safetensors_files(fs: AbstractFileSystem, model_id_or_path: Union[str, P
     else:
         LOGGER.error(f"Cannot find safetensors checkpoint for {model_id_or_path}")
         raise FileNotFoundError(f"Cannot find safetensors checkpoint for {model_id_or_path}")
-

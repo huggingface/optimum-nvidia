@@ -8,14 +8,13 @@ from tensorrt_llm.quantization import QuantMode
 LOGGER = getLogger(__name__)
 
 
-
 def to_awq_module(
-        model: Module,
-        quantization_mode: QuantMode,
-        group_size: int = 128,
-        zero: bool = True,
-        pre_quant_scale: bool = False,
-        exclude_modules: Optional[Set[str]] = None
+    model: Module,
+    quantization_mode: QuantMode,
+    group_size: int = 128,
+    zero: bool = True,
+    pre_quant_scale: bool = False,
+    exclude_modules: Optional[Set[str]] = None,
 ):
     """
     Apply AWQ (Activation-aware Weight Quantization) to the model's linear layers, excluding `exclude_modules`.

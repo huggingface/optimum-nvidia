@@ -13,9 +13,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from enum import Enum
-from functools import singledispatch
 
 import numpy as np
+import torch
 from tensorrt_llm import str_dtype_to_trt
 from tensorrt_llm._utils import str_dtype_to_np
 
@@ -24,6 +24,7 @@ class DataType(Enum):
     """
     Represent the data format used to store and run actual computations
     """
+
     INT8 = "int8"
     FLOAT8 = "float8"
     FLOAT32 = "float32"
@@ -38,6 +39,7 @@ class DataType(Enum):
 
     def as_torch(self) -> "torch.dtype":
         import torch
+
         if self == DataType.INT8:
             return torch.int8
         elif self == DataType.BFLOAT16:
@@ -48,4 +50,3 @@ class DataType(Enum):
             return torch.float16
         elif self == DataType.FLOAT32:
             return torch.float32
-

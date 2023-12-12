@@ -1,14 +1,14 @@
 from abc import ABC, abstractmethod
 from logging import getLogger
 
-from datasets import load_dataset, IterableDataset
+from datasets import IterableDataset, load_dataset
 from transformers import PreTrainedTokenizer
+
 
 LOGGER = getLogger(__name__)
 
 
 class Calibration(ABC):
-
     @abstractmethod
     def __iter__(self):
         raise NotImplementedError()
@@ -31,7 +31,6 @@ class Calibration(ABC):
 
 
 class HfDatasetCalibration(Calibration):
-
     @classmethod
     def from_datasets(cls, dataset: str, split: str, num_samples: int, column: str, streaming: bool = True, **kwargs):
         dataset = load_dataset(dataset, split=split, streaming=streaming, **kwargs)
@@ -58,7 +57,7 @@ class HfDatasetCalibration(Calibration):
                 pad_to_multiple_of=pad_to_multiple_of,
                 truncation=True,
                 padding=tokenizer.pad_token_id is not None,
-                return_tensors="pt"
+                return_tensors="pt",
             )
         ).remove_columns(fieldname)
 

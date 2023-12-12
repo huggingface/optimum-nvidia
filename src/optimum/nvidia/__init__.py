@@ -22,10 +22,11 @@ OPTIMUM_NVIDIA_CONFIG_FILENAME = "build"
 OPTIMUM_NVIDIA_CONFIG_FILE = f"{OPTIMUM_NVIDIA_CONFIG_FILENAME}.json"
 
 
-from .logging import DEFAULT_LOGGING_FMT, setup_logging
-from .version import __version__, VERSION
-
 from .builder import TensorRTEngineBuilder
-from .runtime import TensorRTPreTrainedModel, TensorRTForCausalLM
+from .logging import DEFAULT_LOGGING_FMT, setup_logging
 from .models import AutoModelForCausalLM
+from .runtime import TensorRTForCausalLM, TensorRTPreTrainedModel
+from .version import VERSION, __version__
+
+
 # from .pipelines import pipeline
