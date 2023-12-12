@@ -309,7 +309,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         return True
 
-    def build(self, output_path: PathLike, optmization_level: int = None) -> PathLike:
+    def build(self, output_path: PathLike, optimization_level: int = None) -> PathLike:
         # Sharding info
         sharding = self._sharding_info or NO_SHARDING
         shards_info = [
@@ -401,7 +401,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 build_func = self._build_serial
 
             # Let's build
-            build_func(shards_info, files, output_path, optmization_level)
+            build_func(shards_info, files, output_path, optimization_level)
             return output_path
 
     def _build_serial(
