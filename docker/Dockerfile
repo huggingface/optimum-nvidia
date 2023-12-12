@@ -1,6 +1,12 @@
 FROM tensorrt_llm/release:latest as BUILDER
 
-ARG TARGET_CUDA_ARCHS="80-real;86-real;89-real;90-real"
+# 70 = V100
+# 75 = T4/RTX Quadro
+# 80 = A100/A30
+# 86 = A10/A40/RTX Axxx
+# 89 = L4/L40/L40s/RTX Ada/4090
+# 90 = H100/H200
+ARG TARGET_CUDA_ARCHS="70-real;75-real;80-real;86-real;89-real;90-real"
 
 COPY . /opt/optimum-nvidia
 
