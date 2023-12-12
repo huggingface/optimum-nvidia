@@ -27,5 +27,5 @@ jobs:
           python -m pip install black ruff isort
       - name: Check quality
         run: |
-          ruff check examples tests src scripts
+          ruff -v check examples tests src scripts
           ruff format examples tests src scripts --check
