@@ -27,16 +27,27 @@ You can use a Docker container to try Optimum-NVIDIA today. Images are available
 docker pull huggingface/optimum-nvidia
 ```
 
-<!-- You can also build from source with the Dockerfile provided here. 
+An Optimum-NVIDIA package that can be installed with `pip` will be made available soon. 
 
+## Building from source
+<!---
+Currently, TRT LLM is built and run with Docker, so we should wait until pip installation is available
+-->
+If you prefer to build Optimum-NVIDIA from source rather than using the pre-built Docker image, you must first install [NVIDIA TensorRT-LLM](https://github.com/NVIDIA/TensorRT-LLM) by following the instructions [here](https://github.com/NVIDIA/TensorRT-LLM/blob/main/docs/source/installation.md).
+
+Once you have an environment with TensorRT-LLM installed, you can build Optimum-NVIDIA:
+```bash
+git clone git@github.com:huggingface/optimum-nvidia.git
+pip install -e optimum-nvidia
+```
+
+<!-- 
 ```bash
 git clone git@github.com:huggingface/optimum-nvidia.git
 cd optimum-nvidia
 docker build Dockerfile
 docker run optimum-nvidia
 ``` -->
-
-An Optimum-NVIDIA package that can be installed with `pip` will be made available soon. 
 
 # Quickstart Guide
 ## Pipelines
