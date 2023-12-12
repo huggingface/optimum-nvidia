@@ -37,7 +37,7 @@ If you want to build your own image and/or customize it, you can do so by using 
 the step above, you can use the following command (assuming you're at the root of `optimum-nvidia` repository:
 
 ```bash
-cd third-party/tensorrt-llm && make -C docker release_build CUDA_ARCHS="<TARGET_SM>-real"
+cd third-party/tensorrt-llm && make -C docker release_build CUDA_ARCHS="<TARGET_SMs>"
 ```
 
 Where `CUDA_ARCHS` is a comma-separated list of CUDA architectures you'd like to support.
