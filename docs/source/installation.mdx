@@ -32,7 +32,9 @@ docker run -it --gpus all --ipc host huggingface/optimum-nvidia
 
 If you want to build your own image and/or customize it, you can do so by using the three steps process described below:
 
-1. Clone `optimum-nvidia` repository `git clone --recursive --depth=1 https://github.com/huggingface/optimum-nvidia`
+1. Clone `optimum-nvidia` repository:
+```bash
+git clone --recursive --depth=1 https://github.com/huggingface/optimum-nvidia && cd optimum-nvidia
 2. Build the `tensorrt_llm:latest` image from the NVIDIA TensorRT-LLM repository. If you cloned the `optimum-nvidia` from
 the step above, you can use the following command (assuming you're at the root of `optimum-nvidia` repository:
 
