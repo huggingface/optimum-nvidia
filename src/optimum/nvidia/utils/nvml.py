@@ -6,11 +6,14 @@ from pynvml import nvmlDeviceGetCudaComputeCapability, nvmlDeviceGetHandleByInde
 
 _NVML_INITIALIZED = False
 
-MemoryInfo = NamedTuple("MemoryInfo", [
-    ("total", int),
-    ("free", int),
-    ("used", int),
-])
+MemoryInfo = NamedTuple(
+    "MemoryInfo",
+    [
+        ("total", int),
+        ("free", int),
+        ("used", int),
+    ],
+)
 
 
 def nvml_guard(f):
@@ -40,8 +43,10 @@ def get_device_memory(device: int) -> Optional[int]:
     mem_info = nvmlDeviceGetMemoryInfo(nvml_device_handle)
     return MemoryInfo(mem_info.total, mem_info.free, mem_info.used).total
 
+
 @functools.cache
 @nvml_guard
 def get_device_count() -> int:
     import torch
+
     return torch.cuda.device_count()

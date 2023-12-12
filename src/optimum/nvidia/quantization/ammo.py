@@ -19,7 +19,7 @@ def get_ammo_config(mode: QuantMode, **quantizer_overrides):
         cfg = atq.FP8_DEFAULT_CFG
         if quantizer_overrides:
             for name, cfg in quantizer_overrides.items():
-                cfg['quant_cfg'][name] = cfg
+                cfg["quant_cfg"][name] = cfg
         return cfg
     else:
         raise NotImplementedError(
@@ -42,14 +42,13 @@ def get_quantization_algorithm_name(qconfig: QuantizationConfig) -> str:
 
 
 class AmmoQuantizer:
-
     def __init__(
         self,
         model: torch.nn.Module,
         qconfig: QuantizationConfig,
         dtype: DataType,
         tp_degree: int = -1,
-        **quantizer_overrides
+        **quantizer_overrides,
     ):
         self._model = model
         self._qconfig = qconfig
@@ -61,13 +60,12 @@ class AmmoQuantizer:
 
     def calibrate(self, calibration_data: Iterable[Dict[str, torch.Tensor]]):
         from tqdm import tqdm
+
         with torch.inference_mode():
+
             def _loop():
                 for sample in tqdm(calibration_data):
-                    inputs = {
-                        name: tensor[0].to("cuda")
-                        for name, tensor in sample.items()
-                    }
+                    inputs = {name: tensor[0].to("cuda") for name, tensor in sample.items()}
                     self._model(**inputs)
 
             atq.quantize(self._model, self._ammo_config, _loop)
@@ -78,6 +76,6 @@ class AmmoQuantizer:
             "llama",  # The type of the model as str, e.g gptj, llama or gptnext.
             self._dtype.as_torch(),  # The exported weights data type as torch.dtype.
             get_quantization_algorithm_name(self._qconfig),  # The quantization algorithm applied, e.g. fp8 or int8_sq.
-            path, # The directory where the exported files will be stored.
+            path,  # The directory where the exported files will be stored.
             self._tp_degree,  # The number of GPUs used in the inference time for tensor parallelism.
         )

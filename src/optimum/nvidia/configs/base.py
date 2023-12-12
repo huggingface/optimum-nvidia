@@ -17,7 +17,6 @@ from typing import Any, Mapping, Protocol
 
 
 class ModelConfig(Protocol):
-
     @property
     def vocab_size(self) -> int:
         ...
@@ -56,11 +55,9 @@ class ModelConfig(Protocol):
 
 
 class TransformersConfig(UserDict, ModelConfig):
-
-    __slots__ = ("config", )
+    __slots__ = ("config",)
 
     def __init__(self, pretrained_config: Mapping[str, Any]):
-
         if "num_heads" not in pretrained_config:
             pretrained_config["num_heads"] = pretrained_config["num_attention_heads"]
 
@@ -107,7 +104,7 @@ class TransformersConfig(UserDict, ModelConfig):
     @property
     def use_multi_head_attention(self) -> bool:
         return self.num_kv_heads == self.num_heads
+
     @property
     def activation(self) -> str:
         return self.data["hidden_act"]
-

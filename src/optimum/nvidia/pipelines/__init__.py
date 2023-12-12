@@ -13,10 +13,9 @@ from .base import Pipeline
 
 
 SUPPORTED_MODEL_WITH_TASKS: Dict[str, Dict[str, Tuple[Type[Pipeline], Type]]] = {
-    "llama": {
-        "text-generation": (TextGenerationPipeline, AutoModelForCausalLM)
-    }
+    "llama": {"text-generation": (TextGenerationPipeline, AutoModelForCausalLM)}
 }
+
 
 def get_target_class_for_model_and_task(task: str, architecture: str) -> Optional[Type]:
     task_ = SUPPORTED_MODEL_WITH_TASKS.get(task, None)
@@ -38,7 +37,7 @@ def pipeline(
     task: str = None,
     model: Union[str, PathLike, Module] = None,
     tokenizer: Optional[Union[str, PreTrainedTokenizer, PreTrainedTokenizerFast]] = None,
-    **kwargs
+    **kwargs,
 ):
     """
     Utility factory method to build a [`Pipeline`].

@@ -26,16 +26,18 @@ def to_onnx(network, path: Path):
         network_input = network.get_input(i)
         inputs.append(
             helper.make_tensor_value_info(
-                network_input.name, trt_dtype_to_onnx(network_input.dtype),
-                list(network_input.shape)))
+                network_input.name, trt_dtype_to_onnx(network_input.dtype), list(network_input.shape)
+            )
+        )
 
     outputs = []
     for i in range(network.num_outputs):
         network_output = network.get_output(i)
         outputs.append(
             helper.make_tensor_value_info(
-                network_output.name, trt_dtype_to_onnx(network_output.dtype),
-                list(network_output.shape)))
+                network_output.name, trt_dtype_to_onnx(network_output.dtype), list(network_output.shape)
+            )
+        )
 
     nodes = []
     for i in range(network.num_layers):
@@ -45,18 +47,14 @@ def to_onnx(network, path: Path):
             ipt = layer.get_input(j)
             if ipt is not None:
                 layer_inputs.append(layer.get_input(j).name)
-        layer_outputs = [
-            layer.get_output(j).name for j in range(layer.num_outputs)
-        ]
+        layer_outputs = [layer.get_output(j).name for j in range(layer.num_outputs)]
         nodes.append(
-            helper.make_node(str(layer.type),
-                             name=layer.name,
-                             inputs=layer_inputs,
-                             outputs=layer_outputs,
-                             domain="com.nvidia"))
+            helper.make_node(
+                str(layer.type), name=layer.name, inputs=layer_inputs, outputs=layer_outputs, domain="com.nvidia"
+            )
+        )
 
     onnx_model = helper.make_model(
-        helper.make_graph(nodes, 'attention', inputs, outputs, initializer=None),
-        producer_name='NVIDIA'
+        helper.make_graph(nodes, "attention", inputs, outputs, initializer=None), producer_name="NVIDIA"
     )
     onnx.save(onnx_model, path)

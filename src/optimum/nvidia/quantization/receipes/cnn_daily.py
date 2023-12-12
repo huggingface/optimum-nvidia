@@ -1,4 +1,3 @@
-
 from optimum.nvidia.quantization import Calibration, HfDatasetCalibration
 
 
@@ -9,5 +8,5 @@ def get_cnn_daily_calibration_dataset(num_calibration_samples: int = 512) -> Cal
         split="train",
         num_samples=num_calibration_samples,
         column="article",
-        streaming=True
+        streaming=True,
     )

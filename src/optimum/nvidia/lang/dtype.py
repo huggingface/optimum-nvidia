@@ -24,6 +24,7 @@ class DataType(Enum):
     """
     Represent the data format used to store and run actual computations
     """
+
     INT8 = "int8"
     FLOAT8 = "float8"
     FLOAT32 = "float32"
@@ -38,6 +39,7 @@ class DataType(Enum):
 
     def as_torch(self) -> "torch.dtype":
         import torch
+
         if self == DataType.INT8:
             return torch.int8
         elif self == DataType.BFLOAT16:
@@ -48,4 +50,3 @@ class DataType(Enum):
             return torch.float16
         elif self == DataType.FLOAT32:
             return torch.float32
-

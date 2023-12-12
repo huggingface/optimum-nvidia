@@ -25,11 +25,9 @@ from optimum.nvidia.lang import DataType
 
 
 class WeightAdapter(ABC):
-    """
+    """ """
 
-    """
-
-    __slots__ = ("_sharding_config", )
+    __slots__ = ("_sharding_config",)
 
     def __init__(self, sharding_config: ShardingConfig):
         self._sharding_config = sharding_config
@@ -42,7 +40,7 @@ class WeightAdapter(ABC):
         builder: BuilderConfig,
         qconfig: QuantizationConfig,
         rank: int,
-        weights: Mapping[str, np.array]
+        weights: Mapping[str, np.array],
     ) -> Module:
         """
 

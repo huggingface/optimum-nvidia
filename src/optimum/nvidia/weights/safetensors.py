@@ -34,16 +34,16 @@ def walk(path: PathLike):
     # with open(str(path), "rb") as params_f:
     #     LOGGER.debug(f"Opened file at {path}")
 
-        # Memory-map the whole file
-        # is_linux = sys.platform == "linux"
-        # mm = mmap(params_f.fileno(), length=0, access=ACCESS_READ)
-        # if is_linux:
-        #     LOGGER.debug("[mmap] advising MADV_RANDOM | MADV_HUGEPAGE")
-        #     mm.madvise(MADV_RANDOM | MADV_HUGEPAGE | MADV_WILLNEED)
+    # Memory-map the whole file
+    # is_linux = sys.platform == "linux"
+    # mm = mmap(params_f.fileno(), length=0, access=ACCESS_READ)
+    # if is_linux:
+    #     LOGGER.debug("[mmap] advising MADV_RANDOM | MADV_HUGEPAGE")
+    #     mm.madvise(MADV_RANDOM | MADV_HUGEPAGE | MADV_WILLNEED)
 
-        # Read the content
-        # content = mm.read()
-        # with read_safetensors(content) as st_content:
+    # Read the content
+    # content = mm.read()
+    # with read_safetensors(content) as st_content:
 
     with safe_open(path, framework="numpy") as st_content:
         LOGGER.debug(f"Opened file at {path}")
@@ -52,7 +52,6 @@ def walk(path: PathLike):
 
 
 class SafetensorsAccessor(Mapping[str, np.array]):
-
     __slots__ = ("_buffers", "_indexes")
 
     @classmethod
@@ -65,6 +64,7 @@ class SafetensorsAccessor(Mapping[str, np.array]):
                 with mmap(fd.fileno(), length=0, access=ACCESS_READ) as mm:
                     if is_linux:
                         from mmap import MADV_HUGEPAGE, MADV_SEQUENTIAL, MADV_WILLNEED
+
                         LOGGER.debug("[mmap] advising MADV_RANDOM | MADV_HUGEPAGE | MADV_WILLNEED")
                         mm.madvise(MADV_SEQUENTIAL | MADV_HUGEPAGE | MADV_WILLNEED)
 
@@ -93,7 +93,6 @@ M_co = TypeVar("M_co", covariant=True)
 
 @runtime_checkable
 class SupportsSafetensors(Protocol[M_co]):
-
     @classmethod
     def from_safetensors(
         cls,
