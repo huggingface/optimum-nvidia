@@ -5,13 +5,13 @@ from optimum.nvidia.configs import QuantizationConfig
 from tensorrt_llm.quantization import QuantMode
 
 
-class BaseQuantizationConfigTestCase(TestCase, ABC):
+class BaseQuantizationConfigTestCase(ABC):
 
     @abstractmethod
     def test_has_quantization_step(self):
         raise NotImplementedError()
 
-class NoQuantizationConfigTestCase(BaseQuantizationConfigTestCase):
+class NoQuantizationConfigTestCase(BaseQuantizationConfigTestCase, TestCase):
     """
     Test setup for cases without quantization involved
     """
@@ -23,7 +23,7 @@ class NoQuantizationConfigTestCase(BaseQuantizationConfigTestCase):
         self.assertFalse(self.qconfig.has_quantization_step, "has_quantization_step should be False")
 
 
-class Float8QuantizationConfigTestCase(BaseQuantizationConfigTestCase):
+class Float8QuantizationConfigTestCase(BaseQuantizationConfigTestCase, TestCase):
     """
     Test setup for cases for float8 quantization
     """
