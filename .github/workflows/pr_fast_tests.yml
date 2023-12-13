@@ -1,0 +1,67 @@
+name: CPU Only Test Suite on PRs
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - ci-*
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+env:
+  OPTIMUM_NVIDIA_IS_CI: ON
+  RUN_CPU_ONLY: ON
+
+jobs:
+  run_fast_tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: Fast Optimum-Nvidia Test Suite
+            runner: [ci, nvidia-gpu]
+            image: huggingface/optimum-nvidia
+            report: cpu_only
+
+    name: ${{ matrix.config.name }}
+    runs-on: ${{ matrix.config.runner }}
+
+    container:
+      image: ${{ matrix.config.image }}
+      options: --shm-size "16gb" --gpus all --ipc host -v /mnt/hf_cache:/mnt/cache/
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout optimum-nvidia
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -e .[quality,tests]
+
+      - name: Run fast optimum-nvidia CPU tests
+        run: |
+          python -m pytest -n 4 --max-worker-restart=0 \
+            -s -v -k "No GPU" \
+            --make-reports=tests_${{ matrix.config.report }} \
+            tests
+
+      - name: Failure short reports
+        if: ${{ failure() }}
+        run: cat reports/tests_${{ matrix.config.report }}_failures_short.txt
+
+      - name: Test suite reports artifacts
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: pr_${{ matrix.config.report }}_test_reports
+          path: reports
