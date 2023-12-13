@@ -46,7 +46,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install -e .[quality,tests]
+          python -m pip install --upgrade -e .[quality,tests]
 
       - name: Run fast optimum-nvidia CPU tests
         run: |
