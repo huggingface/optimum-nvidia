@@ -1,13 +1,12 @@
-from abc import ABC, abstractmethod
+from typing import Protocol
 from unittest import TestCase
 
 from optimum.nvidia.configs import QuantizationConfig
 from tensorrt_llm.quantization import QuantMode
 
 
-class BaseQuantizationConfigTestCase(ABC):
+class BaseQuantizationConfigTestCase(Protocol):
 
-    @abstractmethod
     def test_has_quantization_step(self):
         raise NotImplementedError()
 
