@@ -283,12 +283,8 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
             trt_inputs.max_new_tokens = max_new_tokens
 
             trt_outputs = ctrrt.GenerationOutput(
-                ids=torch.empty(
-                    (self._max_batch_size, self._max_beam_width, self._max_output_length),
-                    device="cuda",
-                    dtype=torch.int32,
-                ),
-                lengths=torch.empty((self._max_batch_size, self._max_beam_width), device="cuda", dtype=torch.int32),
+                ids=torch.empty(0, device=device, dtype=torch.int32),
+                lengths=torch.empty(0, device=device, dtype=torch.int32),
             )
 
             self._session.generate(trt_outputs, trt_inputs, generation_config)
