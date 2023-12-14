@@ -17,7 +17,6 @@ env:
   RUN_CPU_ONLY: OFF
   RUN_NIGHTLY: OFF
   RUN_SLOW: ON
-  HF_TOKEN: ${{ secrets.OPTIMUM_NVIDIA_HUB_READ_TOKEN }}
 
 jobs:
   run_gpu_tests:
@@ -35,6 +34,8 @@ jobs:
     container:
       image: ${{ matrix.config.image }}
       options: --shm-size "16gb" --gpus all --ipc host -v /mnt/hf_cache:/mnt/cache/
+      env:
+        HF_TOKEN: ${{ secrets.OPTIMUM_NVIDIA_HUB_READ_TOKEN }}
 
     defaults:
       run:
