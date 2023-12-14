@@ -19,7 +19,7 @@ env:
   RUN_SLOW: ON
 
 jobs:
-  run_fast_tests:
+  run_gpu_tests:
     strategy:
       fail-fast: false
       matrix:
