@@ -161,19 +161,21 @@ class TensorRTPreTrainedModel(ModelHubMixin):
 
 class TensorRTForCausalLM(TensorRTPreTrainedModel):
     __slots__ = (
+        "_device",
         "_config",
         "_mapping",
         "_session",
         "_use_packed_inputs",
         "_max_beam_width",
         "_max_batch_size",
-        "_max_prompt_length" "_max_output_length",
+        "_max_prompt_length",
+        "_max_output_length",
     )
 
     def __init__(self, config: Dict[str, Any], engines_folder: Path, gpus_per_node: int, use_cuda_graph: bool = False):
         super().__init__(engines_folder)
 
-        # TODO avoid the conversion back to str
+        self._device = torch.device("cuda")
         self._config = ctrrt.GptJsonConfig.parse(json.dumps(config))
         self._mapping = ctrrt.WorldConfig.mpi(
             gpus_per_node,
@@ -225,6 +227,8 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         bos_token_id: int = 1,
         eos_token_id: int = 2,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        device = self._device
+
         # If no GenerationConfig is provided, let's allocate one with default settings
         generation_config = ctrrt.SamplingConfig(min(num_beams, self._max_beam_width))
         generation_config.random_seed = [seed]
@@ -245,9 +249,9 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
                     input_ids = input_ids.view((input_ids.size(0), -1))
                 elif input_ids.ndim == 1:
                     input_ids = input_ids.view((1, -1))
-                    lengths = torch.tensor([input_ids.size(0)], device="cuda", dtype=torch.int32)
+                    lengths = torch.tensor([input_ids.size(0)], device=device, dtype=torch.int32)
                 elif input_ids.ndim == 2 and input_ids.size(0) == 1:
-                    lengths = torch.tensor([input_ids.size(1)], device="cuda", dtype=torch.int32)
+                    lengths = torch.tensor([input_ids.size(1)], device=device, dtype=torch.int32)
                 else:
                     raise NotImplementedError(
                         "Cannot compute lengths from torch.Tensor without attention_mask for batch > 1"
@@ -264,9 +268,9 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
                 input_ids = input_ids.view((1, -1))
                 lengths = lengths.flatten()
 
-            if input_ids.device.type != "cuda" or lengths.device.type != "cuda":
-                input_ids = input_ids.to("cuda")
-                lengths = lengths.to("cuda")
+            if input_ids.device.type != device or lengths.device.type != device:
+                input_ids = input_ids.to(device)
+                lengths = lengths.to(device)
 
             trt_inputs = ctrrt.GenerationInput(
                 end_id=eos_token_id,
