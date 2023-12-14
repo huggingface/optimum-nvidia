@@ -29,7 +29,7 @@ jobs:
         cuda_arch: [sm_86, sm_89]
 
     name: ${{ matrix.config.name }}
-    runs-on: [ci, nvidia-gpu, "${{ matrix.cuda_arch }}"]
+    runs-on: [ci, nvidia-gpu, multi-gpu, "${{ matrix.cuda_arch }}"]
 
     container:
       image: ${{ matrix.config.image }}
