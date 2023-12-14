@@ -39,6 +39,5 @@ slow = pytest.mark.skipif(parse_flag_from_env(ENVVAR_NAME_RUN_SLOW, False), reas
 requires_gpu = pytest.mark.skipif(
     parse_flag_from_env(ENVVAR_NAME_RUN_CPU_ONLY, False) or not get_device_count(),
     reason=f"RUN_CPU_ONLY={parse_flag_from_env(ENVVAR_NAME_RUN_CPU_ONLY, False)} or "
-           f"no GPU detected (num_gpus={get_device_count()})"
+    f"no GPU detected (num_gpus={get_device_count()})",
 )
-

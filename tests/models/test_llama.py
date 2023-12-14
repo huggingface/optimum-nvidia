@@ -1,4 +1,3 @@
-
 from parameterized import parameterized
 
 from optimum.nvidia.models.llama import LLamaForCausalLM as TrtLlamaForCausalLM
