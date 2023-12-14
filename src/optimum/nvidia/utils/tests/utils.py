@@ -1,8 +1,8 @@
 import functools
 import os
+from distutils.util import strtobool
 
 import pytest
-from distutils.util import strtobool
 
 from optimum.nvidia.utils.nvml import get_device_count
 
