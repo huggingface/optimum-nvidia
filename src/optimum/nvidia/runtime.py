@@ -264,19 +264,16 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
                     f"Input length {lengths} is bigger than maximum prompt length ({self._max_prompt_length})."
                 )
 
+            # TODO: This doesnt handle if the input is already padded ...
             if self._use_packed_inputs:
                 input_ids = input_ids.view((1, -1))
                 lengths = lengths.flatten()
 
-            if input_ids.device.type != device or lengths.device.type != device:
-                input_ids = input_ids.to(device)
-                lengths = lengths.to(device)
-
             trt_inputs = ctrrt.GenerationInput(
                 end_id=eos_token_id,
                 pad_id=pad_token_id,
-                ids=input_ids,
-                lengths=lengths,
+                ids=input_ids.to(device),
+                lengths=lengths.to(device),
                 packed=self._use_packed_inputs,
             )
 
