@@ -15,6 +15,7 @@ concurrency:
 env:
   OPTIMUM_NVIDIA_IS_CI: ON
   RUN_CPU_ONLY: ON
+  HF_TOKEN: ${{ secrets.OPTIMUM_NVIDIA_HUB_READ_TOKEN }}
 
 jobs:
   run_fast_tests:
