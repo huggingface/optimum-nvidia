@@ -50,6 +50,4 @@ jobs:
 
       - name: Run fast optimum-nvidia CPU tests
         run: |
-          python -m pytest -n 4 --max-worker-restart=0 \
-            -s -v -k "No GPU" \
-            tests
+          python -m pytest -s -v -p no:warnings tests
