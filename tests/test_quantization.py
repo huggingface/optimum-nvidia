@@ -1,8 +1,7 @@
-from abc import ABC, abstractmethod
-from typing import Protocol
+
+from tensorrt_llm.quantization import QuantMode
 
 from optimum.nvidia.configs import NO_QUANTIZATION, QuantizationConfig
-from tensorrt_llm.quantization import QuantMode
 
 
 def test_no_quantization_has_quantization_step():

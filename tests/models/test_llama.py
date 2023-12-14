@@ -1,9 +1,8 @@
-from unittest import TestCase
 
 from parameterized import parameterized
-from optimum.nvidia.utils.tests import requires_gpu
-from optimum.nvidia.models.llama import LLamaForCausalLM as TrtLlamaForCausalLM
 
+from optimum.nvidia.models.llama import LLamaForCausalLM as TrtLlamaForCausalLM
+from optimum.nvidia.utils.tests import requires_gpu
 
 
 @parameterized.expand(["float16", "bfloat16"])

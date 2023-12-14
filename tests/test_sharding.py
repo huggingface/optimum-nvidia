@@ -1,7 +1,6 @@
 from unittest import TestCase
 
 import numpy as np
-import pytest
 from parameterized import parameterized
 
 from optimum.nvidia.weights import shard
