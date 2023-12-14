@@ -1,6 +1,7 @@
 import functools
 import os
-import unittest
+
+import pytest
 from distutils.util import strtobool
 
 from optimum.nvidia.utils.nvml import get_device_count
@@ -11,7 +12,7 @@ INT_TRUE_VALUE = 1
 # Environment variable controlling test set
 ENVVAR_NAME_RUN_NIGHTLY = "RUN_NIGHTLY"
 ENVVAR_NAME_RUN_SLOW = "RUN_SLOW"
-ENVVAR_NAME_RUN_CPUONLY = "RUN_CPUONLY"
+ENVVAR_NAME_RUN_CPU_ONLY = "RUN_CPU_ONLY"
 
 
 @functools.cache
@@ -24,7 +25,7 @@ def parse_flag_from_env(name: str, default: bool) -> bool:
     """
 
     # Retrieve the value or `default` if not present
-    value = os.environ.get(name, default)
+    value = os.environ.get(name, str(default))
 
     try:
         return strtobool(value) == INT_TRUE_VALUE
@@ -32,35 +33,12 @@ def parse_flag_from_env(name: str, default: bool) -> bool:
         raise ValueError(f"Failed to convert environment variable {name}={value} to a bool")
 
 
-def nightly(f):
-    """
-    Mark this callable as a nightly callable for the CI
-    :param f:
-    :return:
-    """
-    return unittest.skipUnless(parse_flag_from_env(ENVVAR_NAME_RUN_NIGHTLY), "test is nightly")(f)
+nightly = pytest.mark.skipif(parse_flag_from_env(ENVVAR_NAME_RUN_NIGHTLY, False), reason="Nightly test")
+slow = pytest.mark.skipif(parse_flag_from_env(ENVVAR_NAME_RUN_SLOW, False), reason="Slow test")
 
-def slow(f):
-    """
-    Mark this callable as a slow callable for the CI
-    :param f:
-    :return:
-    """
-    return unittest.skipUnless(parse_flag_from_env(ENVVAR_NAME_RUN_SLOW), "test is slow")(f)
+requires_gpu = pytest.mark.skipif(
+    parse_flag_from_env(ENVVAR_NAME_RUN_CPU_ONLY, False) or not get_device_count(),
+    reason=f"RUN_CPU_ONLY={parse_flag_from_env(ENVVAR_NAME_RUN_CPU_ONLY, False)} or "
+           f"no GPU detected (num_gpus={get_device_count()})"
+)
 
-def requires_gpu(count: int = 1):
-    """
-    Ensure the unittest callable will execute on as many GPUs as `count`
-    :param count: Number of required GPUs
-    :return:
-    """
-    assert count >= 1, f"count should be >= 1, got {count}"
-    cpu_only = parse_flag_from_env(ENVVAR_NAME_RUN_CPUONLY)
-
-    def _checked_gpu_decorator(f):
-        num_gpus = get_device_count()
-        return unittest.skipUnless(
-            not cpu_only and num_gpus >= count,
-            f"Not enough GPU (requested: {count}, available: {num_gpus})"
-        )(f)
-    return _checked_gpu_decorator
