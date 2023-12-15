@@ -15,7 +15,6 @@
 from abc import ABC, abstractmethod
 from typing import Mapping
 
-import numpy as np
 import torch
 from tensorrt_llm import BuilderConfig, Module
 from tensorrt_llm import Mapping as ShardingConfig
