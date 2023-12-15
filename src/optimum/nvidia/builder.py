@@ -547,6 +547,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
             if parse_flag_from_env("OPTIMUM_NVIDIA_OUTPUT_ONNX_IR", False):
                 from optimum.nvidia.utils import to_onnx
+
                 to_onnx(network.trt_network, output_path.joinpath("model.onnx"))
 
         LOGGER.debug("Optimizing network ...")

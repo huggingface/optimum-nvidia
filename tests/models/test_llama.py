@@ -7,14 +7,7 @@ from optimum.nvidia.utils.tests import requires_gpu
 
 
 LlamaModelInfo = NamedTuple(
-    "LlamaModelInfo",
-    [
-        ("model_id", str),
-        ("dtype", "str"),
-        ("tp_degree", int),
-        ("pp_degre", int),
-        ("world_size", int)
-    ]
+    "LlamaModelInfo", [("model_id", str), ("dtype", "str"), ("tp_degree", int), ("pp_degre", int), ("world_size", int)]
 )
 
 
@@ -28,18 +21,15 @@ def llama(request) -> TrtLlamaForCausalLM:
     "llama",
     [
         LlamaModelInfo("huggingface/llama-7b", "float16", 1, 1, 1),
-        LlamaModelInfo("huggingface/llama-7b", "bfloat16", 1, 1, 1)
+        LlamaModelInfo("huggingface/llama-7b", "bfloat16", 1, 1, 1),
     ],
     ids=[
         "huggingface/llama-7b (float16)",
         "huggingface/llama-7b (bfloat16)",
     ],
-    indirect=True
+    indirect=True,
 )
 @requires_gpu
 def test_build_llama(llama: TrtLlamaForCausalLM):
     assert llama is not None
     assert llama.config.name == "llama"
-
-
-

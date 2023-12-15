@@ -36,7 +36,7 @@ def get_trtllm_pipeline(args: Namespace):
         pp=args.pp,
         gpus_per_node=args.gpus_per_node,
         world_size=args.world_size,
-        dtype=args.dtype
+        dtype=args.dtype,
     )
 
 
