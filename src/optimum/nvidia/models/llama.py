@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import List, Mapping, Union
 
 import numpy as np
+import torch
 from tensorrt_llm import BuilderConfig, Module
 from tensorrt_llm import Mapping as ShardingConfig
 from tensorrt_llm.models import LLaMAForCausalLM
@@ -28,7 +29,7 @@ from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, shard
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 
 
@@ -54,9 +55,10 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         builder: BuilderConfig,
         qconfig: QuantizationConfig,
         rank: int,
-        weights: Mapping[str, np.array],
+        weights: Mapping[str, torch.Tensor],
     ) -> Module:
         shard_info = self._sharding_config
+        precision = DataType(builder.precision)
 
         # TODO: Maybe get this outside of llama specifics
         qkv_packed_layers = []
@@ -64,9 +66,9 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             prefix = f"{LAYERS_PREFIX}.{layer_idx}.self_attn."
 
             # Merge QKV
-            q_weight = weights[prefix + "q_proj.weight"]
-            k_weight = weights[prefix + "k_proj.weight"]
-            v_weight = weights[prefix + "v_proj.weight"]
+            q_weight = as_numpy(weights[prefix + "q_proj.weight"], precision)
+            k_weight = as_numpy(weights[prefix + "k_proj.weight"], precision)
+            v_weight = as_numpy(weights[prefix + "v_proj.weight"], precision)
 
             if not config.use_multi_head_attention:
                 head_size = config.hidden_size // config.num_heads
@@ -83,15 +85,14 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             # Insert the packed weights inside the weights
             qkv_packed_layers.append(qkv_weight)
 
-        dtype = DataType(builder.precision).as_numpy()
         layers_per_stage = config.num_layers // shard_info.pp_size
         layers_range = range(shard_info.pp_rank * layers_per_stage, (shard_info.pp_rank + 1) * layers_per_stage, 1)
 
-        LOGGER.debug(f"Converting LLama with dtype: {dtype} for rank {rank} and layers: {layers_range}")
+        LOGGER.debug(f"Converting LLama with dtype: {precision} for rank {rank} and layers: {layers_range}")
 
         # Convert specific tensors
         if shard_info.is_first_pp_rank():
-            embeddings = weights["model.embed_tokens.weight"].astype(dtype)
+            embeddings = as_numpy(weights["model.embed_tokens.weight"], precision)
             if model.use_parallel_embedding:
                 embeddings = shard(embeddings, rank, shard_info.tp_size, model.embedding_sharding_dim)
 
@@ -99,11 +100,11 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
 
         if shard_info.is_last_pp_rank():
             # Final layer norm
-            final_norm = weights["model.norm.weight"].astype(dtype)
+            final_norm = as_numpy(weights["model.norm.weight"], precision)
             model.ln_f.weight.value = final_norm
 
             # Final vocab projection
-            lm_head = weights["lm_head.weight"].astype(dtype)
+            lm_head = as_numpy(weights["lm_head.weight"], precision)
             rank_tensor = shard(lm_head, rank, shard_info.tp_size)
             model.lm_head.weight.value = rank_tensor
 
@@ -113,11 +114,11 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             prefix = f"{LAYERS_PREFIX}.{idx}"
 
             # input_layernorm.weight
-            input_ln = weights[f"{prefix}.input_layernorm.weight"]
+            input_ln = as_numpy(weights[f"{prefix}.input_layernorm.weight"], precision)
             model.layers[idx].input_layernorm.weight.value = input_ln
 
             # post_attention_layernorm.weight
-            post_attn_ln = weights[f"{prefix}.post_attention_layernorm.weight"]
+            post_attn_ln = as_numpy(weights[f"{prefix}.post_attention_layernorm.weight"], precision)
             model.layers[idx].post_layernorm.weight.value = post_attn_ln
 
             # Self attention layer
@@ -129,7 +130,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
                 wq, wk, wv = (
                     shard(q, rank, shard_info.tp_size, axis=0),
                     shard(k, rank, shard_info.tp_size, axis=0),
-                    shard(v, rank, shard_info.tp_size, axis=0),
+                    shard(k, rank, shard_info.tp_size, axis=0),
                 )
 
                 qkv_weight = np.concatenate((wq, wk, wv), axis=0)
@@ -147,7 +148,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
                 ("mlp.down_proj.weight", model.layers[idx].mlp.proj.weight, 1),
                 ("mlp.gate_proj.weight", model.layers[idx].mlp.fc.weight, 0),
             ]:
-                tensor = weights[f"{prefix}.{src}"]
+                tensor = as_numpy(weights[f"{prefix}.{src}"], precision)
                 rank_tensor = shard(tensor, rank, shard_info.tp_size, shard_axis)
                 dst.value = np.ascontiguousarray(rank_tensor)
 

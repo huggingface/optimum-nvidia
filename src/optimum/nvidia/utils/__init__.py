@@ -16,6 +16,7 @@ import functools
 
 from .fs import *
 from .offload import maybe_offload_weights_to_cpu
+from .onnx import to_onnx
 
 
 def rgetattr(obj, attr):

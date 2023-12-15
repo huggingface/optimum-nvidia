@@ -11,9 +11,12 @@ from optimum.nvidia.pipelines import pipeline
 
 
 def get_transformers_pipeline(args: Namespace):
+    if "dtype" in args:
+        assert args["dtype"] in {"float16", "bfloat16", "float32"}
+
     return raw_pipeline(
         model=args.model,
-        torch_dtype=torch.float16,
+        torch_dtype=args["dtype"],
         model_kwargs={
             "device_map": "balanced",
             "max_memory": {0: "20GiB", "cpu": "64GiB"},
@@ -33,6 +36,7 @@ def get_trtllm_pipeline(args: Namespace):
         pp=args.pp,
         gpus_per_node=args.gpus_per_node,
         world_size=args.world_size,
+        dtype=args.dtype
     )
 
 
@@ -56,6 +60,7 @@ if __name__ == "__main__":
     parser.add_argument("--use-transformers", action="store_true", help="Use transformers pipeline as baseline.")
     parser.add_argument("--use-cuda-graph", action="store_true", help="Turn on CUDA Graph.")
     parser.add_argument("--use-fp8", action="store_true", help="Attempt to benchmark in float8 precision.")
+    parser.add_argument("--dtype", type=str, default="float16", help="Specify the precision for the model.")
     parser.add_argument("--tp", type=int, default=1, help="Degree of tensor parallelism to apply.")
     parser.add_argument("--pp", type=int, default=1, help="Degree of pipeline parallelism to apply.")
     parser.add_argument("--gpus-per-node", type=int, default=1, help="Number of GPUs per node.")

@@ -20,7 +20,7 @@ from sys import platform
 from typing import Iterable, List, Mapping, Protocol, TypeVar, Union, runtime_checkable
 
 import numpy as np
-from safetensors.numpy import load
+from safetensors.torch import load
 from tensorrt_llm import BuilderConfig, Module
 from tensorrt_llm import Mapping as ShardingConfig
 

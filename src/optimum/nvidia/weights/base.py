@@ -16,6 +16,7 @@ from abc import ABC, abstractmethod
 from typing import Mapping
 
 import numpy as np
+import torch
 from tensorrt_llm import BuilderConfig, Module
 from tensorrt_llm import Mapping as ShardingConfig
 from tensorrt_llm.quantization import QuantMode
@@ -40,7 +41,7 @@ class WeightAdapter(ABC):
         builder: BuilderConfig,
         qconfig: QuantizationConfig,
         rank: int,
-        weights: Mapping[str, np.array],
+        weights: Mapping[str, torch.Tensor],
     ) -> Module:
         """
 
