@@ -20,7 +20,7 @@ from sys import platform
 from typing import Iterable, List, Mapping, Protocol, TypeVar, Union, runtime_checkable
 
 import numpy as np
-from safetensors.numpy import load, safe_open
+from safetensors.numpy import load
 from tensorrt_llm import BuilderConfig, Module
 from tensorrt_llm import Mapping as ShardingConfig
 
@@ -28,27 +28,6 @@ from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 
 
 LOGGER = getLogger(__name__)
-
-
-def walk(path: PathLike):
-    # with open(str(path), "rb") as params_f:
-    #     LOGGER.debug(f"Opened file at {path}")
-
-    # Memory-map the whole file
-    # is_linux = sys.platform == "linux"
-    # mm = mmap(params_f.fileno(), length=0, access=ACCESS_READ)
-    # if is_linux:
-    #     LOGGER.debug("[mmap] advising MADV_RANDOM | MADV_HUGEPAGE")
-    #     mm.madvise(MADV_RANDOM | MADV_HUGEPAGE | MADV_WILLNEED)
-
-    # Read the content
-    # content = mm.read()
-    # with read_safetensors(content) as st_content:
-
-    with safe_open(path, framework="numpy") as st_content:
-        LOGGER.debug(f"Opened file at {path}")
-        for name in st_content.keys():
-            yield name, st_content.get_tensor(name)
 
 
 class SafetensorsAccessor(Mapping[str, np.array]):
