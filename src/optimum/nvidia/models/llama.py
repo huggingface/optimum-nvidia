@@ -29,7 +29,7 @@ from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel, repeat_heads
-from optimum.nvidia.weights import SupportsSafetensors, SupportsNpz, WeightAdapter, shard
+from optimum.nvidia.weights import SupportsSafetensors, SupportsNpz, WeightAdapter, shard, as_numpy
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 
 
