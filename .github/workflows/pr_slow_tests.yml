@@ -17,6 +17,7 @@ env:
   RUN_CPU_ONLY: OFF
   RUN_NIGHTLY: OFF
   RUN_SLOW: ON
+  HF_HUB_ENABLE_HF_TRANSFER: ON
 
 jobs:
   run_gpu_tests:
