@@ -45,6 +45,7 @@ from optimum.nvidia.lang import DataType
 from optimum.nvidia.quantization import Calibration
 from optimum.nvidia.utils import ensure_file_exists_locally, maybe_offload_weights_to_cpu
 from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
+from optimum.nvidia.utils.tests.utils import parse_flag_from_env
 from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter
 from optimum.nvidia.weights.hub import get_safetensors_files
 
@@ -544,7 +545,10 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
             model(*inputs)
 
-            # to_onnx(network.trt_network, output_path.joinpath("model.onnx"))
+            if parse_flag_from_env("OPTIMUM_NVIDIA_OUTPUT_ONNX_IR", False):
+                from optimum.nvidia.utils import to_onnx
+
+                to_onnx(network.trt_network, output_path.joinpath("model.onnx"))
 
         LOGGER.debug("Optimizing network ...")
         graph_rewriting.optimize(network)

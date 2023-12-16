@@ -8,6 +8,8 @@ from onnx import TensorProto, helper
 def trt_dtype_to_onnx(dtype):
     if dtype == trt.float16:
         return TensorProto.DataType.FLOAT16
+    if dtype == trt.bfloat16:
+        return TensorProto.DataType.BFLOAT16
     elif dtype == trt.float32:
         return TensorProto.DataType.FLOAT
     elif dtype == trt.int32:
