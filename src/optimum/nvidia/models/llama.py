@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import List, Mapping, Union
 
 import numpy as np
-import torch
 from tensorrt_llm import BuilderConfig, Module
 from tensorrt_llm import Mapping as ShardingConfig
 from tensorrt_llm.models import LLaMAForCausalLM
@@ -29,7 +28,7 @@ from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel, repeat_heads
-from optimum.nvidia.weights import SupportsSafetensors, SupportsNpz, WeightAdapter, shard, as_numpy
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 
 
@@ -55,7 +54,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         builder: BuilderConfig,
         qconfig: QuantizationConfig,
         rank: int,
-        weights: Mapping[str, np.array]
+        weights: Mapping[str, np.array],
     ) -> Module:
         shard_info = self._sharding_config
         precision = DataType(builder.precision)
@@ -72,7 +71,9 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
 
             if not config.use_multi_head_attention:
                 if config.num_kv_heads < shard_info.tp_size:
-                    LOGGER.debug(f"Duplicating KV heads ({config.num_kv_heads}) up to TP-degree ({shard_info.tp_size})")
+                    LOGGER.debug(
+                        f"Duplicating KV heads ({config.num_kv_heads}) up to TP-degree ({shard_info.tp_size})"
+                    )
 
                     factor = shard_info.tp_size // config.num_kv_heads
                     k_weight = repeat_heads(k_weight, factor, axis=1)
