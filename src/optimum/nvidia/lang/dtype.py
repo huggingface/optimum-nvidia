@@ -16,8 +16,8 @@ from enum import Enum
 
 import numpy as np
 import torch
-from tensorrt_llm import str_dtype_to_trt
-from tensorrt_llm._utils import str_dtype_to_np
+from tensorrt_llm._utils import np_bfloat16, _str_to_trt_dtype_dict
+
 
 
 class DataType(Enum):
@@ -31,11 +31,24 @@ class DataType(Enum):
     FLOAT16 = "float16"
     BFLOAT16 = "bfloat16"
 
+
     def as_trt(self) -> object:
-        return str_dtype_to_trt(self.value)
+        if self == DataType.FLOAT8:
+            return _str_to_trt_dtype_dict["fp8"]
+        else:
+            return _str_to_trt_dtype_dict[self.value]
 
     def as_numpy(self) -> np.dtype:
-        return str_dtype_to_np(self.value)
+        if self == DataType.BFLOAT16:
+            return np_bfloat16
+        elif self == DataType.FLOAT16:
+            return np.float16
+        elif self == DataType.FLOAT32:
+            return np.float32
+        elif self == DataType.INT8:
+            return np.int8
+        else:
+            raise ValueError(f"Unsupported data type ({self}) to equivalent NumPy")
 
     def as_torch(self) -> "torch.dtype":
         import torch
