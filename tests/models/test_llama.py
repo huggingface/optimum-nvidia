@@ -5,6 +5,7 @@ import pytest
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models.llama import LLamaForCausalLM as TrtLlamaForCausalLM
 from optimum.nvidia.utils.tests import requires_gpu
+from tensorrt_llm.bindings import DataType as TrtDataType
 
 
 LlamaModelInfo = NamedTuple(
@@ -36,7 +37,7 @@ def test_build_llama(llama: TrtLlamaForCausalLM, dtype: str):
     assert llama.config.name == "llama"
     assert llama.config.precision == dtype, f"Precision should be {dtype} but got {llama.config.precision}"
 
-    model_config = llama.config
-    assert model_config.data_type == DataType(dtype).as_trt()
+    model_config = llama.config.model_config
+    assert model_config.data_type == TrtDataType(DataType(dtype).as_trt())
     assert model_config.use_gpt_attention_plugin, f"GPT Attention plugin should be enabled"
     assert model_config.use_packed_input, f"Remove Padding should set to true with GPT Attention plugin"
