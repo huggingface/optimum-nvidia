@@ -1,11 +1,11 @@
 from typing import NamedTuple
 
 import pytest
+from tensorrt_llm.bindings import DataType as TrtDataType
 
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models.llama import LLamaForCausalLM as TrtLlamaForCausalLM
 from optimum.nvidia.utils.tests import requires_gpu
-from tensorrt_llm.bindings import DataType as TrtDataType
 
 
 LlamaModelInfo = NamedTuple(
@@ -23,7 +23,7 @@ def llama(request) -> TrtLlamaForCausalLM:
     "llama, dtype",
     [
         (LlamaModelInfo("huggingface/llama-7b", "float16", 1, 1, 1), "float16"),
-         (LlamaModelInfo("huggingface/llama-7b", "bfloat16", 1, 1, 1), "bfloat16"),
+        (LlamaModelInfo("huggingface/llama-7b", "bfloat16", 1, 1, 1), "bfloat16"),
     ],
     ids=[
         "huggingface/llama-7b (float16)",
@@ -39,5 +39,5 @@ def test_build_llama(llama: TrtLlamaForCausalLM, dtype: str):
 
     model_config = llama.config.model_config
     assert model_config.data_type == TrtDataType(DataType(dtype).as_trt())
-    assert model_config.use_gpt_attention_plugin, f"GPT Attention plugin should be enabled"
-    assert model_config.use_packed_input, f"Remove Padding should set to true with GPT Attention plugin"
+    assert model_config.use_gpt_attention_plugin, "GPT Attention plugin should be enabled"
+    assert model_config.use_packed_input, "Remove Padding should set to true with GPT Attention plugin"

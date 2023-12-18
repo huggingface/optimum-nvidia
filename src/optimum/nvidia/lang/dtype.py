@@ -16,8 +16,7 @@ from enum import Enum
 
 import numpy as np
 import torch
-from tensorrt_llm._utils import np_bfloat16, _str_to_trt_dtype_dict
-
+from tensorrt_llm._utils import _str_to_trt_dtype_dict, np_bfloat16
 
 
 class DataType(Enum):
@@ -30,7 +29,6 @@ class DataType(Enum):
     FLOAT32 = "float32"
     FLOAT16 = "float16"
     BFLOAT16 = "bfloat16"
-
 
     def as_trt(self) -> object:
         if self == DataType.FLOAT8:

@@ -1,10 +1,11 @@
 import numpy as np
 import pytest
-import torch
-
 import tensorrt as trt
-from optimum.nvidia.lang import DataType
+import torch
 from tensorrt_llm._utils import np_bfloat16
+
+from optimum.nvidia.lang import DataType
+
 
 @pytest.mark.parametrize(
     "literal_dtype,dtype",
@@ -13,7 +14,7 @@ from tensorrt_llm._utils import np_bfloat16
         ("float16", np.float16),
         ("bfloat16", np_bfloat16),
         ("int8", np.int8),
-    ]
+    ],
 )
 def test_convert_str_to_numpy(literal_dtype: str, dtype):
     assert DataType(literal_dtype).as_numpy() == dtype
@@ -26,10 +27,11 @@ def test_convert_str_to_numpy(literal_dtype: str, dtype):
         ("float16", torch.float16),
         ("float8", torch.float32),  # Change this when supported
         ("int8", torch.int8),
-    ]
+    ],
 )
 def test_convert_str_to_torch(literal_dtype: str, dtype):
     assert DataType(literal_dtype).as_torch() == dtype
+
 
 @pytest.mark.parametrize(
     "literal_dtype,dtype",
@@ -38,7 +40,7 @@ def test_convert_str_to_torch(literal_dtype: str, dtype):
         ("float16", trt.float16),
         ("float8", trt.fp8),
         ("int8", trt.int8),
-    ]
+    ],
 )
 def test_convert_str_to_tensorrt(literal_dtype: str, dtype):
     assert DataType(literal_dtype).as_trt() == dtype
