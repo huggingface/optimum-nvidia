@@ -240,6 +240,6 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         return scaling_factors
 
 
-class LLamaForCausalLM(ConvertibleModel, TensorRTForCausalLM):
+class LlamaForCausalLM(ConvertibleModel, TensorRTForCausalLM):
     ADAPTER = LlamaWeightAdapter
     TARGET = LLaMAForCausalLM

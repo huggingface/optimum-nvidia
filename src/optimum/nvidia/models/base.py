@@ -51,9 +51,9 @@ class AutoModelForCausalLM(ModelHubMixin):
         model_type = config["model_type"]
         if model_type == "llama":
             # TODO: Fix circular import
-            from .llama import LLamaForCausalLM
+            from .llama import LlamaForCausalLM
 
-            model_class = LLamaForCausalLM
+            model_class = LlamaForCausalLM
         else:
             raise NotImplementedError(f"Model architecture {model_type} is not supported yet.")
 

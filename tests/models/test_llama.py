@@ -4,7 +4,7 @@ import pytest
 from tensorrt_llm.bindings import DataType as TrtDataType
 
 from optimum.nvidia.lang import DataType
-from optimum.nvidia.models.llama import LLamaForCausalLM as TrtLlamaForCausalLM
+from optimum.nvidia.models.llama import LlamaForCausalLM as TrtLlamaForCausalLM
 from optimum.nvidia.utils.tests import requires_gpu
 
 
