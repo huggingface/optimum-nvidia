@@ -58,7 +58,7 @@ def test_build(llama: Tuple[PreTrainedTokenizer, TrtLlamaForCausalLM], expected_
         f"Precision should be {expected_precision} but got {llama.config.precision}"
 
     model_config = llama.config.model_config
-    assert model_config.data_type == TrtDataType(DataType(dtype).as_trt())
+    assert model_config.data_type == TrtDataType(DataType(expected_precision).as_trt())
     assert model_config.use_gpt_attention_plugin, "GPT Attention plugin should be enabled"
     assert model_config.use_packed_input, "Remove Padding should set to true with GPT Attention plugin"
 
