@@ -2,7 +2,7 @@ from typing import NamedTuple, Tuple
 
 import pytest
 from tensorrt_llm.bindings import DataType as TrtDataType
-from transformers import PreTrainedTokenizer, AutoTokenizer, TensorType
+from transformers import AutoTokenizer, PreTrainedTokenizer, TensorType
 
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models.llama import LlamaForCausalLM as TrtLlamaForCausalLM
@@ -10,13 +10,7 @@ from optimum.nvidia.utils.tests import requires_gpu
 
 
 LlamaModelInfo = NamedTuple(
-    "LlamaModelInfo", [
-        ("model_id", str),
-        ("dtype", str),
-        ("tp_degree", int),
-        ("pp_degree", int),
-        ("world_size", int)
-    ]
+    "LlamaModelInfo", [("model_id", str), ("dtype", str), ("tp_degree", int), ("pp_degree", int), ("world_size", int)]
 )
 
 
@@ -54,8 +48,9 @@ def test_build(llama: Tuple[PreTrainedTokenizer, TrtLlamaForCausalLM], expected_
 
     tokenizer, llama = llama
     assert llama.config.name == "llama"
-    assert llama.config.precision == expected_precision, \
-        f"Precision should be {expected_precision} but got {llama.config.precision}"
+    assert (
+        llama.config.precision == expected_precision
+    ), f"Precision should be {expected_precision} but got {llama.config.precision}"
 
     model_config = llama.config.model_config
     assert model_config.data_type == TrtDataType(DataType(expected_precision).as_trt())
@@ -75,11 +70,14 @@ def test_build(llama: Tuple[PreTrainedTokenizer, TrtLlamaForCausalLM], expected_
     ],
     indirect=["llama"],
 )
-@pytest.mark.parametrize("inputs, num_samples", [
-    ("This is an example", 1),
-    (["This is an example"], 1),
-    (["This is an example", "And this is a second example"], 2)
-])
+@pytest.mark.parametrize(
+    "inputs, num_samples",
+    [
+        ("This is an example", 1),
+        (["This is an example"], 1),
+        (["This is an example", "And this is a second example"], 2),
+    ],
+)
 @requires_gpu
 def test_run_simple(llama: Tuple[PreTrainedTokenizer, TrtLlamaForCausalLM], inputs: str, num_samples: int):
     tokenizer, llama = llama

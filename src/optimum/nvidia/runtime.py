@@ -273,9 +273,7 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
             return trt_outputs.ids, trt_outputs.lengths
 
     def _prepare_inputs(
-        self,
-        input_ids: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None
+        self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         shape = input_ids.size()
         input_ids = input_ids.int()
@@ -300,4 +298,3 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
             input_ids = torch.masked_select(input_ids, attention_mask.bool()).view(1, -1)
 
         return input_ids, lengths
-
