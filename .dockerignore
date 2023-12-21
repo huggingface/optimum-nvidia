@@ -1,5 +1,6 @@
 **/*.engine
 **/*.pyc
+**/*.egg-info
 
 hub/
 
