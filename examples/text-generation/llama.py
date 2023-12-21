@@ -71,7 +71,9 @@ if __name__ == "__main__":
         )
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
-    tokenizer.pad_token = tokenizer.eos_token
+
+    if not tokenizer.pad_token:
+        tokenizer.pad_token = tokenizer.eos_token
 
     # Define the target engine details
     builder = (
@@ -116,10 +118,7 @@ if __name__ == "__main__":
             max_new_tokens=args.max_new_tokens,
         )
 
-        print(
-            tokenizer.decode(
-                generated.squeeze().tolist(),
-            )
-        )
+        generated_text = tokenizer.decode(generated[0, 0])
+        print(generated_text)
 
     print(f"TRTLLM engines have been saved at {args.output}.")

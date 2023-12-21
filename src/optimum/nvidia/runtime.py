@@ -1,4 +1,5 @@
 import json
+import warnings
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
@@ -161,19 +162,21 @@ class TensorRTPreTrainedModel(ModelHubMixin):
 
 class TensorRTForCausalLM(TensorRTPreTrainedModel):
     __slots__ = (
+        "_device",
         "_config",
         "_mapping",
         "_session",
         "_use_packed_inputs",
-        "_max_beam_width",
-        "_max_batch_size",
-        "_max_prompt_length" "_max_output_length",
+        "max_beam_width",
+        "max_batch_size",
+        "max_prompt_length",
+        "max_output_length",
     )
 
     def __init__(self, config: Dict[str, Any], engines_folder: Path, gpus_per_node: int, use_cuda_graph: bool = False):
         super().__init__(engines_folder)
 
-        # TODO avoid the conversion back to str
+        self._device = torch.device("cuda")
         self._config = ctrrt.GptJsonConfig.parse(json.dumps(config))
         self._mapping = ctrrt.WorldConfig.mpi(
             gpus_per_node,
@@ -199,10 +202,10 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
 
         # Additional cached properties
         self._use_packed_inputs = config["plugin_config"].get("remove_input_padding", False)
-        self._max_batch_size = self._config.model_config.max_batch_size
-        self._max_prompt_length = self._config.model_config.max_input_len
-        self._max_output_length = self._config.model_config.max_output_len
-        self._max_beam_width = self._session_config.max_beam_width
+        self.max_batch_size = self._config.model_config.max_batch_size
+        self.max_prompt_length = self._config.model_config.max_input_len
+        self.max_output_length = self._config.model_config.max_output_len
+        self.max_beam_width = self._session_config.max_beam_width
 
     @property
     def config(self) -> ctrrt.GptJsonConfig:
@@ -225,8 +228,10 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         bos_token_id: int = 1,
         eos_token_id: int = 2,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        device = self._device
+
         # If no GenerationConfig is provided, let's allocate one with default settings
-        generation_config = ctrrt.SamplingConfig(min(num_beams, self._max_beam_width))
+        generation_config = ctrrt.SamplingConfig(min(num_beams, self.max_beam_width))
         generation_config.random_seed = [seed]
         generation_config.temperature = [temperature]
         generation_config.top_k = [top_k]
@@ -238,55 +243,58 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
             generation_config.min_length = [min_length]
 
         with torch.no_grad():
-            if isinstance(input_ids, torch.Tensor):
-                input_ids = input_ids.int()
-                if attention_mask is not None:
-                    lengths = attention_mask.sum(dim=1, dtype=torch.int32)
-                    input_ids = input_ids.view((input_ids.size(0), -1))
-                elif input_ids.ndim == 1:
-                    input_ids = input_ids.view((1, -1))
-                    lengths = torch.tensor([input_ids.size(0)], device="cuda", dtype=torch.int32)
-                elif input_ids.ndim == 2 and input_ids.size(0) == 1:
-                    lengths = torch.tensor([input_ids.size(1)], device="cuda", dtype=torch.int32)
-                else:
-                    raise NotImplementedError(
-                        "Cannot compute lengths from torch.Tensor without attention_mask for batch > 1"
-                    )
-            else:
-                raise ValueError("input_ids has to be 2D torch.Tensor (batch, sequence)")
+            if not isinstance(input_ids, torch.Tensor):
+                raise TypeError("input_ids should be a PyTorch tensor (torch.Tensor)")
 
-            if torch.any(torch.gt(lengths, self._max_prompt_length)):
+            input_ids, lengths = self._prepare_inputs(input_ids, attention_mask)
+            if torch.any(torch.gt(lengths, self.max_prompt_length)):
                 raise ValueError(
-                    f"Input length {lengths} is bigger than maximum prompt length ({self._max_prompt_length})."
+                    f"Input length {lengths} is bigger than maximum prompt length ({self.max_prompt_length})."
                 )
-
-            if self._use_packed_inputs:
-                input_ids = input_ids.view((1, -1))
-                lengths = lengths.flatten()
-
-            if input_ids.device.type != "cuda" or lengths.device.type != "cuda":
-                input_ids = input_ids.to("cuda")
-                lengths = lengths.to("cuda")
 
             trt_inputs = ctrrt.GenerationInput(
                 end_id=eos_token_id,
                 pad_id=pad_token_id,
-                ids=input_ids,
-                lengths=lengths,
+                ids=input_ids.to(device),
+                lengths=lengths.to(device),
                 packed=self._use_packed_inputs,
             )
 
             trt_inputs.max_new_tokens = max_new_tokens
 
+            # Tensors are being allocated as in/out parameters and TRTLLM will resize
             trt_outputs = ctrrt.GenerationOutput(
-                ids=torch.empty(
-                    (self._max_batch_size, self._max_beam_width, self._max_output_length),
-                    device="cuda",
-                    dtype=torch.int32,
-                ),
-                lengths=torch.empty((self._max_batch_size, self._max_beam_width), device="cuda", dtype=torch.int32),
+                ids=torch.empty(0, device=device, dtype=torch.int32),
+                lengths=torch.empty(0, device=device, dtype=torch.int32),
             )
 
             self._session.generate(trt_outputs, trt_inputs, generation_config)
 
             return trt_outputs.ids, trt_outputs.lengths
+
+    def _prepare_inputs(
+        self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        shape = input_ids.size()
+        input_ids = input_ids.int()
+
+        if input_ids.ndim == 1:
+            lengths = torch.tensor(shape, dtype=torch.int32, device=self._device)
+        elif input_ids.ndim == 2 and shape[0] == 1:
+            lengths = torch.tensor([shape[1]], dtype=torch.int32, device=self._device)
+        elif attention_mask is not None:
+            lengths = attention_mask.sum(dim=1, dtype=torch.int32)
+        else:
+            warnings.warn(
+                "Not enough information to compute the non-padded tensor length. "
+                "Please provide an attention_mask to avoid situations where padding"
+                " will be attended to in attention modules"
+            )
+
+            attention_mask = torch.ones_like(input_ids)
+            lengths = torch.tensor(shape, dtype=torch.int32).flatten()
+
+        if self._use_packed_inputs and shape[0] > 1:
+            input_ids = torch.masked_select(input_ids, attention_mask.bool()).view(1, -1)
+
+        return input_ids, lengths

@@ -41,4 +41,6 @@ RUN cuda_version=$(nvcc --version | grep 'release' | awk '{print $6}' | awk -F'[
 RUN python -m pip install --upgrade --no-cache-dir datasets huggingface_hub hf-transfer transformers pynvml
 ENV PYTHONPATH=/opt/optimum-nvidia/src:$PYTHONPATH
 
+#Add the project sources to the final layer
+COPY . /opt/optimum-nvidia
 WORKDIR /opt/optimum-nvidia/examples
