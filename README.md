@@ -38,8 +38,8 @@ Ideally the user doesn't need to use docker at all to build from source, they sh
 
 Instead of using the pre-built docker container, you can build Optimum-NVIDIA from source:
 ```bash
-TARGET_SM = "90-real,89-real"
-git clone --recursive --depth=1 git@github.com:huggingface/optimum-nvidia.git
+TARGET_SM="90-real;89-real"
+git clone --recursive --depth=1 https://github.com/huggingface/optimum-nvidia.git
 cd optimum-nvidia/third-party/tensorrt-llm
 make -C docker release_build CUDA_ARCHS=$TARGET_SM
 cd ../.. && docker build -t <organisation_name/image_name>:<version> -f docker/Dockerfile .
