@@ -26,6 +26,11 @@ try:
 except Exception as error:
     assert False, "Error: Could not open '%s' due %s\n" % (filepath, error)
 
+
+ADDITIONAL_DEPENDENCY_LINKS = [
+    'https://pypi.nvidia.com'
+]
+
 INSTALL_REQUIRES = [
     "accelerate",
     "dataset",
@@ -35,7 +40,8 @@ INSTALL_REQUIRES = [
     "numpy >= 1.22.0",
     "onnx >= 1.12.0",
     "optimum >= 1.13.0",
-    "transformers >= 4.38.1",
+    "transformers >= 4.32.1",
+    "tensorrt_llm == 0.7.1",
     "pynvml"
 ]
 
@@ -97,6 +103,7 @@ setup(
     packages=find_namespace_packages(include=["optimum*"]),
     install_requires=INSTALL_REQUIRES,
     extras_require=EXTRAS_REQUIRE,
+    dependency_links=ADDITIONAL_DEPENDENCY_LINKS,
     include_package_data=True,
     zip_safe=False,
 )
