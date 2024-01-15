@@ -221,7 +221,7 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
         temperature: float = 1.0,
         top_k: int = 50,
         top_p: float = 1.0,
-        repetition_penalty: float = 0.0,
+        repetition_penalty: float = 1.0,
         length_penalty: float = 1.0,
         seed: int = 0,
         pad_token_id: int = 0,
