@@ -16,13 +16,11 @@
 from argparse import ArgumentParser
 from logging import getLogger
 from pathlib import Path
-from huggingface_hub import login
 from transformers import AutoTokenizer
 
 from optimum.nvidia import setup_logging
 
 
-# TODO: what is this?
 # Setup logging needs to happen before importing TRT ...
 setup_logging(False)
 
@@ -36,8 +34,6 @@ from optimum.nvidia.utils.cli import (
     register_quantization_args,
 )
 
-from optimum.nvidia.quantization import get_default_calibration_dataset
-from json import load
 LOGGER = getLogger(__name__)
 
 
@@ -66,6 +62,8 @@ if __name__ == "__main__":
 
     LOGGER.info(f"Exporting {args.model} to TensorRT-LLM engine at {args.output}")
     if args.hub_token is not None:
+        from huggingface_hub import login
+
         login(
             args.hub_token,
         )
@@ -86,6 +84,8 @@ if __name__ == "__main__":
 
     # Check if we need to collect calibration samples
     if args.has_quantization_step:
+        from optimum.nvidia.quantization import get_default_calibration_dataset
+
         max_length = min(args.max_prompt_length + args.max_new_tokens, tokenizer.model_max_length)
         calib = get_default_calibration_dataset(args.num_calibration_samples)
 
@@ -99,6 +99,8 @@ if __name__ == "__main__":
     builder.build(args.output, args.optimization_level)
 
     with open(args.output.joinpath("build.json"), mode="r", encoding="utf-8") as config_f:
+        from json import load
+
         config = load(config_f)
         model = TensorRTForCausalLM(config, args.output, args.gpus_per_node)
 

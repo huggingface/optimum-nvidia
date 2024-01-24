@@ -85,34 +85,3 @@ if __name__ == "__main__":
     builder.build(args.output, args.optimization_level)
 
     print(f"TRTLLM engines have been saved at {args.output}.")
-
-    """
-    with open(args.output.joinpath("build.json"), mode="r", encoding="utf-8") as config_f:
-        config = load(config_f)
-        model = TensorRTForSpeechSeq2SeqLMLM(config, args.output, args.gpus_per_node)
-
-        processor = AutoProcessor.from_pretrained("openai/whisper-tiny.en")
-
-        ds = load_dataset("hf-internal-testing/librispeech_asr_dummy", "clean", split="validation")
-
-        inputs = processor(ds[0]["audio"]["array"], return_tensors="pt")
-        input_features = inputs.input_features
-
-
-
-        generated_ids = model.generate(inputs=input_features)
-
-        transcription = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
-        transcription
-
-        generated, lengths = model.generate(
-            input_features,
-            top_k=40,
-            top_p=0.95,
-            repetition_penalty=10,
-            max_new_tokens=args.max_new_tokens,
-        )
-
-        generated_text = tokenizer.decode(generated[0, 0])
-        print(generated_text)
-    """
