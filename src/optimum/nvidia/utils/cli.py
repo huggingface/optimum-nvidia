@@ -81,7 +81,6 @@ def postprocess_quantization_parameters(params: Namespace) -> Namespace:
             use_fp8_kv_cache=params.fp8_cache,
             use_fp8_qdq=params.fp8,
         ),
-        group_size=-1,
     )
 
     params.has_quantization_step = quantization_config.mode != QuantMode(0)

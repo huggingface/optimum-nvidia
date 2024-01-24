@@ -15,4 +15,4 @@
 from typing import Protocol
 
 from .base import ModelConfig, TransformersConfig
-from .quantization import NO_QUANTIZATION, QuantizationConfig
+from .quantization import NO_QUANTIZATION, QuantizationConfig, WeightOnlyQuantizationConfig

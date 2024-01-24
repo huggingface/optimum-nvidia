@@ -75,7 +75,7 @@ class SupportsSafetensors(Protocol[M_co]):
     @classmethod
     def from_safetensors(
         cls,
-        paths: List[Union[str, PathLike]],
+        reader: SafetensorsAccessor,
         model: M_co,
         config: ModelConfig,
         builder_config: BuilderConfig,
@@ -84,7 +84,7 @@ class SupportsSafetensors(Protocol[M_co]):
     ) -> Module:
         """
 
-        :param paths:
+        :param reader:
         :param model:
         :param config:
         :param builder_config:

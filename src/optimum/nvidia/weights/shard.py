@@ -1,7 +1,9 @@
+from typing import List, Tuple, Union
+
 import numpy as np
 
 
-def shard(tensor: np.array, rank: int, tp_degree: int, axis: int = 0) -> np.array:
+def shard(tensor: Union[np.array, List[np.array], Tuple[np.array]], rank: int, tp_degree: int, axis: int = 0) -> np.array:
     """
     Shard the specified tensor along the provided axis splitting it up into tp_degree chunks and returning the
     rank-th section
@@ -11,7 +13,10 @@ def shard(tensor: np.array, rank: int, tp_degree: int, axis: int = 0) -> np.arra
     :param axis: On which axis we want the split to happen (default: 0)
     :return:
     """
-    if tp_degree == 1:
-        return tensor
+    if isinstance(tensor, (List, Tuple)):
+        return tuple(shard(x_i, rank, tp_degree, axis) for x_i in tensor)
     else:
-        return np.ascontiguousarray(np.split(tensor, tp_degree, axis=axis)[rank])
+        if tp_degree == 1:
+            return tensor
+        else:
+            return np.ascontiguousarray(np.split(tensor, tp_degree, axis=axis)[rank])

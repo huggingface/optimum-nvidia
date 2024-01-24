@@ -13,23 +13,6 @@ class Calibration(ABC):
     def __iter__(self):
         raise NotImplementedError()
 
-
-# class HfDatasetCalibration(Calibration):
-#
-#     def __init__(self, dataset: str, split: str, num_samples: int, preprocessing_functor: Callable, streaming: bool = True):
-#         self._num_samples = num_samples
-#         self._functor = preprocessing_functor
-#         self._dataset = load_dataset(dataset, split=split, streaming=streaming) \
-#             .take(num_samples) \
-#             .map(preprocessing_functor) \
-#
-#     def __len__(self):
-#         return self._num_samples
-#
-#     def __iter__(self):
-#         return self._dataset.iter(batch_size=1)
-
-
 class HfDatasetCalibration(Calibration):
     @classmethod
     def from_datasets(cls, dataset: str, split: str, num_samples: int, column: str, streaming: bool = True, **kwargs):
@@ -61,21 +44,3 @@ class HfDatasetCalibration(Calibration):
             )
         ).remove_columns(fieldname)
 
-
-# @runtime_checkable
-# class SupportsWeightQuantization(Protocol):
-#
-#     QUANTIZATION_EXCLUDED_PARAMETERS: Optional[Set[str]]
-#
-#     @staticmethod
-#     @property
-#     def named_weight_parameters() -> Iterable[Tuple[str, np.array]]:
-#         ...
-#
-#
-#
-# class SupportsWeightAndActivationQuantization(Protocol):
-#     pass
-#
-#
-# QUANTIZATION_PROTOCOLS = {SupportsWeightQuantization}

@@ -13,7 +13,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from abc import ABC, abstractmethod
-from typing import Mapping
+from dataclasses import dataclass
+from enum import IntEnum, auto
+from pathlib import Path
+from typing import Mapping, Union, List, Any
 
 import torch
 from tensorrt_llm import BuilderConfig, Module
@@ -22,6 +25,29 @@ from tensorrt_llm.quantization import QuantMode
 
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
+
+
+class FileFormat(IntEnum):
+    NUMPY_QUANTIZED = auto()
+    SAFETENSORS = auto()
+
+
+@dataclass
+class Weights:
+    files: Union[Path, List[Path]]
+    format: FileFormat
+
+    @property
+    def is_folder(self) -> bool:
+        return isinstance(self.files, Path) and self.files.is_dir()
+
+    @property
+    def is_list_of_files(self) -> bool:
+        return isinstance(self.files, List)
+
+    @property
+    def paths(self) -> List[Path]:
+        return self.files if self.is_list_of_files else [self.files]
 
 
 class WeightAdapter(ABC):

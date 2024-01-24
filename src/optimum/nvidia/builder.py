@@ -46,7 +46,7 @@ from optimum.nvidia.quantization import Calibration
 from optimum.nvidia.utils import ensure_file_exists_locally, maybe_offload_weights_to_cpu
 from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
 from optimum.nvidia.utils.tests.utils import parse_flag_from_env
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, FileFormat, Weights
 from optimum.nvidia.weights.hub import get_safetensors_files
 
 
@@ -79,25 +79,6 @@ def create_unique_engine_name(identifier: str, dtype: str, rank: int, tp_degree:
 
 def create_npz_calibration_filename(identifier: str, rank: int, tp_degree: int) -> str:
     return f"{identifier}_tp{tp_degree}_rank{rank}.npz"
-
-
-class FileFormat(IntEnum):
-    NUMPY_QUANTIZED = auto()
-    SAFETENSORS = auto()
-
-
-@dataclass
-class Weights:
-    files: Union[Path, List[Path]]
-    format: FileFormat
-
-    @property
-    def is_folder(self) -> bool:
-        return isinstance(self.files, Path) and self.files.is_dir()
-
-    @property
-    def is_list_of_files(self) -> bool:
-        return isinstance(self.files, List)
 
 
 class TensorRTEngineBuilder(ModelHubMixin):
@@ -341,6 +322,22 @@ class TensorRTEngineBuilder(ModelHubMixin):
         else:
             raise NotImplementedError("We only support loading from Safetensors checkpoints for now.")
 
+        # Checkpoint might be already quantized, we need to infer a potential different qconfig around there
+        if (inferred_qconfig := QuantizationConfig.from_model_config(self._model_config)) != self._quantization_config:
+            if self._quantization_config is None or not self._quantization_config.has_quantization_step:
+                LOGGER.info(f"Overriding quantization configuration from the checkpoint: {inferred_qconfig}")
+                self._quantization_config = inferred_qconfig
+            else:
+                LOGGER.warning(
+                    f"Cannot apply quantization schema {self._quantization_config} "
+                    f"with quantized checkpoint {inferred_qconfig}"
+                )
+
+                raise ValueError(
+                    f"Requested quantization schema {self._quantization_config} is not compatible"
+                    f" with this checkpoint {inferred_qconfig}"
+                )
+
         # Handle potential need for computing calibration data to quantize the model
         if self._quantization_config and self._quantization_config.has_quantization_step:
             from optimum.nvidia.quantization.ammo import AmmoQuantizer
@@ -453,9 +450,11 @@ class TensorRTEngineBuilder(ModelHubMixin):
     ):
         LOGGER.debug(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
 
+        # Cache the config to avoid self lookup
         config = self._model_config
         qconfig = self._quantization_config
 
+        # Create the module and it's associated engine(s)
         ranked_engine_name = create_unique_engine_name(
             config["model_type"], self._dtype.value, shard.rank, shard.tp_size
         )
@@ -490,14 +489,20 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         model = self._weight_adapter.allocate_model(config, shard, self._dtype, qconfig.mode)
 
+        if qconfig.has_quantization_step and not qconfig.has_calibration_step:
+            quantize_model(model, qconfig.mode, **qconfig.to_quantizer_args())
+
         if isinstance(weights, Weights):
             weights = [weights]
 
         for weight in weights:
             # Handle various loading and conversion methods
             if weight.format == FileFormat.SAFETENSORS and issubclass(self._weight_adapter, SupportsSafetensors):
+                from optimum.nvidia.weights.safetensors import SafetensorsAccessor
+
                 LOGGER.debug("Using safetensors as weight provider")
-                self._weight_adapter.from_safetensors(weight.files, model, config, build_config, qconfig, shard)
+                reader = SafetensorsAccessor.from_files(weight.files)
+                self._weight_adapter.from_safetensors(reader, model, config, build_config, qconfig, shard)
 
             elif weight.format == FileFormat.NUMPY_QUANTIZED and issubclass(self._weight_adapter, SupportsNpz):
                 LOGGER.debug("Using Numpy npz as weight provider (with quantization metadata)")
@@ -521,8 +526,16 @@ class TensorRTEngineBuilder(ModelHubMixin):
         network.plugin_config.set_context_fmha(ContextFMHAType.enabled)
         network.plugin_config.enable_remove_input_padding()
 
+        if qconfig.has_quantization_step and qconfig.mode.is_weight_only():
+            LOGGER.debug(f"Enabling weight-only plugin (group-size: {qconfig.group_size})")
+            if qconfig.group_size > 0:
+                network.plugin_config.set_weight_only_groupwise_quant_matmul_plugin(self._dtype.value)
+            else:
+                network.plugin_config.set_weight_only_quant_matmul_plugin(self._dtype.value)
+
         # GeMM plugin doesn't support float8
         if not build_config.fp8:
+            LOGGER.debug(f"Enabling GeMM plugin (dtype: {self._dtype})")
             network.plugin_config.set_gemm_plugin(dtype=self._dtype.value)
 
         # network.plugin_config.enable_paged_kv_cache(64)
