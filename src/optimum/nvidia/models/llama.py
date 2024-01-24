@@ -14,9 +14,7 @@
 #  limitations under the License.
 from collections import defaultdict
 from logging import getLogger
-from os import PathLike
-from pathlib import Path
-from typing import List, Mapping, Union
+from typing import List, Mapping
 
 import numpy as np
 from tensorrt_llm import BuilderConfig, Module
@@ -28,8 +26,8 @@ from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard, retrieve_qkv
-from optimum.nvidia.weights.safetensors import SafetensorsAccessor
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, retrieve_qkv, shard
+
 
 LOGGER = getLogger(__name__)
 
@@ -62,7 +60,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             precision=precision,
             use_multi_head_attention=config.use_multi_head_attention,
             num_kv_heads=config.num_kv_heads,
-            shard_info=shard_info
+            shard_info=shard_info,
         )
 
         layers_per_stage = config.num_layers // shard_info.pp_size

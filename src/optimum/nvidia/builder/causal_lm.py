@@ -16,12 +16,11 @@
 
 from typing import Optional
 
-from .base import TensorRTEngineBuilder
+from tensorrt_llm import Mapping as Shard
+from transformers import AutoModelForCausalLM
 
 from ..configs import ModelConfig, QuantizationConfig
-from tensorrt_llm import Mapping as Shard
-
-from transformers import AutoModelForCausalLM
+from .base import TensorRTEngineBuilder
 
 
 class TensorRTForCausalLMEngineBuilder(TensorRTEngineBuilder):
@@ -37,7 +36,14 @@ class TensorRTForCausalLMEngineBuilder(TensorRTEngineBuilder):
             "use_cache": True,
         }
 
-    def get_builder_config_kwargs(self, config: ModelConfig, qconfig: QuantizationConfig, shard: "Shard", is_parallel: bool, opt_level: Optional[int]):
+    def get_builder_config_kwargs(
+        self,
+        config: ModelConfig,
+        qconfig: QuantizationConfig,
+        shard: "Shard",
+        is_parallel: bool,
+        opt_level: Optional[int],
+    ):
         return {
             "hidden_act": config.activation,
             "num_kv_heads": config.num_kv_heads,

@@ -16,6 +16,7 @@
 from argparse import ArgumentParser
 from logging import getLogger
 from pathlib import Path
+
 from transformers import AutoTokenizer
 
 from optimum.nvidia import setup_logging
@@ -25,7 +26,7 @@ from optimum.nvidia import setup_logging
 setup_logging(False)
 
 # ruff: disable=E402
-from optimum.nvidia import TensorRTForCausalLMEngineBuilder, TensorRTForCausalLM
+from optimum.nvidia import TensorRTForCausalLM, TensorRTForCausalLMEngineBuilder
 from optimum.nvidia.models.llama import LlamaWeightAdapter
 from optimum.nvidia.utils.cli import (
     postprocess_quantization_parameters,
@@ -33,6 +34,7 @@ from optimum.nvidia.utils.cli import (
     register_optimization_profiles_args,
     register_quantization_args,
 )
+
 
 LOGGER = getLogger(__name__)
 

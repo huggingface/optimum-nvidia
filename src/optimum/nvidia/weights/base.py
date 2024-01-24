@@ -13,27 +13,25 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from abc import ABC, abstractmethod
-from typing import Mapping, List, Tuple, Union
+from logging import getLogger
+from os import PathLike
+from pathlib import Path
+from typing import List, Mapping, Tuple, Union
 
+import numpy as np
 import torch
-from tensorrt_llm import BuilderConfig
+from tensorrt_llm import BuilderConfig, Module
+from tensorrt_llm import Mapping as ShardingConfig
 from tensorrt_llm.quantization import QuantMode
 
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
-from .safetensors import SafetensorsAccessor
-from .numpy import as_numpy
 
-import numpy as np
-from logging import getLogger
+from .numpy import as_numpy
+from .safetensors import SafetensorsAccessor
+
 
 LOGGER = getLogger(__name__)
-
-from tensorrt_llm import Mapping as ShardingConfig
-from os import PathLike
-from pathlib import Path
-
-from tensorrt_llm import Module
 
 
 def repeat_heads(tensor: np.array, factor: int, axis: int) -> np.array:
@@ -47,6 +45,7 @@ def repeat_heads(tensor: np.array, factor: int, axis: int) -> np.array:
     tensor_ = np.expand_dims(tensor, axis=axis).repeat(factor, axis=axis)
     return tensor_.reshape(-1, tensor.shape[-1])
 
+
 def retrieve_qkv(
     num_layers: int,
     layer_prefix: str,
@@ -55,12 +54,12 @@ def retrieve_qkv(
     precision: DataType,
     use_multi_head_attention: bool,
     num_kv_heads: int,
-    shard_info: ShardingConfig
+    shard_info: ShardingConfig,
 ) -> List[Tuple]:
     qkv_packed_layers = []
     for layer_idx in range(num_layers):
         prefix = f"{layer_prefix}.{layer_idx}.{attn_layer_name}."
-        
+
         # Merge QKV
         q_weight = as_numpy(weights[prefix + "q_proj.weight"], precision)
         k_weight = as_numpy(weights[prefix + "k_proj.weight"], precision)
@@ -68,20 +67,14 @@ def retrieve_qkv(
 
         if not use_multi_head_attention:
             if num_kv_heads < shard_info.tp_size:
-                LOGGER.debug(
-                    f"Duplicating KV heads ({num_kv_heads}) up to TP-degree ({shard_info.tp_size})"
-                )
+                LOGGER.debug(f"Duplicating KV heads ({num_kv_heads}) up to TP-degree ({shard_info.tp_size})")
 
                 factor = shard_info.tp_size // num_kv_heads
                 k_weight = repeat_heads(k_weight, factor, axis=1)
                 v_weight = repeat_heads(v_weight, factor, axis=1)
 
         # At least one of the query, key, value projection has bias.
-        if (
-            prefix + "q_proj.bias" in weights
-            or prefix + "k_proj.bias" in weights
-            or prefix + "v_proj.bias" in weights
-        ):
+        if prefix + "q_proj.bias" in weights or prefix + "k_proj.bias" in weights or prefix + "v_proj.bias" in weights:
             # For example whisper encoder k_proj does not have bias, so we will just fill with zeros the fused bias if needed.
             numpy_precision = precision.as_numpy()
             if prefix + "q_proj.bias" in weights:
@@ -98,7 +91,7 @@ def retrieve_qkv(
                 v_bias = as_numpy(weights[prefix + "v_proj.bias"], precision)
             else:
                 v_bias = np.zeros(v_weight.shape[0], dtype=numpy_precision)
-            
+
             qkv_bias = (q_bias, k_bias, v_bias)
         else:
             qkv_bias = None
@@ -107,7 +100,7 @@ def retrieve_qkv(
 
         # Insert the packed weights inside the weights
         qkv_packed_layers.append((qkv_weight, qkv_bias))
-    
+
     return qkv_packed_layers
 
 
@@ -166,7 +159,9 @@ class WeightAdapter(ABC):
         sharding_config: ShardingConfig,
     ) -> Module:
         if not isinstance(model, cls.TENSORRT_LLM_MODEL_CLASS):
-            raise ValueError(f"The argument `model` to the method {cls.__name__}.from_safetensors has to be a derived type from TensorRT-LLM's {cls.TENSORRT_LLM_MODEL_CLASS.__name__}, got {type(model)}.")
+            raise ValueError(
+                f"The argument `model` to the method {cls.__name__}.from_safetensors has to be a derived type from TensorRT-LLM's {cls.TENSORRT_LLM_MODEL_CLASS.__name__}, got {type(model)}."
+            )
 
         accessor = SafetensorsAccessor.from_files(paths)
         adapter = cls(sharding_config)

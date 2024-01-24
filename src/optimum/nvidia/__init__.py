@@ -16,9 +16,15 @@
 from .builder import TensorRTEngineBuilder, TensorRTForCausalLMEngineBuilder, TensorRTForSpeechSeq2SeqEngineBuilder
 from .logging import DEFAULT_LOGGING_FMT, setup_logging
 from .models import AutoModelForCausalLM
-from .runtime import TensorRTForCausalLM, TensorRTPreTrainedModel, TensorRTForSpeechSeq2Seq
+from .runtime import TensorRTForCausalLM, TensorRTForSpeechSeq2Seq, TensorRTPreTrainedModel
+from .utils.constants import (
+    DEFAULT_ENGINE_FOLDER,
+    DEFAULT_HF_HUB_TRT_REVISION,
+    OPTIMUM_NVIDIA_CONFIG_FILE,
+    OPTIMUM_NVIDIA_CONFIG_FILENAME,
+    TENSORRT_ENGINE_EXT,
+    TENSORRT_TIMINGS_FILE,
+)
 from .version import VERSION, __version__
-
-from .utils.constants import DEFAULT_HF_HUB_TRT_REVISION, TENSORRT_ENGINE_EXT, DEFAULT_ENGINE_FOLDER, TENSORRT_TIMINGS_FILE, OPTIMUM_NVIDIA_CONFIG_FILENAME, OPTIMUM_NVIDIA_CONFIG_FILE
 
 # from .pipelines import pipeline

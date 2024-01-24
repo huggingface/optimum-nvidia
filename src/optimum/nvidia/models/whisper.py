@@ -12,25 +12,23 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-from collections import defaultdict
 from logging import getLogger
-from os import PathLike
-from pathlib import Path
-from typing import List, Mapping, Union, Tuple
+from typing import List, Mapping, Tuple
 
 import numpy as np
 from tensorrt_llm import BuilderConfig, Module
 from tensorrt_llm import Mapping as ShardingConfig
-from tensorrt_llm.models import WhisperEncoder, DecoderModel
-from tensorrt_llm.quantization import QuantMode
 from tensorrt_llm.functional import LayerNormPositionType, LayerNormType
+from tensorrt_llm.models import DecoderModel, WhisperEncoder
+from tensorrt_llm.quantization import QuantMode
 
-from ..runtime import TensorRTForSpeechSeq2Seq
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard, retrieve_qkv
-from optimum.nvidia.weights.safetensors import SafetensorsAccessor
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, retrieve_qkv, shard
+
+from ..runtime import TensorRTForSpeechSeq2Seq
+
 
 LOGGER = getLogger(__name__)
 
@@ -64,7 +62,7 @@ class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             precision=precision,
             use_multi_head_attention=True,  # Whisper never uses GQA/MQA.
             num_kv_heads=config.config["encoder_attention_heads"],
-            shard_info=shard_info
+            shard_info=shard_info,
         )
 
         layers_per_stage = config.num_layers // shard_info.pp_size
@@ -137,7 +135,11 @@ class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
 
             # Common projection logic
             for src, dst, shard_axis in [
-                ("self_attn.out_proj.weight", model.encoder_layers[idx].attention.dense.weight, 1),  # row tensor parallel.
+                (
+                    "self_attn.out_proj.weight",
+                    model.encoder_layers[idx].attention.dense.weight,
+                    1,
+                ),  # row tensor parallel.
                 ("fc1.weight", model.encoder_layers[idx].mlp.fc.weight, 0),  # column tensor parallel.
                 ("fc2.weight", model.encoder_layers[idx].mlp.proj.weight, 1),  # row tensor parallel.
             ]:
@@ -160,7 +162,7 @@ class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
     def allocate_model(
         config: ModelConfig, sharding: ShardingConfig, dtype: DataType, quant_mode: QuantMode
     ) -> Tuple[Module, Module]:
-        LOGGER.debug(f"Allocating WhisperEncoder model...")
+        LOGGER.debug("Allocating WhisperEncoder model...")
         return WhisperEncoderWeightAdapter.TENSORRT_LLM_MODEL_CLASS(
             n_mels=config.config["num_mel_bins"],
             n_ctx=config.config["max_source_positions"],
@@ -204,7 +206,7 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             precision=precision,
             use_multi_head_attention=True,  # Whisper never uses MQA/GQA.
             num_kv_heads=config.config["decoder_attention_heads"],
-            shard_info=shard_info
+            shard_info=shard_info,
         )
 
         cross_attn_qkv_packed_layers = retrieve_qkv(
@@ -215,7 +217,7 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             precision=precision,
             use_multi_head_attention=True,  # Whisper never uses MQA/GQA.
             num_kv_heads=config.config["decoder_attention_heads"],
-            shard_info=shard_info
+            shard_info=shard_info,
         )
 
         layers_per_stage = config.num_layers // shard_info.pp_size
@@ -330,7 +332,7 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
     def allocate_model(
         config: ModelConfig, sharding: ShardingConfig, dtype: DataType, quant_mode: QuantMode
     ) -> Tuple[Module, Module]:
-        LOGGER.debug(f"Allocating DecoderModel model...")
+        LOGGER.debug("Allocating DecoderModel model...")
 
         # DecoderModel has no quant_mode.
         return DecoderModel(
@@ -350,7 +352,7 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             encoder_head_size=None,
             num_kv_heads=None,
             encoder_num_kv_heads=None,
-            type_vocab_size=None,  
+            type_vocab_size=None,
             max_distance=0,
             num_buckets=0,
             has_embedding_layernorm=False,
@@ -378,7 +380,7 @@ class OptimumWhisperEncoder(ConvertibleModel, TensorRTForSpeechSeq2Seq):
     ADAPTER = WhisperEncoderWeightAdapter
     TARGET = WhisperEncoder
 
+
 class OptimumWhisperDecoder(ConvertibleModel, TensorRTForSpeechSeq2Seq):
     ADAPTER = WhisperDecoderWeightAdapter
     TARGET = DecoderModel
-

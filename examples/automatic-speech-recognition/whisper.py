@@ -1,4 +1,4 @@
- #  coding=utf-8
+#  coding=utf-8
 #  Copyright 2023 The HuggingFace Inc. team. All rights reserved.
 #  #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,24 +13,19 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from argparse import ArgumentParser
-
+from logging import getLogger
 from pathlib import Path
-from json import load
-import torch
-from transformers import AutoProcessor
-from datasets import load_dataset
-
-from optimum.nvidia import setup_logging
 
 from huggingface_hub import login
 
-from logging import getLogger
+from optimum.nvidia import setup_logging
+
 
 # Setup logging needs to happen before importing TRT ...
 setup_logging(False)
 LOGGER = getLogger(__name__)
 
-from optimum.nvidia import TensorRTForSpeechSeq2SeqEngineBuilder, TensorRTForSpeechSeq2Seq
+from optimum.nvidia import TensorRTForSpeechSeq2SeqEngineBuilder
 from optimum.nvidia.utils.cli import (
     postprocess_quantization_parameters,
     register_common_model_topology_args,

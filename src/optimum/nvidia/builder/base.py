@@ -37,7 +37,6 @@ from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
 
-from ..utils.constants import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig, TransformersConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.quantization import Calibration
@@ -46,6 +45,8 @@ from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
 from optimum.nvidia.utils.tests.utils import parse_flag_from_env
 from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter
 from optimum.nvidia.weights.hub import get_safetensors_files
+
+from ..utils.constants import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
 
 
 LOGGER = getLogger(__name__)
@@ -462,7 +463,9 @@ class TensorRTEngineBuilder(ModelHubMixin):
         builder = Builder()
 
         # TODO: handling this with kwargs is ugly.
-        builder_config_kwargs = self.get_builder_config_kwargs(config=config, qconfig=qconfig, shard=shard, is_parallel=is_parallel, opt_level=opt_level)
+        builder_config_kwargs = self.get_builder_config_kwargs(
+            config=config, qconfig=qconfig, shard=shard, is_parallel=is_parallel, opt_level=opt_level
+        )
 
         # TODO: Why are we using `fp8` here while TRT-LLM examples are using `int8`?
         # TODO: Only TP=1 is supported for Whisper? it is hardcoded in TensorRT-LLM/examples/whisper/run.py
@@ -537,7 +540,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
             if not isinstance(inputs, tuple):
                 inputs = (inputs,)
-            
+
             model(*inputs)
 
             if parse_flag_from_env("OPTIMUM_NVIDIA_OUTPUT_ONNX_IR", False):

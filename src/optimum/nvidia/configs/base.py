@@ -72,7 +72,7 @@ class TransformersConfig(UserDict, ModelConfig):
                 pretrained_config["max_sequence_length"] = pretrained_config["max_length"]
             else:
                 raise ValueError("Unable to determine max_sequence_length from model config.")
-        
+
         if "hidden_size" not in pretrained_config and "d_model" in pretrained_config:
             pretrained_config["hidden_size"] = pretrained_config["d_model"]
 
