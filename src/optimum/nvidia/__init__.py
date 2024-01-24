@@ -13,20 +13,14 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-DEFAULT_HF_HUB_TRT_REVISION: str = "trt-llm"
-
-DEFAULT_ENGINE_FOLDER = ".engine"
-TENSORRT_ENGINE_EXT = "engine"
-TENSORRT_TIMINGS_FILE = "timings.cache"
-OPTIMUM_NVIDIA_CONFIG_FILENAME = "build"
-OPTIMUM_NVIDIA_CONFIG_FILE = f"{OPTIMUM_NVIDIA_CONFIG_FILENAME}.json"
-
-
-from .builder import TensorRTEngineBuilder
+from .builder import TensorRTEngineBuilder, TensorRTForCausalLMEngineBuilder, TensorRTForSpeechSeq2SeqEngineBuilder
 from .logging import DEFAULT_LOGGING_FMT, setup_logging
 from .models import AutoModelForCausalLM
-from .runtime import TensorRTForCausalLM, TensorRTPreTrainedModel
+from .runtime import TensorRTForCausalLM, TensorRTPreTrainedModel, TensorRTForSpeechSeq2Seq
 from .version import VERSION, __version__
+
+# TODO: probably no need to have these top level but that would be breaking to remove them
+from .utils.constants import DEFAULT_HF_HUB_TRT_REVISION, TENSORRT_ENGINE_EXT, DEFAULT_ENGINE_FOLDER, TENSORRT_TIMINGS_FILE, OPTIMUM_NVIDIA_CONFIG_FILENAME, OPTIMUM_NVIDIA_CONFIG_FILE
 
 
 # from .pipelines import pipeline

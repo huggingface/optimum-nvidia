@@ -18,7 +18,6 @@ import numpy as np
 import torch
 from tensorrt_llm._utils import _str_to_trt_dtype_dict, np_bfloat16
 
-
 class DataType(Enum):
     """
     Represent the data format used to store and run actual computations

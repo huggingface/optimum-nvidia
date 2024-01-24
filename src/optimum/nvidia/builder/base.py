@@ -1,5 +1,4 @@
 #  coding=utf-8
-#  coding=utf-8
 #  Copyright 2023 The HuggingFace Inc. team. All rights reserved.
 #  #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +12,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+
 import json
 import os
 from dataclasses import dataclass
@@ -37,9 +37,8 @@ from tensorrt_llm.models import quantize_model
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
-from transformers import AutoModelForCausalLM
 
-from optimum.nvidia import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
+from ..utils.constants import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig, TransformersConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.quantization import Calibration
@@ -134,6 +133,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
     def __init__(self, model_id_or_path: Union[str, PathLike], config: ModelConfig, adapter: Type[WeightAdapter]):
         # Model
+        # TODO: passing the adapter here should be optional - we can find it out simply from the model_id_or_path config model_type.
         self._model_id_or_path: Union[str, PathLike] = model_id_or_path
         self._model_config: ModelConfig = config
         self._weight_adapter: Type[WeightAdapter] = adapter
@@ -375,7 +375,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
                     cpu_device_map = {"cpu": virtual_memory().available * 0.8}
 
                     # Allocate required components for quantization
-                    hf_model = AutoModelForCausalLM.from_pretrained(
+                    hf_model = self.LOADING_CLASS.from_pretrained(
                         self._model_id_or_path,
                         device_map="balanced",
                         torch_dtype=self._dtype.as_torch(),
@@ -461,31 +461,25 @@ class TensorRTEngineBuilder(ModelHubMixin):
         )
 
         builder = Builder()
+
+        # TODO: handling this with kwargs is ugly.
+        builder_config_kwargs = self.get_builder_config_kwargs(config=config, qconfig=qconfig, shard=shard, is_parallel=is_parallel, opt_level=opt_level)
+
+        # TODO: Why are we using `fp8` here while TRT-LLM examples are using `int8`?
         build_config = builder.create_builder_config(
             name=config["model_type"],
             precision=self._dtype.value,
             fp8=qconfig.mode.has_fp8_qdq(),
-            vocab_size=config.vocab_size,
             hidden_size=config.hidden_size,
-            hidden_act=config.activation,
-            num_heads=config.num_heads,
-            num_kv_heads=config.num_kv_heads,
             num_layers=config.num_layers,
-            max_position_embeddings=config.max_sequence_length,
             max_batch_size=self._optimization_profile.max_batch_size,
-            max_input_len=self._optimization_profile.max_prompt_length,
-            max_output_len=self._optimization_profile.max_output_length,
-            max_num_tokens=None,
-            max_beam_width=self._beam_width,
-            strongly_typed=qconfig.mode.has_fp8_qdq(),
+            # TODO: Only TP=1 is supported for Whisper? it is hardcoded in TensorRT-LLM/examples/whisper/run.py
             tensor_parallel=shard.tp_size,
-            pipeline_parallel=shard.pp_size,
-            parallel_build=is_parallel,
             use_refit=False,
             quant_mode=self._quantization_config.mode,
-            opt_level=opt_level,
-            huggingface=dict(**config),
-            tensorrt=trt_version(),
+            huggingface=dict(**config),  # TODO: What is this?
+            tensorrt=trt_version(),  # TODO: What is this?
+            **builder_config_kwargs,
         )
 
         model = self._weight_adapter.allocate_model(config, shard, self._dtype, qconfig.mode)
@@ -533,15 +527,18 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         with net_guard(network):
             network.set_named_parameters(model.named_parameters())
+            prepare_inputs_kwargs = self.get_prepare_inputs_kwargs()
+
+            # TRT-LLM's prepare_inputs should always return a tuple, but it is not always the case.
+            # For example https://github.com/NVIDIA/TensorRT-LLM/commit/c89653021e66ca78c55f02b366f404455bc12e8d
+            # fixed a bug where WhisperEncoder would just return a `tensorrt_llm.functional.Tensor`.
             inputs = model.prepare_inputs(
-                max_batch_size=self._optimization_profile.max_batch_size,
-                max_input_len=self._optimization_profile.max_prompt_length,
-                max_new_tokens=self._optimization_profile.max_new_tokens,
-                max_num_tokens=None,
-                max_beam_width=self._beam_width,
-                use_cache=True,
+                **prepare_inputs_kwargs,
             )
 
+            if not isinstance(inputs, tuple):
+                inputs = (inputs,)
+            
             model(*inputs)
 
             if parse_flag_from_env("OPTIMUM_NVIDIA_OUTPUT_ONNX_IR", False):

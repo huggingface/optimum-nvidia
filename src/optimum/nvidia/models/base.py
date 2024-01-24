@@ -18,7 +18,7 @@ from typing import Dict, Optional, Type, Union
 from huggingface_hub import ModelHubMixin
 from tensorrt_llm import Module
 
-from optimum.nvidia.weights import WeightAdapter
+from ..weights.base import WeightAdapter
 
 
 class ConvertibleModel:
