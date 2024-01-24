@@ -466,6 +466,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         builder_config_kwargs = self.get_builder_config_kwargs(config=config, qconfig=qconfig, shard=shard, is_parallel=is_parallel, opt_level=opt_level)
 
         # TODO: Why are we using `fp8` here while TRT-LLM examples are using `int8`?
+        # TODO: Only TP=1 is supported for Whisper? it is hardcoded in TensorRT-LLM/examples/whisper/run.py
         build_config = builder.create_builder_config(
             name=config["model_type"],
             precision=self._dtype.value,
@@ -473,12 +474,11 @@ class TensorRTEngineBuilder(ModelHubMixin):
             hidden_size=config.hidden_size,
             num_layers=config.num_layers,
             max_batch_size=self._optimization_profile.max_batch_size,
-            # TODO: Only TP=1 is supported for Whisper? it is hardcoded in TensorRT-LLM/examples/whisper/run.py
             tensor_parallel=shard.tp_size,
             use_refit=False,
             quant_mode=self._quantization_config.mode,
-            huggingface=dict(**config),  # TODO: What is this?
-            tensorrt=trt_version(),  # TODO: What is this?
+            huggingface=dict(**config),
+            tensorrt=trt_version(),
             **builder_config_kwargs,
         )
 

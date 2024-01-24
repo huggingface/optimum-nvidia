@@ -29,12 +29,13 @@ from ..runtime import TensorRTForSpeechSeq2Seq
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard, pack_qkv
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard, retrieve_qkv
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 
 LOGGER = getLogger(__name__)
 
 
+# TODO: Cleanup the config.config["xxx"] in the future, using Optimum's NormalizedConfig.
 class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
     """ """
 
@@ -54,11 +55,8 @@ class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
         shard_info = self._sharding_config
         precision = DataType(builder.precision)
 
-
         # TensorRT-LLM model definition uses a single GEMM for query/key/value, while transformers does not.
-
-        # TODO: validate this
-        qkv_packed_layers = pack_qkv(
+        qkv_packed_layers = retrieve_qkv(
             num_layers=config.num_layers,
             layer_prefix=self.LAYERS_PREFIX,
             attn_layer_name="self_attn",
@@ -69,7 +67,7 @@ class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             shard_info=shard_info
         )
 
-        layers_per_stage = config.num_layers // shard_info.pp_size  # TODO: is this working if not exactly divisible?
+        layers_per_stage = config.num_layers // shard_info.pp_size
         layers_range = range(shard_info.pp_rank * layers_per_stage, (shard_info.pp_rank + 1) * layers_per_stage, 1)
 
         LOGGER.debug(f"Converting Whisper with dtype: {precision} for rank {rank} and layers: {layers_range}")
@@ -80,7 +78,6 @@ class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             conv1_weight = as_numpy(weights["model.encoder.conv1.weight"], precision)
             conv1_bias = as_numpy(weights["model.encoder.conv1.bias"], precision)
 
-            # TODO: Do we shard conv1?
             # TensorRT-LLM Conv1d weight is 4D while transformers checkpoint ones are 3D.
             model.conv1.weight.value = conv1_weight[..., None]
             model.conv1.bias.value = conv1_bias
@@ -89,16 +86,11 @@ class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             conv2_weight = as_numpy(weights["model.encoder.conv2.weight"], precision)
             conv2_bias = as_numpy(weights["model.encoder.conv2.bias"], precision)
 
-            # TODO: Do we shard conv2?
             model.conv2.weight.value = conv2_weight[..., None]
             model.conv2.bias.value = conv2_bias
 
             # embed_positions
             position_embeddings = as_numpy(weights["model.encoder.embed_positions.weight"], precision)
-
-            # TODO: where to get use_parallel_embedding / embedding_sharding_dim from?
-            # if model.use_parallel_embedding:
-            #     position_embeddings = shard(position_embeddings, rank, shard_info.tp_size, model.embedding_sharding_dim)
 
             model.positional_embedding.value = position_embeddings
 
@@ -169,7 +161,7 @@ class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
         config: ModelConfig, sharding: ShardingConfig, dtype: DataType, quant_mode: QuantMode
     ) -> Tuple[Module, Module]:
         LOGGER.debug(f"Allocating WhisperEncoder model...")
-        return WhisperEncoder(
+        return WhisperEncoderWeightAdapter.TENSORRT_LLM_MODEL_CLASS(
             n_mels=config.config["num_mel_bins"],
             n_ctx=config.config["max_source_positions"],
             n_state=config.hidden_size,
@@ -177,23 +169,6 @@ class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             n_layer=config.config["encoder_layers"],
             dtype=dtype.as_trt(),
         )
-
-    @classmethod
-    def from_safetensors(
-        cls,
-        paths: List[Union[str, PathLike]],
-        model: Module,
-        config: ModelConfig,
-        builder_config: BuilderConfig,
-        qconfig: QuantizationConfig,
-        sharding_config: ShardingConfig,
-    ) -> Module:
-        if not isinstance(model, WhisperEncoder):
-            raise ValueError(f"model has to be a derived type from WhisperEncoder, got {type(model)}")
-
-        accessor = SafetensorsAccessor.from_files(paths)
-        adapter = cls(sharding_config)
-        return adapter.convert(model, config, builder_config, qconfig, sharding_config.rank, accessor)
 
     @staticmethod
     def get_scaling_factors(
@@ -221,8 +196,7 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
         shard_info = self._sharding_config
         precision = DataType(builder.precision)
 
-        # TODO: validate this
-        self_attn_qkv_packed_layers = pack_qkv(
+        self_attn_qkv_packed_layers = retrieve_qkv(
             num_layers=config.num_layers,
             layer_prefix=self.LAYERS_PREFIX,
             attn_layer_name="self_attn",
@@ -233,7 +207,7 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             shard_info=shard_info
         )
 
-        cross_attn_qkv_packed_layers = pack_qkv(
+        cross_attn_qkv_packed_layers = retrieve_qkv(
             num_layers=config.num_layers,
             layer_prefix=self.LAYERS_PREFIX,
             attn_layer_name="encoder_attn",
@@ -253,20 +227,10 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
         if shard_info.is_first_pp_rank():
             # embed_tokens
             tokens_embeddings = as_numpy(weights["model.decoder.embed_tokens.weight"], precision)
-
-            # TODO: use_parallel_embedding is not an attribute of DecoderModel
-            # if model.use_parallel_embedding:
-            #     tokens_embeddings = shard(tokens_embeddings, rank, shard_info.tp_size, model.embedding_sharding_dim)
-
             model.embedding.vocab_embedding.weight.value = tokens_embeddings
 
             # embed_positions
             positions_embeddings = as_numpy(weights["model.decoder.embed_positions.weight"], precision)
-
-            # TODO: use_parallel_embedding is not an attribute of DecoderModel
-            # if model.use_parallel_embedding:
-            #     positions_embeddings = shard(positions_embeddings, rank, shard_info.tp_size, model.embedding_sharding_dim)
-
             model.embedding.position_embedding.weight.value = positions_embeddings
 
         if shard_info.is_last_pp_rank():
@@ -278,7 +242,6 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             model.final_layernorm.bias.value = final_norm_bias
 
             # Final vocab projection
-            # TODO: are we really using tied weights by doing this?
             lm_head = as_numpy(weights["model.decoder.embed_tokens.weight"], precision)
             rank_tensor = shard(lm_head, rank, shard_info.tp_size)
             model.lm_head.weight.value = rank_tensor
@@ -369,6 +332,7 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
     ) -> Tuple[Module, Module]:
         LOGGER.debug(f"Allocating DecoderModel model...")
 
+        # DecoderModel has no quant_mode.
         return DecoderModel(
             num_layers=config.config["decoder_layers"],
             num_heads=config.config["decoder_attention_heads"],
@@ -379,22 +343,16 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             vocab_size=config.vocab_size,
             dtype=dtype.as_trt(),
             logits_dtype=DataType.FLOAT32.as_trt(),
-
-            # TODO: check that config is not just a ModelConfig other this will fail
-            max_position_embeddings=config.config["max_target_positions"],  # TODO: stop using config.config["xxx"]
+            max_position_embeddings=config.config["max_target_positions"],
             has_position_embedding=True,
             relative_attention=False,
-
-            # TODO: specify, but probably not needed
             head_size=None,
             encoder_head_size=None,
             num_kv_heads=None,
             encoder_num_kv_heads=None,
             type_vocab_size=None,  
-
             max_distance=0,
             num_buckets=0,
-        
             has_embedding_layernorm=False,
             has_embedding_scale=False,
             q_scaling=1.0,
@@ -406,10 +364,7 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             layernorm_type=LayerNormType.LayerNorm,
             hidden_act="gelu",
             rescale_before_lm_head=False,
-
             mapping=sharding,
-
-            # TODO felix: why WhisperDecoder has no quant_mode???
         )
 
     @staticmethod

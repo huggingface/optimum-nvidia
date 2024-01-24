@@ -13,7 +13,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from abc import ABC, abstractmethod
-from typing import Mapping, List, Tuple, TYPE_CHECKING, Union
+from typing import Mapping, List, Tuple, Union
 
 import torch
 from tensorrt_llm import BuilderConfig
@@ -29,12 +29,11 @@ from logging import getLogger
 
 LOGGER = getLogger(__name__)
 
-if TYPE_CHECKING:
-    from tensorrt_llm import Mapping as ShardingConfig
-    from os import PathLike
-    from pathlib import Path
+from tensorrt_llm import Mapping as ShardingConfig
+from os import PathLike
+from pathlib import Path
 
-    from tensorrt_llm import Module
+from tensorrt_llm import Module
 
 
 def repeat_heads(tensor: np.array, factor: int, axis: int) -> np.array:
@@ -48,10 +47,7 @@ def repeat_heads(tensor: np.array, factor: int, axis: int) -> np.array:
     tensor_ = np.expand_dims(tensor, axis=axis).repeat(factor, axis=axis)
     return tensor_.reshape(-1, tensor.shape[-1])
 
-
-# TODO: maybe have this as a classmethod of WeightAdapter?
-# TODO: pack_qkv is not a good name
-def pack_qkv(
+def retrieve_qkv(
     num_layers: int,
     layer_prefix: str,
     attn_layer_name: str,
@@ -59,7 +55,7 @@ def pack_qkv(
     precision: DataType,
     use_multi_head_attention: bool,
     num_kv_heads: int,
-    shard_info: "ShardingConfig"
+    shard_info: ShardingConfig
 ) -> List[Tuple]:
     qkv_packed_layers = []
     for layer_idx in range(num_layers):
@@ -121,19 +117,19 @@ class WeightAdapter(ABC):
     __slots__ = ("_sharding_config",)
     TENSORRT_LLM_MODEL_CLASS = None
 
-    def __init__(self, sharding_config: "ShardingConfig"):
+    def __init__(self, sharding_config: ShardingConfig):
         self._sharding_config = sharding_config
 
     @abstractmethod
     def convert(
         self,
-        model: "Module",
+        model: Module,
         config: ModelConfig,
         builder: BuilderConfig,
         qconfig: QuantizationConfig,
         rank: int,
         weights: Mapping[str, torch.Tensor],
-    ) -> "Module":
+    ) -> Module:
         """
 
         :param model:
@@ -148,7 +144,7 @@ class WeightAdapter(ABC):
 
     @staticmethod
     @abstractmethod
-    def allocate_model(conf: ModelConfig, sharding: "ShardingConfig", dtype: DataType, quant_mode: QuantMode) -> "Module":
+    def allocate_model(conf: ModelConfig, sharding: ShardingConfig, dtype: DataType, quant_mode: QuantMode) -> Module:
         """
 
         :param conf:
@@ -162,13 +158,13 @@ class WeightAdapter(ABC):
     @classmethod
     def from_safetensors(
         cls,
-        paths: List[Union[str, "PathLike"]],
-        model: "Module",
+        paths: List[Union[str, PathLike]],
+        model: Module,
         config: ModelConfig,
         builder_config: BuilderConfig,
         qconfig: QuantizationConfig,
-        sharding_config: "ShardingConfig",
-    ) -> "Module":
+        sharding_config: ShardingConfig,
+    ) -> Module:
         if not isinstance(model, cls.TENSORRT_LLM_MODEL_CLASS):
             raise ValueError(f"The argument `model` to the method {cls.__name__}.from_safetensors has to be a derived type from TensorRT-LLM's {cls.TENSORRT_LLM_MODEL_CLASS.__name__}, got {type(model)}.")
 
@@ -177,6 +173,6 @@ class WeightAdapter(ABC):
         return adapter.convert(model, config, builder_config, qconfig, sharding_config.rank, accessor)
 
     @classmethod
-    def from_numpy(cls, path: "Path") -> "Module":
+    def from_numpy(cls, path: Path) -> Module:
         # TODO: Currently only used to load quantized models, might need to change later on
         return np.load(path, "r", allow_pickle=False)

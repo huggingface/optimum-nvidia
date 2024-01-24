@@ -19,8 +19,6 @@ from .models import AutoModelForCausalLM
 from .runtime import TensorRTForCausalLM, TensorRTPreTrainedModel, TensorRTForSpeechSeq2Seq
 from .version import VERSION, __version__
 
-# TODO: probably no need to have these top level but that would be breaking to remove them
 from .utils.constants import DEFAULT_HF_HUB_TRT_REVISION, TENSORRT_ENGINE_EXT, DEFAULT_ENGINE_FOLDER, TENSORRT_TIMINGS_FILE, OPTIMUM_NVIDIA_CONFIG_FILENAME, OPTIMUM_NVIDIA_CONFIG_FILE
-
 
 # from .pipelines import pipeline

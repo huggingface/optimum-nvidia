@@ -13,12 +13,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from .base import TensorRTEngineBuilder
-from typing import TYPE_CHECKING, Optional
 
-if TYPE_CHECKING:
-    from ..configs import ModelConfig, QuantizationConfig
-    from tensorrt_llm import Mapping as Shard
+from typing import Optional
+
+from .base import TensorRTEngineBuilder
+
+from ..configs import ModelConfig, QuantizationConfig
+from tensorrt_llm import Mapping as Shard
 
 from transformers import AutoModelForCausalLM
 
@@ -36,7 +37,7 @@ class TensorRTForCausalLMEngineBuilder(TensorRTEngineBuilder):
             "use_cache": True,
         }
 
-    def get_builder_config_kwargs(self, config: "ModelConfig", qconfig: "QuantizationConfig", shard: "Shard", is_parallel: bool, opt_level: Optional[int]):
+    def get_builder_config_kwargs(self, config: ModelConfig, qconfig: QuantizationConfig, shard: "Shard", is_parallel: bool, opt_level: Optional[int]):
         return {
             "hidden_act": config.activation,
             "num_kv_heads": config.num_kv_heads,

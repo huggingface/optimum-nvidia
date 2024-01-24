@@ -16,7 +16,7 @@ from collections import UserDict
 from typing import Any, Mapping, Protocol
 
 
-# TODO: Why are we not using optimum's NormalizedConfig, or transformers PretrainedConfig?
+# TODO: Use Optimum's NormalizedConfig in the future.
 class ModelConfig(Protocol):
     @property
     def vocab_size(self) -> int:
@@ -59,7 +59,6 @@ class TransformersConfig(UserDict, ModelConfig):
     __slots__ = ("config",)
 
     def __init__(self, pretrained_config: Mapping[str, Any]):
-        # TODO: refactor this, this is decoder-only specific.
         if "num_heads" not in pretrained_config and "num_attention_heads" in pretrained_config:
             pretrained_config["num_heads"] = pretrained_config["num_attention_heads"]
 
@@ -70,13 +69,10 @@ class TransformersConfig(UserDict, ModelConfig):
             if "max_position_embeddings" in pretrained_config:
                 pretrained_config["max_sequence_length"] = pretrained_config["max_position_embeddings"]
             elif "max_length" in pretrained_config:
-                # TODO: move this whisper specific code elsewhere.
                 pretrained_config["max_sequence_length"] = pretrained_config["max_length"]
             else:
-                # TODO: move this elsewhere.
                 raise ValueError("Unable to determine max_sequence_length from model config.")
         
-        # TODO: Whisper specific. Refactor this.
         if "hidden_size" not in pretrained_config and "d_model" in pretrained_config:
             pretrained_config["hidden_size"] = pretrained_config["d_model"]
 

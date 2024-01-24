@@ -46,5 +46,5 @@ def get_safetensors_files(fs: AbstractFileSystem, model_id_or_path: Union[str, P
 
     else:
         LOGGER.error(f"Cannot find safetensors checkpoint for {model_id_or_path}")
-        # TODO: better error for gated model!
+        # TODO: A better error should be raise for gated models (as meta-llama/Llama-2-7b-chat-hf)
         raise FileNotFoundError(f"Cannot find safetensors checkpoint for {model_id_or_path}")

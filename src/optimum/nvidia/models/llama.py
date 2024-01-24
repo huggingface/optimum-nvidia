@@ -28,13 +28,12 @@ from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard, pack_qkv
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard, retrieve_qkv
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 
 LOGGER = getLogger(__name__)
 
 
-# TODO: Why is this in the models/ folder while WeightAdapter is in weights/?
 class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
     """ """
 
@@ -55,7 +54,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         precision = DataType(builder.precision)
 
         # TensorRT-LLM model definition uses a single GEMM for query/key/value, while transformers does not.
-        qkv_packed_layers = pack_qkv(
+        qkv_packed_layers = retrieve_qkv(
             num_layers=config.num_layers,
             layer_prefix=self.LAYERS_PREFIX,
             attn_layer_name="self_attn",
@@ -66,7 +65,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             shard_info=shard_info
         )
 
-        layers_per_stage = config.num_layers // shard_info.pp_size  # TODO: is this working if not exactly divisible?
+        layers_per_stage = config.num_layers // shard_info.pp_size
         layers_range = range(shard_info.pp_rank * layers_per_stage, (shard_info.pp_rank + 1) * layers_per_stage, 1)
 
         LOGGER.debug(f"Converting LLama with dtype: {precision} for rank {rank} and layers: {layers_range}")

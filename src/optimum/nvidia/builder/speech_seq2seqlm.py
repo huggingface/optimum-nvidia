@@ -20,22 +20,17 @@ from huggingface_hub import ModelHubMixin
 
 from tensorrt_llm.quantization import QuantMode
 
-from typing import Union, TYPE_CHECKING, Optional, Dict, Type
+from typing import Union, Optional, Dict, Type
 from pathlib import Path
+from os import PathLike
+from huggingface_hub.hub_mixin import T  # What is this? T?
+from tensorrt_llm import Mapping as Shard
 
 
 from .base import TensorRTEngineBuilder
 from ..models.whisper import WhisperEncoderWeightAdapter, WhisperDecoderWeightAdapter
-from ..configs import TransformersConfig, QuantizationConfig
-
-
-if TYPE_CHECKING:
-    from os import PathLike
-    from huggingface_hub.hub_mixin import T  # What is this? T?
-    from tensorrt_llm import Mapping as Shard
-
-    from ..configs import ModelConfig
-    from ..lang import DataType
+from ..configs import TransformersConfig, QuantizationConfig, ModelConfig
+from ..lang import DataType
 
 
 from logging import getLogger
@@ -44,7 +39,6 @@ LOGGER = getLogger(__name__)
 
 
 class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
-    # TODO: does this work fine with the _quantization_calibration logic?
     LOADING_CLASS = AutoModelForSpeechSeq2Seq
 
     def get_prepare_inputs_kwargs(self):
@@ -86,7 +80,8 @@ class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
         num_languages = config.vocab_size - 51765 - int(is_multilingual)
 
         if opt_level is not None:
-            LOGGER.warning(f"Ignoring opt_level={opt_level} for Whisper encoder.")  # TODO: Why is it not passed in TRT-LLM example?
+            # TensorRT-LLM example always uses opt_level=None.
+            LOGGER.warning(f"Ignoring opt_level={opt_level} for Whisper encoder.")
 
         return {
             "n_mels": config.config["num_mel_bins"],  # TODO: we should just be able to use config.num_mel_bins or config["num_mel_bins"]
@@ -96,7 +91,6 @@ class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
 
 
 class TensorRTWhisperDecoderEngineBuilder(TensorRTEngineBuilder):
-    # TODO: same, should we rather have WhisperEncoder & a wrapper of WhisperDecoder + LM head?
     LOADING_CLASS = AutoModelForSpeechSeq2Seq
 
     def get_prepare_inputs_kwargs(self):
@@ -110,7 +104,8 @@ class TensorRTWhisperDecoderEngineBuilder(TensorRTEngineBuilder):
 
     def get_builder_config_kwargs(self, config: "ModelConfig", qconfig: "QuantizationConfig", shard: "Shard", is_parallel: bool, opt_level: Optional[int]):
         if opt_level is not None:
-            LOGGER.warning(f"Ignoring opt_level={opt_level} for Whisper decoder.")  # TODO: Why is it not passed in TRT-LLM example?
+            # TensorRT-LLM example always uses opt_level=None.
+            LOGGER.warning(f"Ignoring opt_level={opt_level} for Whisper decoder.")
         
         return {
             "hidden_act": "gelu",
@@ -125,8 +120,6 @@ class TensorRTWhisperDecoderEngineBuilder(TensorRTEngineBuilder):
         }
 
 
-
-# TODO: why inherit from ModelHubMixin?
 class TensorRTForSpeechSeq2SeqEngineBuilder(ModelHubMixin):
 
     def __init__(self, model_id_or_path: Union[str, "PathLike"], config: "ModelConfig"):
@@ -150,10 +143,8 @@ class TensorRTForSpeechSeq2SeqEngineBuilder(ModelHubMixin):
         local_files_only: bool,
         token: Optional[Union[str, bool]],
         **model_kwargs,
-    ) -> "T":
-        # TODO: is it OK to ignore all of these arguments?
-        
-        config = model_kwargs.get("config", None)  # TODO: Ensure this is ok
+    ) -> "T":        
+        config = model_kwargs.get("config", None)
 
         # TODO: Handle more things from the params here
         if config and not isinstance(config, TransformersConfig):
@@ -203,8 +194,6 @@ class TensorRTForSpeechSeq2SeqEngineBuilder(ModelHubMixin):
         return self
     
     def with_sampling_strategy(self, num_beams: int):
-        # TODO: probably not needed for the encoder?
-        self.encoder_builder.with_sampling_strategy(num_beams)
         self.decoder_builder.with_sampling_strategy(num_beams)
 
         return self
