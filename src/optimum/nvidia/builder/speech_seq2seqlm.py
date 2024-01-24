@@ -38,6 +38,7 @@ from logging import getLogger
 LOGGER = getLogger(__name__)
 
 
+# TODO: In the future, clean up the `config.config["xxx"]` by using Optimum's NormalizedConfig.
 class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
     LOADING_CLASS = AutoModelForSpeechSeq2Seq
 
@@ -84,9 +85,9 @@ class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
             LOGGER.warning(f"Ignoring opt_level={opt_level} for Whisper encoder.")
 
         return {
-            "n_mels": config.config["num_mel_bins"],  # TODO: we should just be able to use config.num_mel_bins or config["num_mel_bins"]
+            "n_mels": config.config["num_mel_bins"],
             "num_languages": num_languages,
-            "num_heads": config.config["encoder_attention_heads"], # TODO: we should just be able to use config.XX
+            "num_heads": config.config["encoder_attention_heads"],
         }
 
 
@@ -109,14 +110,14 @@ class TensorRTWhisperDecoderEngineBuilder(TensorRTEngineBuilder):
         
         return {
             "hidden_act": "gelu",
-            "max_position_embeddings":config.config["max_target_positions"],  # TODO: we should just be able to use config.XX
+            "max_position_embeddings":config.config["max_target_positions"],
             "apply_query_key_layer_scaling": False,
             "max_input_len": self._optimization_profile.max_prompt_length,
             "max_output_len": self._optimization_profile.max_output_length,
             "cross_attention": True,
             "has_position_embedding": True,
             "has_token_type_embedding": False,
-            "num_heads": config.config["decoder_attention_heads"], # TODO: we should just be able to use config.XX
+            "num_heads": config.config["decoder_attention_heads"],
         }
 
 
