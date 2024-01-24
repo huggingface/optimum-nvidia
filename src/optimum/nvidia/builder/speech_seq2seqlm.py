@@ -97,8 +97,10 @@ class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
             # TensorRT-LLM example always uses opt_level=None.
             LOGGER.warning(f"Ignoring opt_level={opt_level} for Whisper encoder.")
 
-        # TODO: Why are we using `fp8` here while TRT-LLM examples are using `int8`?
-        # TODO: Only TP=1 is supported for Whisper? it is hardcoded in TensorRT-LLM/examples/whisper/run.py
+        if shard.tp_size != 1:
+            # TensorRT-LLM/examples/whisper/run.py hard-codes TP to 1 for Whisper encoder.
+            LOGGER.warning(f"Ignoring shard.tp_size={shard.tp_size} for Whisper encoder, using tensor_parallel=1.")
+
         build_config = tensorrt_llm_builder.create_builder_config(
             name=config["model_type"],
             precision=self._dtype.value,
@@ -106,7 +108,7 @@ class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
             hidden_size=config.hidden_size,
             num_layers=config.num_layers,
             max_batch_size=self._optimization_profile.max_batch_size,
-            tensor_parallel=shard.tp_size,
+            tensor_parallel=1,
             use_refit=False,
             quant_mode=self._quantization_config.mode,
             huggingface=dict(**config),
@@ -143,8 +145,6 @@ class TensorRTWhisperDecoderEngineBuilder(TensorRTEngineBuilder):
             # TensorRT-LLM example always uses opt_level=None.
             LOGGER.warning(f"Ignoring opt_level={opt_level} for Whisper decoder.")
 
-        # TODO: Why are we using `fp8` here while TRT-LLM examples are using `int8`?
-        # TODO: Only TP=1 is supported for Whisper? it is hardcoded in TensorRT-LLM/examples/whisper/run.py
         build_config = tensorrt_llm_builder.create_builder_config(
             name=config["model_type"],
             precision=self._dtype.value,
@@ -200,7 +200,6 @@ class TensorRTForSpeechSeq2SeqEngineBuilder(ModelHubMixin):
     ) -> "T":
         config = model_kwargs.get("config", None)
 
-        # TODO: Handle more things from the params here
         if config and not isinstance(config, TransformersConfig):
             config = TransformersConfig(config)
         else:
@@ -209,7 +208,6 @@ class TensorRTForSpeechSeq2SeqEngineBuilder(ModelHubMixin):
         return cls(model_id, config)
 
     def build(self, output_path: "PathLike", optimization_level: int = None) -> "PathLike":
-        # TODO: Fix shape of encoder input.
         LOGGER.info("Building TensorRT encoder engine...")
         self.encoder_builder.build(Path(output_path, "encoder"), optimization_level)
 
@@ -250,12 +248,8 @@ class TensorRTForSpeechSeq2SeqEngineBuilder(ModelHubMixin):
         max_new_tokens = self._model_config.max_sequence_length - 1
         max_output_length = self._model_config.max_sequence_length
 
-        # TODO: `with_generation_profile` does not make much sense for the encoder?
         self.encoder_builder.with_generation_profile(
             max_batch_size=max_batch_size,
-            max_prompt_length=max_prompt_length,
-            max_new_tokens=max_new_tokens,
-            max_output_length=max_output_length,
         )
 
         self.decoder_builder.with_generation_profile(

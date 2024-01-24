@@ -98,8 +98,6 @@ class TensorRTPreTrainedModel(ModelHubMixin):
             if not builder:
                 LOGGER.debug("No builder provided, using default one")
 
-                raise NotImplementedError("This should be more adaptable")
-
                 # Define some parameters the user can provide
                 model_dtype = model_kwargs.get("dtype", "float16")
                 use_fp8 = model_kwargs.get("use_fp8", False)

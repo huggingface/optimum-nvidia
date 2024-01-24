@@ -103,9 +103,8 @@ class Weights:
 class TensorRTEngineBuilder(ModelHubMixin):
     """ """
 
-    LOADING_CLASS = (
-        AutoModelForCausalLM  # Keeping AutoModelForCausalLM in this base class for backward compatibility with Llama.
-    )
+    # Keeping AutoModelForCausalLM in this base class for backward compatibility with Llama.
+    LOADING_CLASS = AutoModelForCausalLM
 
     @classmethod
     def _from_pretrained(
@@ -233,9 +232,13 @@ class TensorRTEngineBuilder(ModelHubMixin):
         return self
 
     def with_generation_profile(
-        self, max_batch_size: int, max_prompt_length: int, max_new_tokens: int, max_output_length: int = None
+        self,
+        max_batch_size: int,
+        max_prompt_length: Optional[int] = None,
+        max_new_tokens: Optional[int] = None,
+        max_output_length: Optional[int] = None,
     ) -> "TensorRTEngineBuilder":
-        if max_output_length is None:
+        if max_output_length is None and max_prompt_length is not None and max_new_tokens is not None:
             # TODO: Understand why we can set to a larger value?
             # max_output_length = self._model_config.max_sequence_length
             max_output_length = max_prompt_length + max_new_tokens
@@ -585,8 +588,6 @@ class TensorRTEngineBuilder(ModelHubMixin):
         config = self._model_config
         qconfig = self._quantization_config
 
-        # TODO: Why are we using `fp8` here while TRT-LLM examples are using `int8`?
-        # TODO: Only TP=1 is supported for Whisper? it is hardcoded in TensorRT-LLM/examples/whisper/run.py
         build_config = tensorrt_llm_builder.create_builder_config(
             name=config["model_type"],
             precision=self._dtype.value,
