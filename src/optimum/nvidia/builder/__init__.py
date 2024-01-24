@@ -14,5 +14,4 @@
 #  limitations under the License.
 
 from .base import TensorRTEngineBuilder
-from .causal_lm import TensorRTForCausalLMEngineBuilder
 from .speech_seq2seqlm import TensorRTForSpeechSeq2SeqEngineBuilder

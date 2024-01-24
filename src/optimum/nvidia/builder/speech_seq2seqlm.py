@@ -22,6 +22,8 @@ from typing import Dict, Optional, Type, Union
 from huggingface_hub import ModelHubMixin
 from huggingface_hub.hub_mixin import T  # What is this? T?
 from tensorrt_llm import Mapping as Shard
+from tensorrt_llm._utils import trt_version
+from tensorrt_llm.builder import Builder
 from tensorrt_llm.quantization import QuantMode
 from transformers import AutoModelForSpeechSeq2Seq
 
@@ -38,10 +40,17 @@ LOGGER = getLogger(__name__)
 class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
     LOADING_CLASS = AutoModelForSpeechSeq2Seq
 
-    def get_prepare_inputs_kwargs(self):
-        return {
-            "max_batch_size": self._optimization_profile.max_batch_size,
-        }
+    def prepare_inputs(self, model):
+        inputs = model.prepare_inputs(
+            max_batch_size=self._optimization_profile.max_batch_size,
+        )
+
+        # TRT-LLM's prepare_inputs should always return a tuple, but it was not the case for WhisperEncoder.
+        # The patch https://github.com/NVIDIA/TensorRT-LLM/commit/c89653021e66ca78c55f02b366f404455bc12e8d
+        # is not yet included in huggingface/optimum-nvidia:latest.
+        if not isinstance(inputs, tuple):
+            inputs = (inputs,)
+        return inputs
 
     def validate(self) -> bool:
         if self._quantization_config is None:
@@ -72,14 +81,15 @@ class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
 
         return True
 
-    def get_builder_config_kwargs(
-        self,
-        config: "ModelConfig",
-        qconfig: "QuantizationConfig",
-        shard: "Shard",
-        is_parallel: bool,
-        opt_level: Optional[int],
+    def create_builder_config(
+        self, tensorrt_llm_builder: Builder, shard: Shard, is_parallel: bool, opt_level: Optional[int]
     ):
+        """
+        Prepares the builder for the model. This is kept for backward compatibility in the base class for Llama, but this should be overridden for each architecture as `Builder.create_builder_config` takes different arguments depending on the architecture.
+        """
+        config = self._model_config
+        qconfig = self._quantization_config
+
         is_multilingual = config.vocab_size >= 51865
         num_languages = config.vocab_size - 51765 - int(is_multilingual)
 
@@ -87,48 +97,78 @@ class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
             # TensorRT-LLM example always uses opt_level=None.
             LOGGER.warning(f"Ignoring opt_level={opt_level} for Whisper encoder.")
 
-        return {
-            "n_mels": config.config["num_mel_bins"],
-            "num_languages": num_languages,
-            "num_heads": config.config["encoder_attention_heads"],
-        }
+        # TODO: Why are we using `fp8` here while TRT-LLM examples are using `int8`?
+        # TODO: Only TP=1 is supported for Whisper? it is hardcoded in TensorRT-LLM/examples/whisper/run.py
+        build_config = tensorrt_llm_builder.create_builder_config(
+            name=config["model_type"],
+            precision=self._dtype.value,
+            fp8=qconfig.mode.has_fp8_qdq(),
+            hidden_size=config.hidden_size,
+            num_layers=config.num_layers,
+            max_batch_size=self._optimization_profile.max_batch_size,
+            tensor_parallel=shard.tp_size,
+            use_refit=False,
+            quant_mode=self._quantization_config.mode,
+            huggingface=dict(**config),
+            tensorrt=trt_version(),
+            n_mels=config.config["num_mel_bins"],
+            num_languages=num_languages,
+            num_heads=config.config["encoder_attention_heads"],
+        )
+
+        return build_config
 
 
 class TensorRTWhisperDecoderEngineBuilder(TensorRTEngineBuilder):
     LOADING_CLASS = AutoModelForSpeechSeq2Seq
 
-    def get_prepare_inputs_kwargs(self):
-        return {
-            "max_batch_size": self._optimization_profile.max_batch_size,
-            "max_beam_width": self._beam_width,
-            "max_decoder_input_len": self._optimization_profile.max_prompt_length,
-            "max_new_tokens": self._optimization_profile.max_new_tokens,
-            "max_encoder_input_len": self._model_config.config["max_source_positions"],
-        }
+    def prepare_inputs(self, model):
+        inputs = model.prepare_inputs(
+            max_batch_size=self._optimization_profile.max_batch_size,
+            max_beam_width=self._beam_width,
+            max_decoder_input_len=self._optimization_profile.max_prompt_length,
+            max_new_tokens=self._optimization_profile.max_new_tokens,
+            max_encoder_input_len=self._model_config.config["max_source_positions"],
+        )
 
-    def get_builder_config_kwargs(
-        self,
-        config: "ModelConfig",
-        qconfig: "QuantizationConfig",
-        shard: "Shard",
-        is_parallel: bool,
-        opt_level: Optional[int],
+        return inputs
+
+    def create_builder_config(
+        self, tensorrt_llm_builder: Builder, shard: Shard, is_parallel: bool, opt_level: Optional[int]
     ):
+        config = self._model_config
+        qconfig = self._quantization_config
+
         if opt_level is not None:
             # TensorRT-LLM example always uses opt_level=None.
             LOGGER.warning(f"Ignoring opt_level={opt_level} for Whisper decoder.")
 
-        return {
-            "hidden_act": "gelu",
-            "max_position_embeddings": config.config["max_target_positions"],
-            "apply_query_key_layer_scaling": False,
-            "max_input_len": self._optimization_profile.max_prompt_length,
-            "max_output_len": self._optimization_profile.max_output_length,
-            "cross_attention": True,
-            "has_position_embedding": True,
-            "has_token_type_embedding": False,
-            "num_heads": config.config["decoder_attention_heads"],
-        }
+        # TODO: Why are we using `fp8` here while TRT-LLM examples are using `int8`?
+        # TODO: Only TP=1 is supported for Whisper? it is hardcoded in TensorRT-LLM/examples/whisper/run.py
+        build_config = tensorrt_llm_builder.create_builder_config(
+            name=config["model_type"],
+            precision=self._dtype.value,
+            fp8=qconfig.mode.has_fp8_qdq(),
+            hidden_size=config.hidden_size,
+            num_layers=config.num_layers,
+            max_batch_size=self._optimization_profile.max_batch_size,
+            tensor_parallel=shard.tp_size,
+            use_refit=False,
+            quant_mode=self._quantization_config.mode,
+            huggingface=dict(**config),
+            tensorrt=trt_version(),
+            hidden_act="gelu",
+            max_position_embeddings=config.config["max_target_positions"],
+            apply_query_key_layer_scaling=False,
+            max_input_len=self._optimization_profile.max_prompt_length,
+            max_output_len=self._optimization_profile.max_output_length,
+            cross_attention=True,
+            has_position_embedding=True,
+            has_token_type_embedding=False,
+            num_heads=config.config["decoder_attention_heads"],
+        )
+
+        return build_config
 
 
 class TensorRTForSpeechSeq2SeqEngineBuilder(ModelHubMixin):

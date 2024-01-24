@@ -36,6 +36,7 @@ from tensorrt_llm.models import quantize_model
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
+from transformers import AutoModelForCausalLM
 
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig, TransformersConfig
 from optimum.nvidia.lang import DataType
@@ -101,6 +102,10 @@ class Weights:
 
 class TensorRTEngineBuilder(ModelHubMixin):
     """ """
+
+    LOADING_CLASS = (
+        AutoModelForCausalLM  # Keeping AutoModelForCausalLM in this base class for backward compatibility with Llama.
+    )
 
     @classmethod
     def _from_pretrained(
@@ -462,26 +467,8 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         builder = Builder()
 
-        # TODO: handling this with kwargs is ugly.
-        builder_config_kwargs = self.get_builder_config_kwargs(
-            config=config, qconfig=qconfig, shard=shard, is_parallel=is_parallel, opt_level=opt_level
-        )
-
-        # TODO: Why are we using `fp8` here while TRT-LLM examples are using `int8`?
-        # TODO: Only TP=1 is supported for Whisper? it is hardcoded in TensorRT-LLM/examples/whisper/run.py
-        build_config = builder.create_builder_config(
-            name=config["model_type"],
-            precision=self._dtype.value,
-            fp8=qconfig.mode.has_fp8_qdq(),
-            hidden_size=config.hidden_size,
-            num_layers=config.num_layers,
-            max_batch_size=self._optimization_profile.max_batch_size,
-            tensor_parallel=shard.tp_size,
-            use_refit=False,
-            quant_mode=self._quantization_config.mode,
-            huggingface=dict(**config),
-            tensorrt=trt_version(),
-            **builder_config_kwargs,
+        build_config = self.create_builder_config(
+            tensorrt_llm_builder=builder, shard=shard, is_parallel=is_parallel, opt_level=opt_level
         )
 
         model = self._weight_adapter.allocate_model(config, shard, self._dtype, qconfig.mode)
@@ -529,17 +516,8 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         with net_guard(network):
             network.set_named_parameters(model.named_parameters())
-            prepare_inputs_kwargs = self.get_prepare_inputs_kwargs()
 
-            # TRT-LLM's prepare_inputs should always return a tuple, but it is not always the case.
-            # For example https://github.com/NVIDIA/TensorRT-LLM/commit/c89653021e66ca78c55f02b366f404455bc12e8d
-            # fixed a bug where WhisperEncoder would just return a `tensorrt_llm.functional.Tensor`.
-            inputs = model.prepare_inputs(
-                **prepare_inputs_kwargs,
-            )
-
-            if not isinstance(inputs, tuple):
-                inputs = (inputs,)
+            inputs = self.prepare_inputs(model)
 
             model(*inputs)
 
@@ -582,3 +560,58 @@ class TensorRTEngineBuilder(ModelHubMixin):
         LOGGER.info(f"Saving engine to {path}...")
         with open(path, "wb") as f:
             f.write(bytearray(engine))
+
+    def prepare_inputs(self, model):
+        """
+        Prepares inputs to be run by the model. This is kept for backward compatibility in the base class for Llama, but this should be overridden for each architecture as `TODO.prepare_inputs` takes different arguments depending on the architecture.
+        """
+        inputs = model.prepare_inputs(
+            max_batch_size=self._optimization_profile.max_batch_size,
+            max_input_len=self._optimization_profile.max_prompt_length,
+            max_new_tokens=self._optimization_profile.max_new_tokens,
+            max_num_tokens=None,
+            max_beam_width=self._beam_width,
+            use_cache=True,
+        )
+
+        return inputs
+
+    def create_builder_config(
+        self, tensorrt_llm_builder: Builder, shard: Shard, is_parallel: bool, opt_level: Optional[int]
+    ):
+        """
+        Prepares the builder for the model. This is kept for backward compatibility in the base class for Llama, but this should be overridden for each architecture as `Builder.create_builder_config` takes different arguments depending on the architecture.
+        """
+        config = self._model_config
+        qconfig = self._quantization_config
+
+        # TODO: Why are we using `fp8` here while TRT-LLM examples are using `int8`?
+        # TODO: Only TP=1 is supported for Whisper? it is hardcoded in TensorRT-LLM/examples/whisper/run.py
+        build_config = tensorrt_llm_builder.create_builder_config(
+            name=config["model_type"],
+            precision=self._dtype.value,
+            fp8=qconfig.mode.has_fp8_qdq(),
+            hidden_size=config.hidden_size,
+            num_layers=config.num_layers,
+            max_batch_size=self._optimization_profile.max_batch_size,
+            tensor_parallel=shard.tp_size,
+            use_refit=False,
+            quant_mode=self._quantization_config.mode,
+            huggingface=dict(**config),
+            tensorrt=trt_version(),
+            hidden_act=config.activation,
+            num_kv_heads=config.num_kv_heads,
+            num_heads=config.num_heads,
+            max_position_embeddings=config.max_sequence_length,
+            max_input_len=self._optimization_profile.max_prompt_length,
+            max_output_len=self._optimization_profile.max_output_length,
+            max_num_tokens=None,
+            max_beam_width=self._beam_width,
+            strongly_typed=qconfig.mode.has_fp8_qdq(),
+            pipeline_parallel=shard.pp_size,
+            parallel_build=is_parallel,
+            vocab_size=config.vocab_size,
+            opt_level=opt_level,
+        )
+
+        return build_config
