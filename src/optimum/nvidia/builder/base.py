@@ -566,7 +566,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
     def prepare_inputs(self, model):
         """
-        Prepares inputs to be run by the model. This is kept for backward compatibility in the base class for Llama, but this should be overridden for each architecture as `TODO.prepare_inputs` takes different arguments depending on the architecture.
+        Prepares inputs to be run by the model. This is kept for backward compatibility in the base class for Llama, but this should be overridden for each architecture as prepare_inputs takes different arguments depending on the tensorrt_llm.Module subclass.
         """
         inputs = model.prepare_inputs(
             max_batch_size=self._optimization_profile.max_batch_size,
