@@ -349,48 +349,49 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 ")"
             )
 
-            # Save quantization artifacts
-            calibration_path = output_path.joinpath("calibration")
+            if self._quantization_config.has_calibration_step:
+                # Save quantization artifacts
+                calibration_path = output_path.joinpath("calibration")
 
-            # Handle any calibration required for static quantization
-            if self._quantization_calibration:
-                has_json = has_npz = False
-                if calibration_path.exists() and calibration_path.is_dir():
-                    calibration_data = os.listdir(calibration_path)
-                    if len(calibration_data) == 2:
-                        has_json = any(f.endswith(".json") for f in calibration_data)
-                        has_npz = any(f.endswith(".npz") for f in calibration_data)
+                # Handle any calibration required for static quantization
+                if self._quantization_calibration:
+                    has_json = has_npz = False
+                    if calibration_path.exists() and calibration_path.is_dir():
+                        calibration_data = os.listdir(calibration_path)
+                        if len(calibration_data) == 2:
+                            has_json = any(f.endswith(".json") for f in calibration_data)
+                            has_npz = any(f.endswith(".npz") for f in calibration_data)
 
-                if not calibration_path.exists() or not (has_json and has_npz):
-                    LOGGER.info("Calibrating model ...")
+                    if not calibration_path.exists() or not (has_json and has_npz):
+                        LOGGER.info("Calibrating model ...")
 
-                    # Retrieve device total memory
-                    fraction_device_map = {
-                        device_id: get_device_memory(device_id) * 0.7 for device_id in range(get_device_count())
-                    }
+                        # Retrieve device total memory
+                        fraction_device_map = {
+                            device_id: get_device_memory(device_id) * 0.7 for device_id in range(get_device_count())
+                        }
 
-                    cpu_device_map = {"cpu": virtual_memory().available * 0.8}
+                        cpu_device_map = {"cpu": virtual_memory().available * 0.8}
 
-                    # Allocate required components for quantization
-                    hf_model = AutoModelForCausalLM.from_pretrained(
-                        self._model_id_or_path,
-                        device_map="balanced",
-                        torch_dtype=self._dtype.as_torch(),
-                        max_memory=fraction_device_map | cpu_device_map,
-                    ).to(memory_format=torch.channels_last)
+                        # Allocate required components for quantization
+                        hf_model = AutoModelForCausalLM.from_pretrained(
+                            self._model_id_or_path,
+                            device_map="balanced",
+                            torch_dtype=self._dtype.as_torch(),
+                            max_memory=fraction_device_map | cpu_device_map,
+                        ).to(memory_format=torch.channels_last)
 
-                    hf_model = maybe_offload_weights_to_cpu(hf_model)
+                        hf_model = maybe_offload_weights_to_cpu(hf_model)
 
-                    quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
-                    quantizer.calibrate(self._quantization_calibration)
-                    quantizer.save(calibration_path)
-                    # Release the memory
-                    del hf_model
-                    torch.cuda.empty_cache()
-                else:
-                    LOGGER.info(f"Reusing already precomputed calibration data at {calibration_path}")
+                        quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
+                        quantizer.calibrate(self._quantization_calibration)
+                        quantizer.save(calibration_path)
+                        # Release the memory
+                        del hf_model
+                        torch.cuda.empty_cache()
+                    else:
+                        LOGGER.info(f"Reusing already precomputed calibration data at {calibration_path}")
 
-            files = [files, Weights(calibration_path, FileFormat.NUMPY_QUANTIZED)]
+                files = [files, Weights(calibration_path, FileFormat.NUMPY_QUANTIZED)]
 
         if self.validate():
             if self._build_info.parallel and self._build_info.num_parallel_jobs > 1:

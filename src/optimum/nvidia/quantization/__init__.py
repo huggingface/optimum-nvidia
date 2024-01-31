@@ -6,7 +6,7 @@ import torch
 from .awq import to_awq_module
 from .base import Calibration, HfDatasetCalibration
 from .receipes import get_default_calibration_dataset
-from .utils import pack_int8_to_int4, unpack_int32_into_int8
+from .utils import unpack_int32_into_int8
 from ..configs import QuantizationConfig
 
 _AWQ_TENSOR_NAME_EXT = {"qweight", "qzeros", "scales"}
@@ -35,22 +35,23 @@ def quantizable(
         if qconfig.mode.is_weight_only():
             pack = torch.ops.fastertransformer.pack_int8_tensor_to_packed_int4
             preprocess = torch.ops.fastertransformer.preprocess_weights_for_mixed_gemm
+            qdtype = torch.quint4x2 if qconfig.mode.is_int4_weight_only() else torch.int8
 
             tensor_name_parts = name.split(".")[:-1]
             qscales = weights[".".join(tensor_name_parts + ["scales"])]
 
             # Extract the weight stored in int32
-            qweight = unpack_int32_into_int8(weights[".".join(tensor_name_parts + ["qweight"])], True, True)
-            qweight_interleaved = preprocess(pack(qweight), torch.quint4x2).view(torch.float16)
+            qweight_i32 = weights[".".join(tensor_name_parts + ["qweight"])]
+            qweight_i8 = unpack_int32_into_int8(qweight_i32, center=True)
+            qweight_packed_qi4x2 = preprocess(pack(qweight_i8), )
 
             if (tensor_zero_point_name := ".".join(tensor_name_parts + ["qzeros"])) in weights:
                 qzeros = weights[tensor_zero_point_name]
                 if qzeros.dtype == torch.int32:
                     qzeros = unpack_int32_into_int8(qzeros)
 
-                zeros_x_scales_fp16 = ((-qzeros + 7) * qscales).half()
-                return qweight_interleaved, qscales, zeros_x_scales_fp16
+                return qweight_packed_qi4x2, qscales, qzeros
             else:
-                return qweight_interleaved, qscales
+                return qweight_packed_qi4x2, qscales
     else:
         return weights[name]
