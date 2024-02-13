@@ -465,6 +465,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
             name=config["model_type"],
             precision=self._dtype.value,
             fp8=qconfig.mode.has_fp8_qdq(),
+            int8=qconfig.mode.has_act_or_weight_quant(),
             vocab_size=config.vocab_size,
             hidden_size=config.hidden_size,
             hidden_act=config.activation,

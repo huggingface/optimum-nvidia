@@ -7,7 +7,10 @@ from .awq import to_awq_module
 from .base import Calibration, HfDatasetCalibration
 from .receipes import get_default_calibration_dataset
 from .utils import unpack_int32_into_int8
-from ..configs import QuantizationConfig
+
+from optimum.nvidia.configs import QuantizationConfig
+from optimum.nvidia.lang import DataType
+from optimum.nvidia.weights import as_numpy
 
 _AWQ_TENSOR_NAME_EXT = {"qweight", "qzeros", "scales"}
 _GPTQ_TENSOR_NAME_EXT = {"g_idx"}
@@ -18,7 +21,8 @@ _AWQ_GPTQ_TENSOR_NAME_EXT = _AWQ_TENSOR_NAME_EXT.union(_GPTQ_TENSOR_NAME_EXT)
 def quantizable(
     weights: Mapping[str, np.array],
     name: str,
-    qconfig: QuantizationConfig
+    qconfig: QuantizationConfig,
+    precision: DataType
 ) -> Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]]:
     """
     Handle the retrieving of potentially quantized weights in various name and format
@@ -38,20 +42,20 @@ def quantizable(
             qdtype = torch.quint4x2 if qconfig.mode.is_int4_weight_only() else torch.int8
 
             tensor_name_parts = name.split(".")[:-1]
-            qscales = weights[".".join(tensor_name_parts + ["scales"])]
+            qscales = as_numpy(weights[".".join(tensor_name_parts + ["scales"])], precision)
 
             # Extract the weight stored in int32
             qweight_i32 = weights[".".join(tensor_name_parts + ["qweight"])]
             qweight_i8 = unpack_int32_into_int8(qweight_i32, center=True)
-            qweight_packed_qi4x2 = preprocess(pack(qweight_i8), )
+            qweight_packed = preprocess(pack(qweight_i8), qdtype)
 
             if (tensor_zero_point_name := ".".join(tensor_name_parts + ["qzeros"])) in weights:
                 qzeros = weights[tensor_zero_point_name]
                 if qzeros.dtype == torch.int32:
                     qzeros = unpack_int32_into_int8(qzeros)
 
-                return qweight_packed_qi4x2, qscales, qzeros
+                return as_numpy(qweight_packed, DataType.INT8), qscales, as_numpy(qzeros, DataType.INT8)
             else:
-                return qweight_packed_qi4x2, qscales
+                return as_numpy(qweight_packed, DataType.INT8), qscales
     else:
-        return weights[name]
+        return as_numpy(weights[name], precision)

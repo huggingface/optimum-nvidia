@@ -14,12 +14,10 @@
 #  limitations under the License.
 from collections import defaultdict
 from logging import getLogger
-from os import PathLike
 from pathlib import Path
-from typing import List, Mapping, Union
+from typing import List, Mapping
 
 import numpy as np
-import torch
 from tensorrt_llm import BuilderConfig, Module
 from tensorrt_llm import Mapping as ShardingConfig
 from tensorrt_llm.models import LLaMAForCausalLM
@@ -30,7 +28,7 @@ from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel, repeat_heads
 from optimum.nvidia.quantization import quantizable
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard, stack
 from optimum.nvidia.weights.safetensors import SafetensorsAccessor
 
 
@@ -67,9 +65,9 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             prefix = f"{LAYERS_PREFIX}.{layer_idx}.self_attn"
 
             # Merge QKV
-            q_weight = as_numpy(quantizable(weights, f"{prefix}.q_proj.weight", qconfig), precision)
-            k_weight = as_numpy(quantizable(weights, f"{prefix}.k_proj.weight", qconfig), precision)
-            v_weight = as_numpy(quantizable(weights, f"{prefix}.v_proj.weight", qconfig), precision)
+            q_weight = quantizable(weights, f"{prefix}.q_proj.weight", qconfig, precision)
+            k_weight = quantizable(weights, f"{prefix}.k_proj.weight", qconfig, precision)
+            v_weight = quantizable(weights, f"{prefix}.v_proj.weight", qconfig, precision)
 
             if not config.use_multi_head_attention:
                 if config.num_kv_heads < shard_info.tp_size:
@@ -123,24 +121,40 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             model.layers[idx].post_layernorm.weight.value = post_attn_ln
 
             # Self attention layer
-            qkv = qkv_packed_layers[idx]
-            q, k, v = qkv
+            qkv_module = model.layers[idx].attention.qkv
+            q, k, v = qkv_packed_layers[idx]
 
             # Shard
-            # if not config.use_multi_head_attention:  # TODO: support GQA
-            #     wq, wk, wv = (
-            #         shard(q, rank, shard_info.tp_size, axis=0),
-            #         shard(k, rank, shard_info.tp_size, axis=0),
-            #         shard(v, rank, shard_info.tp_size, axis=0),
-            #     )
-            #
-            #     qkv_weight = np.concatenate((wq, wk, wv), axis=0)
-            # else:
-            #     qkv_weight = np.stack((q, k, v), axis=0)
-            #     rank_tensor = shard(qkv_weight, rank, shard_info.tp_size, axis=1)
-            #     qkv_weight = rank_tensor.reshape(-1, config.hidden_size)
-            #
-            # model.layers[idx].attention.qkv.weight.value = np.ascontiguousarray(qkv_weight)
+            if not config.use_multi_head_attention:  # TODO: support GQA
+                wq, wk, wv = (
+                    shard(q, rank, shard_info.tp_size, axis=0),
+                    shard(k, rank, shard_info.tp_size, axis=0),
+                    shard(v, rank, shard_info.tp_size, axis=0),
+                )
+
+                qkv = np.concatenate((wq, wk, wv), axis=0)
+            else:
+                qkv = stack((q, k, v), axis=0)
+
+            rank_tensor = shard(qkv, rank, shard_info.tp_size, axis=1)
+
+            if hasattr(qkv_module, "weight"):
+                qkv_module.weight.value = np.ascontiguousarray(rank_tensor.reshape(-1, config.hidden_size))
+            else:
+                if hasattr(qkv_module, "qweight"):
+                    qkv_module.qweight.value = np.ascontiguousarray(
+                        rank_tensor[0].transpose(1, 2, 0).reshape(config.hidden_size, -1)
+                    )
+
+                if hasattr(qkv_module, "scale"):
+                    qkv_module.scale.value = np.ascontiguousarray(
+                        rank_tensor[1].transpose(1, 2, 0).reshape(-1, 3 * config.hidden_size)
+                    )
+
+                if hasattr(qkv_module, "zero"):
+                    qkv_module.zero.value = np.ascontiguousarray(
+                        rank_tensor[2].transpose(1, 2, 0).reshape(-1, 3 * config.hidden_size)
+                    )
 
             # Common projection logic
             for src, dst, shard_axis in [
@@ -149,7 +163,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
                 ("mlp.down_proj.weight", model.layers[idx].mlp.proj, 1),
                 ("mlp.gate_proj.weight", model.layers[idx].mlp.fc, 0),
             ]:
-                tensor = as_numpy(quantizable(weights, f"{prefix}.{src}", qconfig), precision)
+                tensor = quantizable(weights, f"{prefix}.{src}", qconfig, precision)
                 rank_tensor = shard(tensor, rank, shard_info.tp_size, shard_axis)
 
                 if len(rank_tensor) == 1:

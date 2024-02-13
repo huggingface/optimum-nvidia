@@ -1,3 +1,4 @@
+from operator import itemgetter
 from typing import List, Tuple, Union
 
 import numpy as np
@@ -20,3 +21,22 @@ def shard(tensor: Union[np.array, List[np.array], Tuple[np.array]], rank: int, t
             return tensor
         else:
             return np.ascontiguousarray(np.split(tensor, tp_degree, axis=axis)[rank])
+
+
+def stack(tensors: Union[Tuple[np.array], Tuple[Tuple[np.array]]], axis: int = 0) -> Union[np.array, Tuple[np.array]]:
+    if all((isinstance(t, np.ndarray) for t in tensors)):
+        return np.stack(tensors, axis=axis)
+    elif all((isinstance(t, tuple) for t in tensors)):
+        length = set([len(t) for t in tensors])
+
+        if not len(length) == 1:
+            raise ValueError(f"Not all the provided tuples have the same number of items ({length})")
+
+        packed = tuple(zip(*tensors))
+        return tuple(np.stack(t, axis=axis) for t in packed)
+
+
+
+
+
+
