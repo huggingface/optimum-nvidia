@@ -25,7 +25,7 @@ from tensorrt_llm.quantization import QuantMode
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, retrieve_qkv, shard
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, pack_qkv, shard
 
 from ..runtime import TensorRTForSpeechSeq2Seq
 
@@ -54,7 +54,7 @@ class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
         precision = DataType(builder.precision)
 
         # TensorRT-LLM model definition uses a single GEMM for query/key/value, while transformers does not.
-        qkv_packed_layers = retrieve_qkv(
+        qkv_packed_layers = pack_qkv(
             num_layers=config.num_layers,
             layer_prefix=self.LAYERS_PREFIX,
             attn_layer_name="self_attn",
@@ -161,7 +161,7 @@ class WhisperEncoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
     @staticmethod
     def allocate_model(
         config: ModelConfig, sharding: ShardingConfig, dtype: DataType, quant_mode: QuantMode
-    ) -> Tuple[Module, Module]:
+    ) -> Module:
         LOGGER.debug("Allocating WhisperEncoder model...")
         return WhisperEncoderWeightAdapter.TENSORRT_LLM_MODEL_CLASS(
             n_mels=config.config["num_mel_bins"],
@@ -198,7 +198,7 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
         shard_info = self._sharding_config
         precision = DataType(builder.precision)
 
-        self_attn_qkv_packed_layers = retrieve_qkv(
+        self_attn_qkv_packed_layers = pack_qkv(
             num_layers=config.num_layers,
             layer_prefix=self.LAYERS_PREFIX,
             attn_layer_name="self_attn",
@@ -209,7 +209,7 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
             shard_info=shard_info,
         )
 
-        cross_attn_qkv_packed_layers = retrieve_qkv(
+        cross_attn_qkv_packed_layers = pack_qkv(
             num_layers=config.num_layers,
             layer_prefix=self.LAYERS_PREFIX,
             attn_layer_name="encoder_attn",
@@ -331,7 +331,7 @@ class WhisperDecoderWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNp
     @staticmethod
     def allocate_model(
         config: ModelConfig, sharding: ShardingConfig, dtype: DataType, quant_mode: QuantMode
-    ) -> Tuple[Module, Module]:
+    ) -> Module:
         LOGGER.debug("Allocating DecoderModel model...")
 
         # DecoderModel has no quant_mode.

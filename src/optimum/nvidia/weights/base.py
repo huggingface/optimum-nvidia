@@ -46,7 +46,7 @@ def repeat_heads(tensor: np.array, factor: int, axis: int) -> np.array:
     return tensor_.reshape(-1, tensor.shape[-1])
 
 
-def retrieve_qkv(
+def pack_qkv(
     num_layers: int,
     layer_prefix: str,
     attn_layer_name: str,

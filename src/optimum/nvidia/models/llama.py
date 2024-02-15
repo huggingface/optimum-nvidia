@@ -26,7 +26,7 @@ from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import ConvertibleModel
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, retrieve_qkv, shard
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, pack_qkv, shard
 
 
 LOGGER = getLogger(__name__)
@@ -52,7 +52,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         precision = DataType(builder.precision)
 
         # TensorRT-LLM model definition uses a single GEMM for query/key/value, while transformers does not.
-        qkv_packed_layers = retrieve_qkv(
+        qkv_packed_layers = pack_qkv(
             num_layers=config.num_layers,
             layer_prefix=self.LAYERS_PREFIX,
             attn_layer_name="self_attn",
