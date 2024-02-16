@@ -13,7 +13,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from logging import getLogger
-from typing import List, Mapping, Tuple
+from typing import List, Mapping
 
 import numpy as np
 from tensorrt_llm import BuilderConfig, Module
