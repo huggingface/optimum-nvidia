@@ -1,5 +1,4 @@
 #  coding=utf-8
-#  coding=utf-8
 #  Copyright 2023 The HuggingFace Inc. team. All rights reserved.
 #  #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -39,7 +38,6 @@ from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
 from transformers import AutoModelForCausalLM
 
-from optimum.nvidia import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig, TransformersConfig
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.quantization import Calibration
@@ -48,6 +46,8 @@ from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
 from optimum.nvidia.utils.tests.utils import parse_flag_from_env
 from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter
 from optimum.nvidia.weights.hub import get_safetensors_files
+
+from ..utils.constants import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
 
 
 LOGGER = getLogger(__name__)
@@ -103,6 +103,9 @@ class Weights:
 class TensorRTEngineBuilder(ModelHubMixin):
     """ """
 
+    # Keeping AutoModelForCausalLM in this base class for backward compatibility with Llama.
+    LOADING_CLASS = AutoModelForCausalLM
+
     @classmethod
     def _from_pretrained(
         cls: Type[T],
@@ -134,6 +137,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
     def __init__(self, model_id_or_path: Union[str, PathLike], config: ModelConfig, adapter: Type[WeightAdapter]):
         # Model
+        # TODO: passing the adapter here should be optional - we can find it out simply from the model_id_or_path config model_type.
         self._model_id_or_path: Union[str, PathLike] = model_id_or_path
         self._model_config: ModelConfig = config
         self._weight_adapter: Type[WeightAdapter] = adapter
@@ -228,9 +232,13 @@ class TensorRTEngineBuilder(ModelHubMixin):
         return self
 
     def with_generation_profile(
-        self, max_batch_size: int, max_prompt_length: int, max_new_tokens: int, max_output_length: int = None
+        self,
+        max_batch_size: int,
+        max_prompt_length: Optional[int] = None,
+        max_new_tokens: Optional[int] = None,
+        max_output_length: Optional[int] = None,
     ) -> "TensorRTEngineBuilder":
-        if max_output_length is None:
+        if max_output_length is None and max_prompt_length is not None and max_new_tokens is not None:
             # TODO: Understand why we can set to a larger value?
             # max_output_length = self._model_config.max_sequence_length
             max_output_length = max_prompt_length + max_new_tokens
@@ -375,7 +383,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
                     cpu_device_map = {"cpu": virtual_memory().available * 0.8}
 
                     # Allocate required components for quantization
-                    hf_model = AutoModelForCausalLM.from_pretrained(
+                    hf_model = self.LOADING_CLASS.from_pretrained(
                         self._model_id_or_path,
                         device_map="balanced",
                         torch_dtype=self._dtype.as_torch(),
@@ -461,31 +469,9 @@ class TensorRTEngineBuilder(ModelHubMixin):
         )
 
         builder = Builder()
-        build_config = builder.create_builder_config(
-            name=config["model_type"],
-            precision=self._dtype.value,
-            fp8=qconfig.mode.has_fp8_qdq(),
-            vocab_size=config.vocab_size,
-            hidden_size=config.hidden_size,
-            hidden_act=config.activation,
-            num_heads=config.num_heads,
-            num_kv_heads=config.num_kv_heads,
-            num_layers=config.num_layers,
-            max_position_embeddings=config.max_sequence_length,
-            max_batch_size=self._optimization_profile.max_batch_size,
-            max_input_len=self._optimization_profile.max_prompt_length,
-            max_output_len=self._optimization_profile.max_output_length,
-            max_num_tokens=None,
-            max_beam_width=self._beam_width,
-            strongly_typed=qconfig.mode.has_fp8_qdq(),
-            tensor_parallel=shard.tp_size,
-            pipeline_parallel=shard.pp_size,
-            parallel_build=is_parallel,
-            use_refit=False,
-            quant_mode=self._quantization_config.mode,
-            opt_level=opt_level,
-            huggingface=dict(**config),
-            tensorrt=trt_version(),
+
+        build_config = self.create_builder_config(
+            tensorrt_llm_builder=builder, shard=shard, is_parallel=is_parallel, opt_level=opt_level
         )
 
         model = self._weight_adapter.allocate_model(config, shard, self._dtype, qconfig.mode)
@@ -533,14 +519,8 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         with net_guard(network):
             network.set_named_parameters(model.named_parameters())
-            inputs = model.prepare_inputs(
-                max_batch_size=self._optimization_profile.max_batch_size,
-                max_input_len=self._optimization_profile.max_prompt_length,
-                max_new_tokens=self._optimization_profile.max_new_tokens,
-                max_num_tokens=None,
-                max_beam_width=self._beam_width,
-                use_cache=True,
-            )
+
+            inputs = self.prepare_inputs(model)
 
             model(*inputs)
 
@@ -583,3 +563,56 @@ class TensorRTEngineBuilder(ModelHubMixin):
         LOGGER.info(f"Saving engine to {path}...")
         with open(path, "wb") as f:
             f.write(bytearray(engine))
+
+    def prepare_inputs(self, model):
+        """
+        Prepares inputs to be run by the model. This is kept for backward compatibility in the base class for Llama, but this should be overridden for each architecture as prepare_inputs takes different arguments depending on the tensorrt_llm.Module subclass.
+        """
+        inputs = model.prepare_inputs(
+            max_batch_size=self._optimization_profile.max_batch_size,
+            max_input_len=self._optimization_profile.max_prompt_length,
+            max_new_tokens=self._optimization_profile.max_new_tokens,
+            max_num_tokens=None,
+            max_beam_width=self._beam_width,
+            use_cache=True,
+        )
+
+        return inputs
+
+    def create_builder_config(
+        self, tensorrt_llm_builder: Builder, shard: Shard, is_parallel: bool, opt_level: Optional[int]
+    ):
+        """
+        Prepares the builder for the model. This is kept for backward compatibility in the base class for Llama, but this should be overridden for each architecture as `Builder.create_builder_config` takes different arguments depending on the architecture.
+        """
+        config = self._model_config
+        qconfig = self._quantization_config
+
+        build_config = tensorrt_llm_builder.create_builder_config(
+            name=config["model_type"],
+            precision=self._dtype.value,
+            fp8=qconfig.mode.has_fp8_qdq(),
+            hidden_size=config.hidden_size,
+            num_layers=config.num_layers,
+            max_batch_size=self._optimization_profile.max_batch_size,
+            tensor_parallel=shard.tp_size,
+            use_refit=False,
+            quant_mode=self._quantization_config.mode,
+            huggingface=dict(**config),
+            tensorrt=trt_version(),
+            hidden_act=config.activation,
+            num_kv_heads=config.num_kv_heads,
+            num_heads=config.num_heads,
+            max_position_embeddings=config.max_sequence_length,
+            max_input_len=self._optimization_profile.max_prompt_length,
+            max_output_len=self._optimization_profile.max_output_length,
+            max_num_tokens=None,
+            max_beam_width=self._beam_width,
+            strongly_typed=qconfig.mode.has_fp8_qdq(),
+            pipeline_parallel=shard.pp_size,
+            parallel_build=is_parallel,
+            vocab_size=config.vocab_size,
+            opt_level=opt_level,
+        )
+
+        return build_config

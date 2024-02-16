@@ -10,10 +10,12 @@ import torch
 from huggingface_hub import ModelHubMixin
 from transformers import AutoTokenizer
 
-from optimum.nvidia import DEFAULT_ENGINE_FOLDER, OPTIMUM_NVIDIA_CONFIG_FILE, TensorRTEngineBuilder
 from optimum.nvidia.configs import TransformersConfig
 from optimum.nvidia.models import ConvertibleModel
 from optimum.nvidia.utils import get_local_empty_folder, get_user_agent
+
+from .builder import TensorRTEngineBuilder
+from .utils.constants import DEFAULT_ENGINE_FOLDER, OPTIMUM_NVIDIA_CONFIG_FILE
 
 
 LOGGER = getLogger(__name__)
@@ -298,3 +300,8 @@ class TensorRTForCausalLM(TensorRTPreTrainedModel):
             input_ids = torch.masked_select(input_ids, attention_mask.bool()).view(1, -1)
 
         return input_ids, lengths
+
+
+class TensorRTForSpeechSeq2Seq(TensorRTPreTrainedModel):
+    # TODO: implement
+    pass

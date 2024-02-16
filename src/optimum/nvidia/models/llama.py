@@ -14,9 +14,7 @@
 #  limitations under the License.
 from collections import defaultdict
 from logging import getLogger
-from os import PathLike
-from pathlib import Path
-from typing import List, Mapping, Union
+from typing import List, Mapping
 
 import numpy as np
 from tensorrt_llm import BuilderConfig, Module
@@ -27,25 +25,19 @@ from tensorrt_llm.quantization import QuantMode
 from optimum.nvidia import TensorRTForCausalLM
 from optimum.nvidia.configs import ModelConfig, QuantizationConfig
 from optimum.nvidia.lang import DataType
-from optimum.nvidia.models import ConvertibleModel, repeat_heads
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, shard
-from optimum.nvidia.weights.safetensors import SafetensorsAccessor
+from optimum.nvidia.models import ConvertibleModel
+from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter, as_numpy, pack_qkv, shard
 
 
 LOGGER = getLogger(__name__)
-LAYERS_PREFIX = "model.layers"
 
 
 class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
     """ """
 
     QUANTIZATION_EXCLUDED_PARAMETERS = {"lm_head"}
-    NAMED_WEIGHT_PARAMETERS = {
-        "self_attn.o_proj.weight": ("attention.dense", 1),
-        "mlp.up_proj.weight": ("mlp.gate.weight", 0),
-        "mlp.down_proj.weight": ("mlp.proj.weight", 1),
-        "mlp.gate_proj.weight": ("mlp.fc.weight", 0),
-    }
+    TENSORRT_LLM_MODEL_CLASS = LLaMAForCausalLM
+    LAYERS_PREFIX = "model.layers"
 
     def convert(
         self,
@@ -59,30 +51,17 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         shard_info = self._sharding_config
         precision = DataType(builder.precision)
 
-        # TODO: Maybe get this outside of llama specifics
-        qkv_packed_layers = []
-        for layer_idx in range(config.num_layers):
-            prefix = f"{LAYERS_PREFIX}.{layer_idx}.self_attn."
-
-            # Merge QKV
-            q_weight = as_numpy(weights[prefix + "q_proj.weight"], precision)
-            k_weight = as_numpy(weights[prefix + "k_proj.weight"], precision)
-            v_weight = as_numpy(weights[prefix + "v_proj.weight"], precision)
-
-            if not config.use_multi_head_attention:
-                if config.num_kv_heads < shard_info.tp_size:
-                    LOGGER.debug(
-                        f"Duplicating KV heads ({config.num_kv_heads}) up to TP-degree ({shard_info.tp_size})"
-                    )
-
-                    factor = shard_info.tp_size // config.num_kv_heads
-                    k_weight = repeat_heads(k_weight, factor, axis=1)
-                    v_weight = repeat_heads(v_weight, factor, axis=1)
-
-            qkv_weight = [q_weight, k_weight, v_weight]
-
-            # Insert the packed weights inside the weights
-            qkv_packed_layers.append(qkv_weight)
+        # TensorRT-LLM model definition uses a single GEMM for query/key/value, while transformers does not.
+        qkv_packed_layers = pack_qkv(
+            num_layers=config.num_layers,
+            layer_prefix=self.LAYERS_PREFIX,
+            attn_layer_name="self_attn",
+            weights=weights,
+            precision=precision,
+            use_multi_head_attention=config.use_multi_head_attention,
+            num_kv_heads=config.num_kv_heads,
+            shard_info=shard_info,
+        )
 
         layers_per_stage = config.num_layers // shard_info.pp_size
         layers_range = range(shard_info.pp_rank * layers_per_stage, (shard_info.pp_rank + 1) * layers_per_stage, 1)
@@ -110,7 +89,7 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
         # Map all the hidden layers
         for layer_idx in layers_range:
             idx = layer_idx - shard_info.pp_rank * layers_per_stage
-            prefix = f"{LAYERS_PREFIX}.{idx}"
+            prefix = f"{self.LAYERS_PREFIX}.{idx}"
 
             # input_layernorm.weight
             input_ln = as_numpy(weights[f"{prefix}.input_layernorm.weight"], precision)
@@ -121,20 +100,24 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             model.layers[idx].post_layernorm.weight.value = post_attn_ln
 
             # Self attention layer
-            qkv = qkv_packed_layers[idx]
-            q, k, v = qkv
+            qkv_weights, qkv_bias = qkv_packed_layers[idx]
+            q_weight, k_weight, v_weight = qkv_weights
+
+            if qkv_bias is not None:
+                raise ValueError("TensorRT-LLM's Llama does not support query/key/value projection bias.")
 
             # Shard
-            if not config.use_multi_head_attention:  # TODO: support GQA
+            # TODO: support GQA
+            if not config.use_multi_head_attention:
                 wq, wk, wv = (
-                    shard(q, rank, shard_info.tp_size, axis=0),
-                    shard(k, rank, shard_info.tp_size, axis=0),
-                    shard(v, rank, shard_info.tp_size, axis=0),
+                    shard(q_weight, rank, shard_info.tp_size, axis=0),
+                    shard(k_weight, rank, shard_info.tp_size, axis=0),
+                    shard(v_weight, rank, shard_info.tp_size, axis=0),
                 )
 
                 qkv_weight = np.concatenate((wq, wk, wv), axis=0)
             else:
-                qkv_weight = np.stack((q, k, v), axis=0)
+                qkv_weight = np.stack((q_weight, k_weight, v_weight), axis=0)
                 rank_tensor = shard(qkv_weight, rank, shard_info.tp_size, axis=1)
                 qkv_weight = rank_tensor.reshape(-1, config.hidden_size)
 
@@ -157,8 +140,8 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
     def allocate_model(
         config: ModelConfig, sharding: ShardingConfig, dtype: DataType, quant_mode: QuantMode
     ) -> Module:
-        LOGGER.debug(f"Allocating {LLaMAForCausalLM.__name__} model")
-        return LLaMAForCausalLM(
+        LOGGER.debug(f"Allocating {LlamaWeightAdapter.TENSORRT_LLM_MODEL_CLASS.__name__} model")
+        return LlamaWeightAdapter.TENSORRT_LLM_MODEL_CLASS(
             num_layers=config.num_layers,
             num_heads=config.num_heads,
             num_kv_heads=config.num_kv_heads,
@@ -176,28 +159,6 @@ class LlamaWeightAdapter(WeightAdapter, SupportsSafetensors, SupportsNpz):
             use_fused_mlp=quant_mode
             == QuantMode(0),  # Disable if quantization for now as it remove one scaling factor
         )
-
-    @classmethod
-    def from_safetensors(
-        cls,
-        paths: List[Union[str, PathLike]],
-        model: Module,
-        config: ModelConfig,
-        builder_config: BuilderConfig,
-        qconfig: QuantizationConfig,
-        sharding_config: ShardingConfig,
-    ) -> Module:
-        if not isinstance(model, LLaMAForCausalLM):
-            raise ValueError(f"model has to be a derived type from LLaMAForCausalLM, got {type(model)}")
-
-        accessor = SafetensorsAccessor.from_files(paths)
-        adapter = cls(sharding_config)
-        return adapter.convert(model, config, builder_config, qconfig, sharding_config.rank, accessor)
-
-    @classmethod
-    def from_numpy(cls, path: Path) -> Module:
-        # TODO: Currently only used to load quantized models, might need to change later on
-        return np.load(path, "r", allow_pickle=False)
 
     @staticmethod
     def get_scaling_factors(
