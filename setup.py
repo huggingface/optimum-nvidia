@@ -14,9 +14,9 @@
 #  limitations under the License.
 import re
 from distutils.core import setup
-
+from platform import system, machine, python_version
 from setuptools import find_namespace_packages
-
+from sys import version_info as pyversion
 
 # Ensure we match the version set in optimum/nvidia/version.py
 filepath = "src/optimum/nvidia/version.py"
@@ -26,10 +26,12 @@ try:
 except Exception as error:
     assert False, "Error: Could not open '%s' due %s\n" % (filepath, error)
 
+PYTHON_VERSION = f"{pyversion.major}{pyversion.minor}"
+NVIDIA_PYPI_INDEX = "https://pypi.nvidia.com"
+TRT_LLM_VERSION = "0.9.0.dev2024020600"
+TRT_LLM_TARGET_HOSTED_VERSION = f"{TRT_LLM_VERSION}-cp{PYTHON_VERSION}-cp{PYTHON_VERSION}-{system().lower()}_{machine()}"
 
-ADDITIONAL_DEPENDENCY_LINKS = [
-    'https://pypi.nvidia.com'
-]
+print("VERSION: ", TRT_LLM_TARGET_HOSTED_VERSION)
 
 INSTALL_REQUIRES = [
     "accelerate",
@@ -40,8 +42,9 @@ INSTALL_REQUIRES = [
     "numpy >= 1.22.0",
     "onnx >= 1.12.0",
     "optimum >= 1.13.0",
+    "setuptools",
     "transformers >= 4.32.1",
-    "tensorrt_llm == 0.7.1",
+    f"tensorrt-llm @ {NVIDIA_PYPI_INDEX}/tensorrt-llm/tensorrt_llm-{TRT_LLM_TARGET_HOSTED_VERSION}.whl",
     "pynvml"
 ]
 
@@ -91,7 +94,6 @@ setup(
         "Intended Audience :: Education",
         "Intended Audience :: Science/Research",
         "Operating System :: OS Independent",
-        "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
@@ -103,7 +105,6 @@ setup(
     packages=find_namespace_packages(include=["optimum*"]),
     install_requires=INSTALL_REQUIRES,
     extras_require=EXTRAS_REQUIRE,
-    dependency_links=ADDITIONAL_DEPENDENCY_LINKS,
     include_package_data=True,
     zip_safe=False,
 )
