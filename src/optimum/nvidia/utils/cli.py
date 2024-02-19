@@ -2,16 +2,15 @@ from argparse import ArgumentParser, Namespace
 
 from tensorrt_llm.quantization import QuantMode
 
-from optimum.nvidia.configs import QuantizationConfig
-from optimum.nvidia.lang import DataType
+from optimum.nvidia import DataType
 
 
 # Model topology (sharding, pipelining, dtype)
 def register_common_model_topology_args(parser: ArgumentParser) -> ArgumentParser:
     parser.add_argument(
         "--dtype",
-        choices=[dtype.value for dtype in DataType],
-        default=DataType.FLOAT16,
+        choices=DataType.values(),
+        default="float16",
         help="Data type to do the computations.",
     )
     parser.add_argument(
@@ -69,23 +68,21 @@ def register_quantization_args(parser: ArgumentParser) -> ArgumentParser:
 
 def postprocess_quantization_parameters(params: Namespace) -> Namespace:
     # Only support FP8 quantization for now
-    quantization_config = QuantizationConfig(
-        mode=QuantMode.from_description(
-            quantize_weights=False,
-            quantize_activations=False,
-            per_token=False,
-            per_channel=False,
-            per_group=False,
-            use_int4_weights=False,
-            use_int8_kv_cache=False,
-            use_fp8_kv_cache=params.fp8_cache,
-            use_fp8_qdq=params.fp8,
-        ),
-        group_size=-1,
+    qconfig = QuantMode.from_description(
+        quantize_weights=False,
+        quantize_activations=False,
+        per_token=False,
+        per_channel=False,
+        per_group=False,
+        use_int4_weights=False,
+        use_int8_kv_cache=False,
+        use_fp8_kv_cache=params.fp8_cache,
+        use_fp8_qdq=params.fp8,
     )
 
-    params.has_quantization_step = quantization_config.mode != QuantMode(0)
-    params.quantization_config = quantization_config
+
+    params.has_quantization_step = qconfig != QuantMode(0)
+    params.quantization_config = qconfig
 
     # If we do have the output path, then let's create the calibration path
     if "output" in params:

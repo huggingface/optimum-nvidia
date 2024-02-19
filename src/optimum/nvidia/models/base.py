@@ -12,59 +12,34 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-from pathlib import Path
-from typing import Dict, Optional, Type, Union
+from typing import Protocol, Optional, runtime_checkable
 
-from huggingface_hub import ModelHubMixin
-from tensorrt_llm import Module
-
-from ..weights.base import WeightAdapter
+from tensorrt_llm import Mapping
+from tensorrt_llm.quantization import QuantMode
 
 
-class ConvertibleModel:
-    """ """
+@runtime_checkable
+class SupportsFromHuggingFace(Protocol):
+    """
+    Define the protocol implemented by TensorRT-LLM models to support loading from Hugging Face Hub
+    """
 
-    ADAPTER: Type[WeightAdapter]
-    TARGET: Type[Module]
-
-
-class AutoModelForCausalLM(ModelHubMixin):
     @classmethod
-    def _from_pretrained(
-        cls: Type,
-        *,
-        model_id: str,
-        revision: Optional[str],
-        cache_dir: Optional[Union[str, Path]],
-        force_download: bool,
-        proxies: Optional[Dict],
-        resume_download: bool,
-        local_files_only: bool,
-        token: Optional[Union[str, bool]],
-        **model_kwargs,
+    def from_huggingface(
+        cls,
+        hf_model_dir,
+        dtype='float16',
+        mapping: Optional[Mapping] = None,
+        quant_mode: Optional[QuantMode] = None,
+        **kwargs
     ):
-        config = model_kwargs.pop("config", None)
+        """
 
-        if not config:
-            raise ValueError("Unable to determine the model type without config")
-
-        model_type = config["model_type"]
-        if model_type == "llama":
-            # TODO: Fix circular import
-            from .llama import LlamaForCausalLM
-
-            model_class = LlamaForCausalLM
-        else:
-            raise NotImplementedError(f"Model architecture {model_type} is not supported yet.")
-
-        return model_class.from_pretrained(
-            pretrained_model_name_or_path=model_id,
-            revision=revision,
-            cache_dir=cache_dir,
-            force_download=force_download,
-            proxies=proxies,
-            resume_download=resume_download,
-            local_files_only=local_files_only,
-            token=token,
-            **model_kwargs,
-        )
+        :param hf_model_dir:
+        :param dtype:
+        :param mapping:
+        :param quant_mode:
+        :param kwargs:
+        :return:
+        """
+        ...

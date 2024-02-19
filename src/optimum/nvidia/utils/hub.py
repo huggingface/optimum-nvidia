@@ -3,9 +3,9 @@ from sys import version as pyversion
 
 from pynvml import nvmlDeviceGetCount, nvmlInit, nvmlSystemGetDriverVersion
 
+from optimum.nvidia.utils import parse_flag_from_env
 from ..version import __version__
 from .nvml import get_device_compute_capabilities
-from .tests.utils import parse_flag_from_env
 
 
 USER_AGENT_BASE = [f"optimum/nvidia/{__version__}", f"python/{pyversion.split()[0]}"]

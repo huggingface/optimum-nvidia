@@ -14,9 +14,20 @@
 #  limitations under the License.
 import functools
 
-from .fs import *
+from .constants import (
+    DEFAULT_ENGINE_FOLDER,
+    DEFAULT_HF_HUB_TRT_REVISION,
+    OPTIMUM_NVIDIA_CONFIG_FILE,
+    OPTIMUM_NVIDIA_CONFIG_FILENAME,
+    TENSORRT_ENGINE_EXT,
+    TENSORRT_TIMINGS_FILE,
+)
+from .env import parse_flag_from_env
+from .hub import get_user_agent
+from .nvml import has_float8_support
 from .offload import maybe_offload_weights_to_cpu
 from .onnx import to_onnx
+
 
 
 def rgetattr(obj, attr):

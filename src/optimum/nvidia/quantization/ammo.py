@@ -7,9 +7,7 @@ from ammo.torch import export as ate
 from ammo.torch import quantization as atq
 from tensorrt_llm.quantization import QuantMode
 
-from optimum.nvidia.configs import QuantizationConfig
-from optimum.nvidia.lang import DataType
-
+from optimum.nvidia import DataType
 
 LOGGER = getLogger(__name__)
 
@@ -28,14 +26,12 @@ def get_ammo_config(mode: QuantMode, **quantizer_overrides):
         )
 
 
-def get_quantization_algorithm_name(qconfig: QuantizationConfig) -> str:
-    mode = qconfig.mode
-
-    if mode.has_fp8_qdq() or mode.has_fp8_kv_cache():
+def get_quantization_algorithm_name(qconfig: QuantMode) -> str:
+    if qconfig.has_fp8_qdq() or qconfig.has_fp8_kv_cache():
         return "fp8"
-    elif mode.is_int4_weight_only():
+    elif qconfig.is_int4_weight_only():
         return "int4_awq"
-    elif not mode.is_weight_only() and mode.is_int8():
+    elif not qconfig.has_act_and_weight_quant():
         return "int8_sq"
     else:
         raise ValueError(f"Unable to determine quantization algorithm from: {qconfig}")
@@ -45,7 +41,7 @@ class AmmoQuantizer:
     def __init__(
         self,
         model: torch.nn.Module,
-        qconfig: QuantizationConfig,
+        qconfig: QuantMode,
         dtype: DataType,
         tp_degree: int = -1,
         **quantizer_overrides,

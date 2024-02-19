@@ -14,46 +14,33 @@
 #  limitations under the License.
 import json
 import os
-from dataclasses import dataclass
-from enum import IntEnum, auto
 from logging import getLogger
 from multiprocessing import Pool
 from os import PathLike, sched_getaffinity
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional, Type, Union
+from typing import Dict, List, NamedTuple, Optional, Type, Union, Any, Mapping
 
-import numpy as np
 import torch
-from fsspec.implementations.local import LocalFileSystem
-from huggingface_hub import CONFIG_NAME, HfFileSystem, ModelHubMixin
+from huggingface_hub import CONFIG_NAME, ModelHubMixin
 from huggingface_hub.hub_mixin import T
 from psutil import virtual_memory
-from tensorrt_llm import Mapping as Shard
-from tensorrt_llm import graph_rewriting
-from tensorrt_llm._utils import trt_version
+from tensorrt_llm import graph_rewriting, Mapping as Shard
 from tensorrt_llm.builder import Builder
-from tensorrt_llm.models import quantize_model
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
 from transformers import AutoModelForCausalLM
 
-from optimum.nvidia.configs import ModelConfig, QuantizationConfig, TransformersConfig
-from optimum.nvidia.lang import DataType
+from optimum.nvidia import DataType
+from optimum.nvidia.errors import UnsupportedHardwareFeature
 from optimum.nvidia.quantization import Calibration
-from optimum.nvidia.utils import ensure_file_exists_locally, maybe_offload_weights_to_cpu
+from optimum.nvidia.utils import (maybe_offload_weights_to_cpu, parse_flag_from_env,
+                                  OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE)
 from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
-from optimum.nvidia.utils.tests.utils import parse_flag_from_env
-from optimum.nvidia.weights import SupportsNpz, SupportsSafetensors, WeightAdapter
-from optimum.nvidia.weights.hub import get_safetensors_files
-
-from ..utils.constants import OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE
 
 
 LOGGER = getLogger(__name__)
 
-
-SM_FP8_SUPPORTED = {89, 90}
 
 # Utility classes to store build information
 BuildInfo = NamedTuple("BuildInfo", [("parallel", bool), ("num_parallel_jobs", int)])
@@ -81,25 +68,6 @@ def create_npz_calibration_filename(identifier: str, rank: int, tp_degree: int) 
     return f"{identifier}_tp{tp_degree}_rank{rank}.npz"
 
 
-class FileFormat(IntEnum):
-    NUMPY_QUANTIZED = auto()
-    SAFETENSORS = auto()
-
-
-@dataclass
-class Weights:
-    files: Union[Path, List[Path]]
-    format: FileFormat
-
-    @property
-    def is_folder(self) -> bool:
-        return isinstance(self.files, Path) and self.files.is_dir()
-
-    @property
-    def is_list_of_files(self) -> bool:
-        return isinstance(self.files, List)
-
-
 class TensorRTEngineBuilder(ModelHubMixin):
     """ """
 
@@ -121,35 +89,22 @@ class TensorRTEngineBuilder(ModelHubMixin):
         **model_kwargs,
     ) -> T:
         config = model_kwargs.get("config", None)  # TODO: Ensure this is ok
-        adapter = model_kwargs.get("adapter", None)  # Override inferred adapter
+        return cls(model_id, config)
 
-        if adapter is None:
-            LOGGER.debug(f"Inferring adapter from config: {config['model_type']}")
-            raise NotImplementedError()
-
-        # TODO: Handle more things from the params here
-        if config and not isinstance(config, TransformersConfig):
-            config = TransformersConfig(config)
-        else:
-            raise ValueError(f"Unsupported configuration type ({type(config).__name__})")
-
-        return cls(model_id, config, adapter)
-
-    def __init__(self, model_id_or_path: Union[str, PathLike], config: ModelConfig, adapter: Type[WeightAdapter]):
+    def __init__(self, model_id_or_path: Union[str, PathLike], config: Mapping[str, Any]):
         # Model
         # TODO: passing the adapter here should be optional - we can find it out simply from the model_id_or_path config model_type.
         self._model_id_or_path: Union[str, PathLike] = model_id_or_path
-        self._model_config: ModelConfig = config
-        self._weight_adapter: Type[WeightAdapter] = adapter
+        self._model_config = config
 
         # Engine build
-        self._dtype = DataType.FLOAT16
+        self._dtype = self._model_config["torch_dtype"]
         self._build_info: BuildInfo = SERIAL_BUILD
         self._sharding_info: ShardingInfo = NO_SHARDING
         self._optimization_profile: Optional[OptimizationProfile] = None
 
         # Quantization
-        self._quantization_config: Optional[QuantizationConfig] = None
+        self._qconfig: Optional[QuantMode] = None
         self._quantization_calibration: Optional[Calibration] = None
 
         # Sampling
@@ -169,17 +124,15 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         return self
 
-    def to(self, dtype: Union[str, DataType]) -> "TensorRTEngineBuilder":
+    def to(self, dtype: DataType) -> "TensorRTEngineBuilder":
         """
 
         :param dtype:
         :return:
         """
-        LOGGER.debug(f"Setting target dtype to {str(dtype)}")
-        if isinstance(dtype, str):
-            dtype = DataType(dtype)
-
-        self._dtype = dtype
+        if dtype.value != self._dtype:
+            LOGGER.debug(f"Setting target dtype to {dtype}")
+            self._dtype = dtype.value
 
         return self
 
@@ -203,30 +156,21 @@ class TensorRTEngineBuilder(ModelHubMixin):
         return self
 
     def with_quantization_profile(
-        self, config: QuantizationConfig, calibration: Optional[Calibration] = None
+        self, mode: QuantMode, calibration: Optional[Calibration] = None
     ) -> "TensorRTEngineBuilder":
         """
 
-        :param config:
+        :param mode:
         :param calibration:
         :return:
         """
-        if config.mode.has_fp8_qdq() or config.mode.has_fp8_kv_cache():
-            from optimum.nvidia.utils.nvml import get_device_compute_capabilities
-
-            compute_capabilities = get_device_compute_capabilities(0)
-
-            if compute_capabilities:
-                compute_capabilities_ = compute_capabilities[0] * 10 + compute_capabilities[1]
-
-                if compute_capabilities_ not in SM_FP8_SUPPORTED:
-                    raise ValueError(
-                        f"float8 is not supported on your device (compute capabilities = {compute_capabilities_}). "
-                        f"Please use a device with compute capabilities {SM_FP8_SUPPORTED}"
-                    )
+        if mode.has_fp8_qdq() or mode.has_fp8_kv_cache():
+            from optimum.nvidia.utils.nvml import has_float8_support
+            if not has_float8_support():
+                raise UnsupportedHardwareFeature.float8()
 
         # TODO: validate the calibration is required or not
-        self._quantization_config = config
+        self._qconfig = mode
         self._quantization_calibration = calibration
 
         return self
@@ -267,12 +211,12 @@ class TensorRTEngineBuilder(ModelHubMixin):
         return self
 
     def validate(self) -> bool:
-        if self._quantization_config is None:
+        if self._qconfig is None:
             LOGGER.warning(
                 "Quantization descriptor was None, assuming no quantization will be applied. "
                 "If you want to change this behaviour, please use TRTEngineBuilder.with_quantization_schema()"
             )
-            self._quantization_config = QuantizationConfig(QuantMode(0), 0)
+            self._qconfig = (QuantMode(0), 0)
 
         # Optimization profile
         if self._optimization_profile is None:
@@ -284,13 +228,14 @@ class TensorRTEngineBuilder(ModelHubMixin):
         # Ensure ranges are compatible
         optim_profile = self._optimization_profile
         model_config = self._model_config
+        max_sequence_length = model_config["max_position_embeddings"]  # for now
         for prop, (min_value, max_value) in [
             ("max_batch_size", (1, None)),
-            ("max_prompt_length", (1, model_config.max_sequence_length - 1)),
-            ("max_new_tokens", (1, model_config.max_sequence_length - 1)),
+            ("max_prompt_length", (1, max_sequence_length - 1)),
+            ("max_new_tokens", (1, max_sequence_length - 1)),
             (
                 "max_output_length",
-                (optim_profile.max_prompt_length + optim_profile.max_new_tokens, model_config.max_sequence_length),
+                (optim_profile.max_prompt_length + optim_profile.max_new_tokens, max_sequence_length),
             ),
         ]:
             prop_value = getattr(optim_profile, prop)
@@ -300,11 +245,11 @@ class TensorRTEngineBuilder(ModelHubMixin):
             if max_value is not None and prop_value > max_value:
                 raise ValueError(f"Invalid value ({prop_value}) for {prop}. Needs to be <= {max_value}")
 
-        if optim_profile.max_prompt_length + optim_profile.max_new_tokens > model_config.max_sequence_length:
-            new_max_new_tokens = model_config.max_sequence_length - optim_profile.max_prompt_length
+        if optim_profile.max_prompt_length + optim_profile.max_new_tokens > max_sequence_length:
+            new_max_new_tokens = max_sequence_length - optim_profile.max_prompt_length
             LOGGER.warning(
                 f"max_prompt_tokens ({optim_profile.max_prompt_length}) + max_new_tokens ({optim_profile.max_new_tokens})"
-                f" is longer than model's maximum sequence length ({model_config.max_sequence_length}). "
+                f" is longer than model's maximum sequence length ({max_sequence_length}). "
                 f"Truncating the max_new_tokens to {new_max_new_tokens}."
             )
 
@@ -318,6 +263,52 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         return True
 
+    def quantize(self, output_path: Path):
+        from optimum.nvidia.quantization.ammo import AmmoQuantizer
+
+        LOGGER.debug(f"Model requires quantization (mode: {self._qconfig})")
+
+        # Save quantization artifacts
+        calibration_path = output_path.joinpath("calibration")
+
+        # Handle any calibration required for static quantization
+        if self._quantization_calibration:
+            has_json = has_npz = False
+            if calibration_path.exists() and calibration_path.is_dir():
+                calibration_data = os.listdir(calibration_path)
+                if len(calibration_data) == 2:
+                    has_json = any(f.endswith(".json") for f in calibration_data)
+                    has_npz = any(f.endswith(".npz") for f in calibration_data)
+
+            if not calibration_path.exists() or not (has_json and has_npz):
+                LOGGER.info("Calibrating model...")
+
+                # Retrieve device total memory
+                fraction_device_map = {
+                    device_id: get_device_memory(device_id) * 0.7 for device_id in range(get_device_count())
+                }
+
+                cpu_device_map = {"cpu": virtual_memory().available * 0.8}
+
+                # Allocate required components for quantization
+                hf_model = self.LOADING_CLASS.from_pretrained(
+                    self._model_id_or_path,
+                    device_map="balanced",
+                    torch_dtype=self._dtype.as_torch(),
+                    max_memory=fraction_device_map | cpu_device_map,
+                ).to(memory_format=torch.channels_last)
+
+                hf_model = maybe_offload_weights_to_cpu(hf_model)
+
+                quantizer = AmmoQuantizer(hf_model, self._qconfig, self._dtype, self._sharding_info.tp_degree)
+                quantizer.calibrate(self._quantization_calibration)
+                quantizer.save(calibration_path)
+                # Release the memory
+                del hf_model
+                torch.cuda.empty_cache()
+            else:
+                LOGGER.info(f"Reusing already precomputed calibration data at {calibration_path}")
+
     def build(self, output_path: PathLike, optimization_level: int = None) -> PathLike:
         # Sharding info
         sharding = self._sharding_info or NO_SHARDING
@@ -330,78 +321,9 @@ class TensorRTEngineBuilder(ModelHubMixin):
         if not output_path.exists():
             output_path.mkdir(parents=True)
 
-        # Handle the loading - Note Safetensors is always preferred
-        if os.path.isdir(self._model_id_or_path):  # Can either be a local directory
-            LOGGER.debug(f"Loading weights from local directory {self._model_id_or_path}")
-            fs = LocalFileSystem()
-
-        else:  # Or a model on the Hub
-            LOGGER.debug(f"Loading weights from remote Hugging Face Hub {self._model_id_or_path}")
-            fs = HfFileSystem()
-
-        # Check for safetensors preferred serialization format
-        if issubclass(self._weight_adapter, SupportsSafetensors):
-            local_files = []
-            for file in get_safetensors_files(fs, self._model_id_or_path):
-                local_filepath = Path(ensure_file_exists_locally(fs, self._model_id_or_path, file))
-                local_files.append(local_filepath)
-            files = Weights(local_files, FileFormat.SAFETENSORS)
-        else:
-            raise NotImplementedError("We only support loading from Safetensors checkpoints for now.")
-
         # Handle potential need for computing calibration data to quantize the model
-        if self._quantization_config and self._quantization_config.has_quantization_step:
-            from optimum.nvidia.quantization.ammo import AmmoQuantizer
-
-            LOGGER.debug(
-                "Model requires quantization ("
-                f"weight only: {self._quantization_config.mode.is_weight_only()}, "
-                f"mode: {self._quantization_config.mode}"
-                ")"
-            )
-
-            # Save quantization artifacts
-            calibration_path = output_path.joinpath("calibration")
-
-            # Handle any calibration required for static quantization
-            if self._quantization_calibration:
-                has_json = has_npz = False
-                if calibration_path.exists() and calibration_path.is_dir():
-                    calibration_data = os.listdir(calibration_path)
-                    if len(calibration_data) == 2:
-                        has_json = any(f.endswith(".json") for f in calibration_data)
-                        has_npz = any(f.endswith(".npz") for f in calibration_data)
-
-                if not calibration_path.exists() or not (has_json and has_npz):
-                    LOGGER.info("Calibrating model ...")
-
-                    # Retrieve device total memory
-                    fraction_device_map = {
-                        device_id: get_device_memory(device_id) * 0.7 for device_id in range(get_device_count())
-                    }
-
-                    cpu_device_map = {"cpu": virtual_memory().available * 0.8}
-
-                    # Allocate required components for quantization
-                    hf_model = self.LOADING_CLASS.from_pretrained(
-                        self._model_id_or_path,
-                        device_map="balanced",
-                        torch_dtype=self._dtype.as_torch(),
-                        max_memory=fraction_device_map | cpu_device_map,
-                    ).to(memory_format=torch.channels_last)
-
-                    hf_model = maybe_offload_weights_to_cpu(hf_model)
-
-                    quantizer = AmmoQuantizer(hf_model, self._quantization_config, self._dtype, sharding.tp_degree)
-                    quantizer.calibrate(self._quantization_calibration)
-                    quantizer.save(calibration_path)
-                    # Release the memory
-                    del hf_model
-                    torch.cuda.empty_cache()
-                else:
-                    LOGGER.info(f"Reusing already precomputed calibration data at {calibration_path}")
-
-            files = [files, Weights(calibration_path, FileFormat.NUMPY_QUANTIZED)]
+        if self._qconfig:
+            self.quantize(output_path)
 
         if self.validate():
             if self._build_info.parallel and self._build_info.num_parallel_jobs > 1:
@@ -410,25 +332,23 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 build_func = self._build_serial
 
             # Let's build
-            build_func(shards_info, files, output_path, optimization_level)
+            build_func(shards_info, output_path, optimization_level)
             return output_path
 
     def _build_serial(
         self,
         shards_info: List[Shard],
-        weights: Union[Weights, List[Weights]],
         output_path: Path,
         opt_level: Optional[int],
     ):
         LOGGER.debug("Building TRT engines sequentially")
 
         for shard in shards_info:
-            self._build_engine_for_rank(shard, weights, output_path, opt_level, is_parallel=False)
+            self._build_engine_for_rank(shard, output_path, opt_level, is_parallel=False)
 
     def _build_parallel(
         self,
         shard_info: List[Shard],
-        weight_files: Union[Weights, List[Weights]],
         output_path: Path,
         opt_level: Optional[int],
     ):
@@ -445,7 +365,6 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 _ = builders.map(
                     self._build_engine_for_rank,
                     shard,
-                    weight_files,
                     output_path,
                     is_parallel=True,
                     opt_level=opt_level,
@@ -454,7 +373,6 @@ class TensorRTEngineBuilder(ModelHubMixin):
     def _build_engine_for_rank(
         self,
         shard: Shard,
-        weights: Union[Weights, List[Weights]],
         output_path: Path,
         opt_level: Optional[int],
         is_parallel: bool,
@@ -462,67 +380,53 @@ class TensorRTEngineBuilder(ModelHubMixin):
         LOGGER.debug(f"Building engine rank={shard.rank} (world_size={shard.world_size})")
 
         config = self._model_config
-        qconfig = self._quantization_config
+        qconfig = self._qconfig
 
         ranked_engine_name = create_unique_engine_name(
-            config["model_type"], self._dtype.value, shard.rank, shard.tp_size
+            config["model_type"], self._dtype, shard.rank, shard.tp_size
         )
 
         builder = Builder()
-
         build_config = self.create_builder_config(
-            tensorrt_llm_builder=builder, shard=shard, is_parallel=is_parallel, opt_level=opt_level
+            tensorrt_llm_builder=builder,
+            shard=shard,
+            is_parallel=is_parallel,
+            opt_level=opt_level
         )
-
-        model = self._weight_adapter.allocate_model(config, shard, self._dtype, qconfig.mode)
-
-        if isinstance(weights, Weights):
-            weights = [weights]
-
-        for weight in weights:
-            # Handle various loading and conversion methods
-            if weight.format == FileFormat.SAFETENSORS and issubclass(self._weight_adapter, SupportsSafetensors):
-                LOGGER.debug("Using safetensors as weight provider")
-                self._weight_adapter.from_safetensors(weight.files, model, config, build_config, qconfig, shard)
-
-            elif weight.format == FileFormat.NUMPY_QUANTIZED and issubclass(self._weight_adapter, SupportsNpz):
-                LOGGER.debug("Using Numpy npz as weight provider (with quantization metadata)")
-                calibration_filename = create_npz_calibration_filename(config["model_type"], shard.rank, shard.tp_size)
-                qweights = np.load(weight.files.joinpath(calibration_filename), mmap_mode="r", allow_pickle=False)
-
-                scales = self._weight_adapter.get_scaling_factors(qweights, config.num_layers, qconfig.mode)
-                quantize_model(model, qconfig.mode, quant_scales=scales)
-            else:
-                raise ValueError(
-                    f"Unknown FileFormat {weight.format}. "
-                    "Please open up an issue on https://github.com/huggingface/optimum-nvidia/issues"
-                )
 
         # Let's build the network
         network = builder.create_network()
         network.trt_network.name = ranked_engine_name
 
         # Enable plugins
-        network.plugin_config.set_gpt_attention_plugin(dtype=self._dtype.value)
+        network.plugin_config.set_gpt_attention_plugin(dtype=self._dtype)
         network.plugin_config.set_context_fmha(ContextFMHAType.enabled)
         network.plugin_config.enable_remove_input_padding()
 
         # GeMM plugin doesn't support float8
         if not build_config.fp8:
-            network.plugin_config.set_gemm_plugin(dtype=self._dtype.value)
+            network.plugin_config.set_gemm_plugin(dtype=self._dtype)
 
         # network.plugin_config.enable_paged_kv_cache(64)
 
         if shard.world_size > 1:
             LOGGER.debug(f"Enabling NCCL plugin as world_size = ({shard.world_size})")
-            network.plugin_config.set_nccl_plugin(dtype=self._dtype.value)
+            network.plugin_config.set_nccl_plugin(dtype=self._dtype)
+
+        from tensorrt_llm.models import LLaMAForCausalLM, TaurusForCausalLM
+
 
         with net_guard(network):
+            model = TaurusForCausalLM.from_hugging_face(
+                hf_model_dir=self._model_id_or_path,
+                dtype=self._dtype,
+                mapping=shard,
+                quant_mode=qconfig[0],
+            )
+
             network.set_named_parameters(model.named_parameters())
-
             inputs = self.prepare_inputs(model)
-
-            model(*inputs)
+            model(**inputs)
 
             if parse_flag_from_env("OPTIMUM_NVIDIA_OUTPUT_ONNX_IR", False):
                 from optimum.nvidia.utils import to_onnx
@@ -568,11 +472,12 @@ class TensorRTEngineBuilder(ModelHubMixin):
         """
         Prepares inputs to be run by the model. This is kept for backward compatibility in the base class for Llama, but this should be overridden for each architecture as prepare_inputs takes different arguments depending on the tensorrt_llm.Module subclass.
         """
+        print(model.config.to_dict())
         inputs = model.prepare_inputs(
             max_batch_size=self._optimization_profile.max_batch_size,
             max_input_len=self._optimization_profile.max_prompt_length,
-            max_new_tokens=self._optimization_profile.max_new_tokens,
-            max_num_tokens=None,
+            max_seq_len=self._model_config["max_position_embeddings"],
+            max_num_tokens=self._optimization_profile.max_new_tokens,
             max_beam_width=self._beam_width,
             use_cache=True,
         )
@@ -586,32 +491,31 @@ class TensorRTEngineBuilder(ModelHubMixin):
         Prepares the builder for the model. This is kept for backward compatibility in the base class for Llama, but this should be overridden for each architecture as `Builder.create_builder_config` takes different arguments depending on the architecture.
         """
         config = self._model_config
-        qconfig = self._quantization_config
+        qconfig = self._qconfig
 
         build_config = tensorrt_llm_builder.create_builder_config(
             name=config["model_type"],
-            precision=self._dtype.value,
-            fp8=qconfig.mode.has_fp8_qdq(),
-            hidden_size=config.hidden_size,
-            num_layers=config.num_layers,
+            precision=self._dtype,
+            fp8=qconfig[0].has_fp8_qdq(),
+            hidden_size=config["hidden_size"],
+            num_layers=config["num_hidden_layers"],
             max_batch_size=self._optimization_profile.max_batch_size,
             tensor_parallel=shard.tp_size,
             use_refit=False,
-            quant_mode=self._quantization_config.mode,
+            quant_mode=self._qconfig[0],
             huggingface=dict(**config),
-            tensorrt=trt_version(),
-            hidden_act=config.activation,
-            num_kv_heads=config.num_kv_heads,
-            num_heads=config.num_heads,
-            max_position_embeddings=config.max_sequence_length,
+            hidden_act=config["hidden_act"],
+            num_kv_heads=config["num_key_value_heads"],
+            num_heads=config["num_attention_heads"],
+            max_position_embeddings=config["max_position_embeddings"],
             max_input_len=self._optimization_profile.max_prompt_length,
             max_output_len=self._optimization_profile.max_output_length,
             max_num_tokens=None,
             max_beam_width=self._beam_width,
-            strongly_typed=qconfig.mode.has_fp8_qdq(),
+            strongly_typed=qconfig[0].has_fp8_qdq(),
             pipeline_parallel=shard.pp_size,
             parallel_build=is_parallel,
-            vocab_size=config.vocab_size,
+            vocab_size=config["vocab_size"],
             opt_level=opt_level,
         )
 

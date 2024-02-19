@@ -1,10 +1,16 @@
 import functools
+from logging import getLogger
 from typing import NamedTuple, Optional, Tuple
 
 from pynvml import nvmlDeviceGetCudaComputeCapability, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo, nvmlInit
 
+LOGGER = getLogger()
+
 
 _NVML_INITIALIZED = False
+
+SM_FP8_SUPPORTED = {89, 90}
+
 
 MemoryInfo = NamedTuple(
     "MemoryInfo",
@@ -50,3 +56,16 @@ def get_device_count() -> int:
     import torch
 
     return torch.cuda.device_count()
+
+
+@functools.cache
+@nvml_guard
+def has_float8_support() -> bool:
+    compute_capabilities = get_device_compute_capabilities()
+    if compute_capabilities:
+        compute_capabilities_ = compute_capabilities[0] * 10 + compute_capabilities[1]
+
+        return compute_capabilities_ in SM_FP8_SUPPORTED
+    else:
+        LOGGER.warning("Failed to retrieve the proper compute capabilities on the device")
+        return False
