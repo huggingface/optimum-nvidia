@@ -25,7 +25,7 @@ class SupportsFromHuggingFace(Protocol):
     """
 
     @classmethod
-    def from_huggingface(
+    def from_hugging_face(
         cls,
         hf_model_dir,
         dtype='float16',

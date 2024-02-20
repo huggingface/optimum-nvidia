@@ -26,6 +26,7 @@ from huggingface_hub.hub_mixin import T
 from psutil import virtual_memory
 from tensorrt_llm import graph_rewriting, Mapping as Shard
 from tensorrt_llm.builder import Builder
+from tensorrt_llm.models import LLaMAForCausalLM, TaurusForCausalLM
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
@@ -33,6 +34,7 @@ from transformers import AutoModelForCausalLM
 
 from optimum.nvidia import DataType
 from optimum.nvidia.errors import UnsupportedHardwareFeature
+from optimum.nvidia.models import SupportsFromHuggingFace
 from optimum.nvidia.quantization import Calibration
 from optimum.nvidia.utils import (maybe_offload_weights_to_cpu, parse_flag_from_env,
                                   OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE)
@@ -40,6 +42,14 @@ from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
 
 
 LOGGER = getLogger(__name__)
+
+
+# Maps from model type to TRTLLM conversion scripts
+_MODEL_TYPE_TO_TRT_IMPL: Mapping[str, SupportsFromHuggingFace] = {
+    "llama": LLaMAForCausalLM,
+    "mistral": LLaMAForCausalLM,
+    "gemma": TaurusForCausalLM
+}
 
 
 # Utility classes to store build information
@@ -415,10 +425,10 @@ class TensorRTEngineBuilder(ModelHubMixin):
             LOGGER.debug(f"Enabling NCCL plugin as world_size = ({shard.world_size})")
             network.plugin_config.set_nccl_plugin(dtype=self._dtype)
 
-        from tensorrt_llm.models import LLaMAForCausalLM, TaurusForCausalLM
 
         with net_guard(network):
-            model = TaurusForCausalLM.from_hugging_face(
+            adapter = _MODEL_TYPE_TO_TRT_IMPL[self._model_config["model_type"]]
+            model = adapter.from_hugging_face(
                 hf_model_dir=self._model_id_or_path,
                 dtype=self._dtype,
                 mapping=shard,
@@ -429,8 +439,10 @@ class TensorRTEngineBuilder(ModelHubMixin):
             inputs = self.prepare_inputs(model)
             model(**inputs)
 
-            for k, v in model.named_network_outputs():
-                network._mark_output(k, v, DataType(self._dtype).to_trt())
+            if parse_flag_from_env("OPTIMUM_NVIDIA_ENABLE_DEBUG_OUTPUTS", False):
+                LOGGER.info("Enabling dumping hidden tensor's output in debug mode")
+                for k, v in model.named_network_outputs():
+                    network._mark_output(k, v, DataType(self._dtype).to_trt())
 
             if parse_flag_from_env("OPTIMUM_NVIDIA_OUTPUT_ONNX_IR", False):
                 from optimum.nvidia.utils import to_onnx
