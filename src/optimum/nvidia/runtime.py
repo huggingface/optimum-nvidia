@@ -10,12 +10,10 @@ import torch
 from huggingface_hub import ModelHubMixin
 from transformers import AutoTokenizer
 
+from optimum.nvidia import DataType
+from optimum.nvidia.builder import TensorRTEngineBuilder
 from optimum.nvidia.utils import get_user_agent
-from . import DataType
-
-from .builder import TensorRTEngineBuilder
-from .utils.constants import DEFAULT_ENGINE_FOLDER, OPTIMUM_NVIDIA_CONFIG_FILE
-
+from optimum.nvidia.utils.constants import DEFAULT_ENGINE_FOLDER, OPTIMUM_NVIDIA_CONFIG_FILE
 
 LOGGER = getLogger(__name__)
 
@@ -139,16 +137,14 @@ class TensorRTCompiledModel(ModelHubMixin):
                     )
 
             # Retrieve the path where to store and use this to store the TensorRTEngineBuilder artifacts
-            # engine_folder = get_local_empty_folder(DEFAULT_ENGINE_FOLDER)
             engine_folder = Path(DEFAULT_ENGINE_FOLDER)
             builder.build(engine_folder, optimization_level)
 
         # Let's load the TensorRT engine config as a JSON file
-        # with open(engine_folder.joinpath(OPTIMUM_NVIDIA_CONFIG_FILE), "r") as trt_config_f:
-        #     trt_config = json.load(trt_config_f)
+        with open(engine_folder.joinpath(OPTIMUM_NVIDIA_CONFIG_FILE), "r") as trt_config_f:
+            trt_config = json.load(trt_config_f)
 
-        # return cls(trt_config, engine_folder, gpus_per_node, use_cuda_graph)
-        return cls(engine_folder)
+        return cls(trt_config, engine_folder, gpus_per_node, use_cuda_graph)
 
 
 class TensorRTForCausalLM:

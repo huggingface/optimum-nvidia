@@ -400,6 +400,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         # Enable plugins
         network.plugin_config.set_gpt_attention_plugin(dtype=self._dtype)
+        network.plugin_config.set_bert_attention_plugin(dtype=self._dtype)
         network.plugin_config.set_context_fmha(ContextFMHAType.enabled)
         network.plugin_config.enable_remove_input_padding()
 
@@ -407,14 +408,14 @@ class TensorRTEngineBuilder(ModelHubMixin):
         if not build_config.fp8:
             network.plugin_config.set_gemm_plugin(dtype=self._dtype)
 
-        # network.plugin_config.enable_paged_kv_cache(64)
+        network.plugin_config.enable_xqa = False
+        network.plugin_config.paged_kv_cache = False
 
         if shard.world_size > 1:
             LOGGER.debug(f"Enabling NCCL plugin as world_size = ({shard.world_size})")
             network.plugin_config.set_nccl_plugin(dtype=self._dtype)
 
         from tensorrt_llm.models import LLaMAForCausalLM, TaurusForCausalLM
-
 
         with net_guard(network):
             model = TaurusForCausalLM.from_hugging_face(
@@ -427,6 +428,9 @@ class TensorRTEngineBuilder(ModelHubMixin):
             network.set_named_parameters(model.named_parameters())
             inputs = self.prepare_inputs(model)
             model(**inputs)
+
+            for k, v in model.named_network_outputs():
+                network._mark_output(k, v, DataType(self._dtype).to_trt())
 
             if parse_flag_from_env("OPTIMUM_NVIDIA_OUTPUT_ONNX_IR", False):
                 from optimum.nvidia.utils import to_onnx
@@ -505,7 +509,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
             quant_mode=self._qconfig[0],
             huggingface=dict(**config),
             hidden_act=config["hidden_act"],
-            num_kv_heads=config["num_key_value_heads"],
+            num_kv_heads=config.get("num_key_value_heads", config["num_attention_heads"]),
             num_heads=config["num_attention_heads"],
             max_position_embeddings=config["max_position_embeddings"],
             max_input_len=self._optimization_profile.max_prompt_length,

@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     model = AutoModelForCausalLM.from_pretrained(args.model)
 
-    prompt = "What is the latest generation of Nvidia GPUs?"
+    prompt = "Write me a poem about Machine Learning."
     tokens = tokenizer(prompt, padding=True, return_tensors="pt")
     generated, lengths = model.generate(
         **tokens,
@@ -82,8 +82,9 @@ if __name__ == "__main__":
         repetition_penalty=10,
         pad_token_id=tokenizer.eos_token_id,
         eos_token_id=tokenizer.eos_token_id,
-        max_new_tokens=args.max_new_tokens,
+        max_new_tokens=30,
     )
 
-    generated_text = tokenizer.decode(generated[0, 0])
+    print(generated[0, 0])
+    generated_text = tokenizer.decode(generated[0, 0], skip_special_tokens=True, clean_up_tokenization_spaces=True)
     print(generated_text)
