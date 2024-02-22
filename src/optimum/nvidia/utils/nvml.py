@@ -61,7 +61,7 @@ def get_device_count() -> int:
 @functools.cache
 @nvml_guard
 def has_float8_support() -> bool:
-    compute_capabilities = get_device_compute_capabilities()
+    compute_capabilities = get_device_compute_capabilities(0)
     if compute_capabilities:
         compute_capabilities_ = compute_capabilities[0] * 10 + compute_capabilities[1]
 

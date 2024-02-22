@@ -11,7 +11,7 @@ from huggingface_hub import ModelHubMixin
 from transformers import AutoTokenizer
 
 from optimum.nvidia import DataType
-from optimum.nvidia.builder import TensorRTEngineBuilder
+# from optimum.nvidia.builder import TensorRTEngineBuilder
 from optimum.nvidia.utils import get_user_agent
 from optimum.nvidia.utils.constants import DEFAULT_ENGINE_FOLDER, OPTIMUM_NVIDIA_CONFIG_FILE
 

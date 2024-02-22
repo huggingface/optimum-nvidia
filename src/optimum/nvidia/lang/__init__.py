@@ -1,8 +1,6 @@
 from enum import Enum
 from typing import List
 
-import tensorrt as trt
-
 
 class DataType(Enum):
     FLOAT32 = "float32"
@@ -15,7 +13,13 @@ class DataType(Enum):
     UINT8 = "uint8"
     BOOL = "bool"
 
-    def to_trt(self) -> trt.DataType:
+    def to_trt(self) -> "DataType":
+        """
+        Convert textual dtype representation to their TensorRT counterpart
+        :return: Converted dtype if equivalent is found
+        :raise ValueError if provided dtype doesn't have counterpart
+        """
+        import tensorrt as trt
         if self == DataType.FLOAT32:
             return trt.DataType.FLOAT
         elif self == DataType.FLOAT16:
@@ -37,14 +41,34 @@ class DataType(Enum):
         else:
             raise ValueError(f"Unknown value {self}")
 
+    def to_torch(self):
+        """
+        Convert textual dtype representation to their Torch counterpart
+        :return: Converted dtype if equivalent is found
+        :raise ValueError if provided dtype doesn't have counterpart
+        """
+        import torch
+        if self == DataType.FLOAT32:
+            return torch.float32
+        elif self == DataType.FLOAT16:
+            return torch.float16
+        elif self == DataType.BFLOAT16:
+            return torch.bfloat16
+        elif self == DataType.FLOAT8:
+            return torch.float8_e4m3fn
+        elif self == DataType.INT8:
+            return torch.int8
+        elif self == DataType.UINT8:
+            return torch.uint8
+        elif self == DataType.INT32:
+            return torch.int32
+        elif self == DataType.INT64:
+            return torch.int64
+        elif self == DataType.BOOL:
+            return torch.bool
+        else:
+            raise ValueError(f"Unknown value {self}")
+
     @staticmethod
     def values() -> List[str]:
         return [item.value for item in DataType]
-
-def to_trt_dtype(dtype: str) -> trt.DataType:
-    """
-    Convert textual dtype representation to their TensorRT counterpart
-    :param dtype: Textual description of the dtype to convert
-    :return: Converted dtype if equivalent is found
-    :raise ValueError if provided dtype doesn't have counterpart
-    """

@@ -20,13 +20,14 @@ from os import PathLike, sched_getaffinity
 from pathlib import Path
 from typing import Dict, List, NamedTuple, Optional, Type, Union, Any, Mapping
 
+import safetensors
 import torch
 from huggingface_hub import CONFIG_NAME, ModelHubMixin
 from huggingface_hub.hub_mixin import T
 from psutil import virtual_memory
 from tensorrt_llm import graph_rewriting, Mapping as Shard
 from tensorrt_llm.builder import Builder
-from tensorrt_llm.models import LLaMAForCausalLM, TaurusForCausalLM
+from tensorrt_llm.models import LLaMAForCausalLM#, TaurusForCausalLM
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
@@ -48,13 +49,13 @@ LOGGER = getLogger(__name__)
 _MODEL_TYPE_TO_TRT_IMPL: Mapping[str, SupportsFromHuggingFace] = {
     "llama": LLaMAForCausalLM,
     "mistral": LLaMAForCausalLM,
-    "gemma": TaurusForCausalLM
+    # "gemma": TaurusForCausalLM
 }
 
 
 # Utility classes to store build information
-BuildInfo = NamedTuple("BuildInfo", [("parallel", bool), ("num_parallel_jobs", int)])
-SERIAL_BUILD = BuildInfo(False, 1)
+BuildInfo = NamedTuple("BuildInfo", [("parallel", bool), ("num_parallel_jobs", int), ("quantized_path", Optional[Path])])
+SERIAL_BUILD = BuildInfo(False, 1, None)
 
 # Utility classes to store shape information
 OptimizationProfile = NamedTuple(
@@ -283,14 +284,14 @@ class TensorRTEngineBuilder(ModelHubMixin):
 
         # Handle any calibration required for static quantization
         if self._quantization_calibration:
-            has_json = has_npz = False
+            has_json = has_qweight = False
             if calibration_path.exists() and calibration_path.is_dir():
                 calibration_data = os.listdir(calibration_path)
                 if len(calibration_data) == 2:
                     has_json = any(f.endswith(".json") for f in calibration_data)
-                    has_npz = any(f.endswith(".npz") for f in calibration_data)
+                    has_qweight = any(f.endswith(".safetensors") for f in calibration_data)
 
-            if not calibration_path.exists() or not (has_json and has_npz):
+            if not calibration_path.exists() or not (has_json and has_qweight):
                 LOGGER.info("Calibrating model...")
 
                 # Retrieve device total memory
@@ -304,13 +305,23 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 hf_model = self.LOADING_CLASS.from_pretrained(
                     self._model_id_or_path,
                     device_map="balanced",
-                    torch_dtype=self._dtype.as_torch(),
+                    torch_dtype=DataType(self._dtype).to_torch(),
                     max_memory=fraction_device_map | cpu_device_map,
                 ).to(memory_format=torch.channels_last)
 
                 hf_model = maybe_offload_weights_to_cpu(hf_model)
 
-                quantizer = AmmoQuantizer(hf_model, self._qconfig, self._dtype, self._sharding_info.tp_degree)
+                quantizer = AmmoQuantizer(
+                    hf_model,
+                    self._qconfig,
+                    self._dtype,
+                    self._sharding_info.tp_degree,
+                    quantizer_overrides={
+                        "*lm_head*": {
+                            "enable": False
+                        },
+                    }
+                )
                 quantizer.calibrate(self._quantization_calibration)
                 quantizer.save(calibration_path)
                 # Release the memory
@@ -318,6 +329,9 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 torch.cuda.empty_cache()
             else:
                 LOGGER.info(f"Reusing already precomputed calibration data at {calibration_path}")
+
+        self._build_info = BuildInfo(self._build_info.parallel, self._build_info.num_parallel_jobs, calibration_path)
+
 
     def build(self, output_path: PathLike, optimization_level: int = None) -> PathLike:
         # Sharding info
@@ -425,15 +439,18 @@ class TensorRTEngineBuilder(ModelHubMixin):
             LOGGER.debug(f"Enabling NCCL plugin as world_size = ({shard.world_size})")
             network.plugin_config.set_nccl_plugin(dtype=self._dtype)
 
-
+        # Set the weights
         with net_guard(network):
             adapter = _MODEL_TYPE_TO_TRT_IMPL[self._model_config["model_type"]]
-            model = adapter.from_hugging_face(
-                hf_model_dir=self._model_id_or_path,
-                dtype=self._dtype,
-                mapping=shard,
-                quant_mode=qconfig[0],
-            )
+            if build_config.fp8 and self._build_info.quantized_path is not None:
+                model = adapter.from_checkpoint(self._build_info.quantized_path)
+            else:
+                model = adapter.from_hugging_face(
+                    hf_model_dir=self._model_id_or_path,
+                    dtype=self._dtype,
+                    mapping=shard,
+                    quant_mode=qconfig,
+                )
 
             network.set_named_parameters(model.named_parameters())
             inputs = self.prepare_inputs(model)
@@ -512,13 +529,13 @@ class TensorRTEngineBuilder(ModelHubMixin):
         build_config = tensorrt_llm_builder.create_builder_config(
             name=config["model_type"],
             precision=self._dtype,
-            fp8=qconfig[0].has_fp8_qdq(),
+            fp8=qconfig.has_fp8_qdq(),
             hidden_size=config["hidden_size"],
             num_layers=config["num_hidden_layers"],
             max_batch_size=self._optimization_profile.max_batch_size,
             tensor_parallel=shard.tp_size,
             use_refit=False,
-            quant_mode=self._qconfig[0],
+            quant_mode=self._qconfig,
             huggingface=dict(**config),
             hidden_act=config["hidden_act"],
             num_kv_heads=config.get("num_key_value_heads", config["num_attention_heads"]),
@@ -528,7 +545,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
             max_output_len=self._optimization_profile.max_output_length,
             max_num_tokens=None,
             max_beam_width=self._beam_width,
-            strongly_typed=qconfig[0].has_fp8_qdq(),
+            strongly_typed=qconfig.has_fp8_qdq(),
             pipeline_parallel=shard.pp_size,
             parallel_build=is_parallel,
             vocab_size=config["vocab_size"],

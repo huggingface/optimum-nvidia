@@ -1,6 +1,6 @@
 from logging import getLogger
 from pathlib import Path
-from typing import Dict, Iterable, Union
+from typing import Dict, Iterable, Union, Any
 
 import torch
 from ammo.torch import export as ate
@@ -11,13 +11,54 @@ from optimum.nvidia import DataType
 
 LOGGER = getLogger(__name__)
 
+KV_CACHE_CFG = {
+    "*.query_key_value.output_quantizer": {
+        "num_bits": 8,
+        "axis": None,
+        "enable": True
+    },
+    "*.Wqkv.output_quantizer": {
+        "num_bits": 8,
+        "axis": None,
+        "enable": True
+    },
+    "*.W_pack.output_quantizer": {
+        "num_bits": 8,
+        "axis": None,
+        "enable": True
+    },
+    "*.c_attn.output_quantizer": {
+        "num_bits": 8,
+        "axis": None,
+        "enable": True
+    },
+    "*.k_proj.output_quantizer": {
+        "num_bits": 8,
+        "axis": None,
+        "enable": True
+    },
+    "*.v_proj.output_quantizer": {
+        "num_bits": 8,
+        "axis": None,
+        "enable": True
+    },
+}
 
-def get_ammo_config(mode: QuantMode, **quantizer_overrides):
+
+def get_ammo_config(mode: QuantMode, quantizer_overrides):
     if mode.has_fp8_qdq():
         cfg = atq.FP8_DEFAULT_CFG
+
+        if mode.has_fp8_kv_cache():
+            kv_cache_config = KV_CACHE_CFG.copy()
+            for value in kv_cache_config.values():
+                value.update({"num_bits": (4, 3)})  # type: ignore
+            cfg["quant_cfg"].update(kv_cache_config)
+
         if quantizer_overrides:
-            for name, cfg in quantizer_overrides.items():
-                cfg["quant_cfg"][name] = cfg
+            for name, val in quantizer_overrides.items():
+                cfg["quant_cfg"][name] = val
+
         return cfg
     else:
         raise NotImplementedError(
@@ -44,7 +85,7 @@ class AmmoQuantizer:
         qconfig: QuantMode,
         dtype: DataType,
         tp_degree: int = -1,
-        **quantizer_overrides,
+        quantizer_overrides: Dict[str, Any] = None,
     ):
         self._model = model
         self._qconfig = qconfig
@@ -52,7 +93,7 @@ class AmmoQuantizer:
         self._tp_degree = tp_degree
 
         # Infer the target quantization elements
-        self._ammo_config = get_ammo_config(qconfig.mode, **quantizer_overrides)
+        self._ammo_config = get_ammo_config(qconfig, quantizer_overrides)
 
     def calibrate(self, calibration_data: Iterable[Dict[str, torch.Tensor]]):
         from tqdm import tqdm
@@ -67,11 +108,12 @@ class AmmoQuantizer:
             atq.quantize(self._model, self._ammo_config, _loop)
 
     def save(self, path: Union[str, Path]):
-        ate.export_model_config(
-            self._model,  # The quantized model.
-            "llama",  # The type of the model as str, e.g gptj, llama or gptnext.
-            self._dtype.as_torch(),  # The exported weights data type as torch.dtype.
-            get_quantization_algorithm_name(self._qconfig),  # The quantization algorithm applied, e.g. fp8 or int8_sq.
-            path,  # The directory where the exported files will be stored.
-            self._tp_degree,  # The number of GPUs used in the inference time for tensor parallelism.
-        )
+        with torch.inference_mode():
+            ate.export_model_config(
+                model=self._model,  # The quantized model.
+                decoder_type="llama",  # The type of the model as str, e.g gptj, llama or gptnext.
+                dtype=DataType(self._dtype).to_torch(),  # The exported weights data type as torch.dtype.
+                export_dir=path,  # The directory where the exported files will be stored.
+                inference_tensor_parallel=self._tp_degree,  # The number of GPUs used in the inference time for tensor parallelism.
+                export_tensorrt_llm_config=True
+            )

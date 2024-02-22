@@ -22,11 +22,8 @@ from transformers import AutoTokenizer
 from optimum.nvidia import setup_logging, AutoModelForCausalLM
 
 # Setup logging needs to happen before importing TRT ...
-setup_logging(False)
+setup_logging(True)
 
-# ruff: disable=E402
-from optimum.nvidia import TensorRTForCausalLM
-from optimum.nvidia.builder import TensorRTEngineBuilder
 from optimum.nvidia.utils.cli import (
     postprocess_quantization_parameters,
     register_common_model_topology_args,
@@ -39,7 +36,7 @@ LOGGER = getLogger(__name__)
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser("🤗 TensorRT-LLM Llama implementation")
+    parser = ArgumentParser("🤗 Optimum-Nvidia Text-Generation Example")
     parser.add_argument("--hub-token", type=str, help="Hugging Face Hub Token to retrieve private weights.")
     register_common_model_topology_args(parser)
     register_optimization_profiles_args(parser)
@@ -51,62 +48,28 @@ if __name__ == "__main__":
     args = postprocess_quantization_parameters(args)
 
     # Ensure the output folder exists or create the folder
-    if args.output.exists():
-        if not args.output.is_dir():
-            raise ValueError(f"Output path {args.output} should be an empty folder")
-
-        if any(args.output.iterdir()):
-            raise ValueError(f"Output path {args.output} is not empty")
-    else:
-        LOGGER.info(f"Creating folder {args.output}")
-        args.output.mkdir()
+    # if args.output.exists():
+    #     if not args.output.is_dir():
+    #         raise ValueError(f"Output path {args.output} should be an empty folder")
+    #
+    #     if any(args.output.iterdir()):
+    #         raise ValueError(f"Output path {args.output} is not empty")
+    # else:
+    #     LOGGER.info(f"Creating folder {args.output}")
+    #     args.output.mkdir()
 
     LOGGER.info(f"Exporting {args.model} to TensorRT-LLM engine at {args.output}")
     if args.hub_token is not None:
         from huggingface_hub import login
 
-        login(
-            args.hub_token,
-        )
+        login(args.hub_token)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
-
     if not tokenizer.pad_token:
         tokenizer.pad_token = tokenizer.eos_token
 
     # Create the model
-    model = AutoModelForCausalLM.from_pretrained(args.model)
-
-    # builder = (
-    #     TensorRTEngineBuilder.from_pretrained(args.model)
-    #     .to(args.dtype)
-    #     .shard(args.tensor_parallelism, args.pipeline_parallelism, args.world_size, args.gpus_per_node)
-    #     .with_generation_profile(args.max_batch_size, args.max_prompt_length, args.max_new_tokens)
-    #     .with_sampling_strategy(args.max_beam_width)
-    # )
-    #
-    # # Check if we need to collect calibration samples
-    # if args.has_quantization_step:
-    #     from optimum.nvidia.quantization import get_default_calibration_dataset
-    #
-    #     max_length = min(args.max_prompt_length + args.max_new_tokens, tokenizer.model_max_length)
-    #     calib = get_default_calibration_dataset(args.num_calibration_samples)
-    #
-    #     if hasattr(calib, "tokenize"):
-    #         calib.tokenize(tokenizer, max_length=max_length, pad_to_multiple_of=8)
-    #
-    #     # Add the quantization step
-    #     builder.with_quantization_profile(args.quantization_config, calib)
-
-    # Build the engine
-    # builder.build(args.output, args.optimization_level)
-    # print(f"TRTLLM engines have been saved at {args.output}.")
-
-    # with open(args.output.joinpath("build.json"), mode="r", encoding="utf-8") as config_f:
-    #     from json import load
-    #
-    #     config = load(config_f)
-    #     model = TensorRTForCausalLM(config, args.output, args.gpus_per_node)
+    model = AutoModelForCausalLM.from_pretrained(args.model, use_fp8=args.fp8)
 
     prompt = "What is the latest generation of Nvidia GPUs?"
     tokens = tokenizer(prompt, padding=True, return_tensors="pt")
@@ -120,5 +83,5 @@ if __name__ == "__main__":
         max_new_tokens=args.max_new_tokens,
     )
 
-    generated_text = tokenizer.decode(generated[0, 0])
+    generated_text = tokenizer.decode_batch(generated.flatten(0, 1))
     print(generated_text)

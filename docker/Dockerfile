@@ -15,7 +15,7 @@ COPY . /opt/optimum-nvidia
 WORKDIR /opt/optimum-nvidia/third-party/tensorrt-llm
 
 # Install dependencies
-RUN python -m pip install --upgrade --no-cache-dir datasets huggingface_hub hf-transfer transformers pynvml
+RUN python -m pip install --upgrade --no-cache-dir datasets huggingface_hub hf-transfer optimum transformers pynvml
 ENV PYTHONPATH=/opt/optimum-nvidia/src:$PYTHONPATH
 
 #Add the project sources to the final layer
