@@ -47,21 +47,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args = postprocess_quantization_parameters(args)
 
-    # Ensure the output folder exists or create the folder
-    # if args.output.exists():
-    #     if not args.output.is_dir():
-    #         raise ValueError(f"Output path {args.output} should be an empty folder")
-    #
-    #     if any(args.output.iterdir()):
-    #         raise ValueError(f"Output path {args.output} is not empty")
-    # else:
-    #     LOGGER.info(f"Creating folder {args.output}")
-    #     args.output.mkdir()
-
-    LOGGER.info(f"Exporting {args.model} to TensorRT-LLM engine at {args.output}")
     if args.hub_token is not None:
         from huggingface_hub import login
-
         login(args.hub_token)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
@@ -83,5 +70,5 @@ if __name__ == "__main__":
         max_new_tokens=args.max_new_tokens,
     )
 
-    generated_text = tokenizer.decode_batch(generated.flatten(0, 1))
+    generated_text = tokenizer.batch_decode(generated.flatten(0, 1), skip_special_tokens=True)
     print(generated_text)
