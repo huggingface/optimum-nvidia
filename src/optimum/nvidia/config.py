@@ -44,6 +44,7 @@ class QuantizationConfig:
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
+
 def convert_quant_method_to_trt(
     method: str,
     weight_num_bits: int,
