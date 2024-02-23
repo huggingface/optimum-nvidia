@@ -2,17 +2,9 @@ from argparse import ArgumentParser, Namespace
 
 from tensorrt_llm.quantization import QuantMode
 
-from optimum.nvidia import DataType
-
 
 # Model topology (sharding, pipelining, dtype)
 def register_common_model_topology_args(parser: ArgumentParser) -> ArgumentParser:
-    parser.add_argument(
-        "--dtype",
-        choices=DataType.values(),
-        default="float16",
-        help="Data type to do the computations.",
-    )
     parser.add_argument(
         "--tensor-parallelism",
         type=int,
