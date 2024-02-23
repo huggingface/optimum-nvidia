@@ -153,7 +153,11 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         engine_builder = LocalEngineBuilder(config, output_path)
         engine_builder.build(engine_config)
 
-        print()
+        return cls(
+            output_path / "config.json",
+            output_path,
+            gpus_per_node=config.mapping.gpus_per_node,
+            use_cuda_graph=model_kwargs.pop("use_cuda_graph", False))
 
     @staticmethod
     def convert_config_to_trtllm(cls: Type[SupportsTensorrtConversion], config: PretrainedConfig) -> TensorRTConfig:
