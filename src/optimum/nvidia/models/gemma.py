@@ -35,6 +35,7 @@ from transformers import (PretrainedConfig as TransformersPretrainedConfig,
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.config import dtype_to_str
 from optimum.nvidia.hub import HuggingFaceHubModel
+from optimum.nvidia.runtime import CausalLM
 
 LOGGER = getLogger(__name__)
 
@@ -413,7 +414,7 @@ class GemmaConfig(TensorRTConfig):
         return False
 
 
-class GemmaForCausalLM(HuggingFaceHubModel):
+class GemmaForCausalLM(CausalLM, HuggingFaceHubModel):
     MODEL_CONFIG = GemmaConfig
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersGemmaForCausalLM
     TRT_LLM_TARGET_MODEL_CLASS = TrtGemmaForCausalLM

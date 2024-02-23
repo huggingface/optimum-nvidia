@@ -27,6 +27,7 @@ from transformers import (PretrainedConfig as TransformersPretrainedConfig,
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.config import dtype_to_str
 from optimum.nvidia.hub import HuggingFaceHubModel
+from optimum.nvidia.runtime import CausalLM
 
 LOGGER = getLogger(__name__)
 
@@ -91,7 +92,7 @@ class LlamaConfig(TensorRTConfig):
         return True
 
 
-class LlamaForCausalLM(HuggingFaceHubModel):
+class LlamaForCausalLM(CausalLM, HuggingFaceHubModel):
     MODEL_CONFIG = LlamaConfig
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersLlamaForCausalLM
     TRT_LLM_TARGET_MODEL_CLASS = LLaMAForCausalLM

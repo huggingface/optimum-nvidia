@@ -25,7 +25,7 @@ DEFAULT_PROMPT_LENGTH: int = 128
 DEFAULT_BEAM_WIDTH: int = 1
 
 
-class TensorRTCompiledModel(ModelHubMixin):
+class CompiledModel(ModelHubMixin):
     def __init__(self, engines_folder_path: Union[Path, PathLike]):
         self._engines_folder_path = Path(engines_folder_path)
 
@@ -37,117 +37,9 @@ class TensorRTCompiledModel(ModelHubMixin):
         """
         return self._engines_folder_path
 
-    def _save_pretrained(self, save_directory: Path) -> None:
-        # All engines are serialized on the disk, let's first check if save_directory is not
-        # just the path where the engines were serialized.
-        # In this case it would just be a no-op
-
-        if save_directory != self._engines_folder_path:
-            if not any(save_directory.iterdir()):
-                from shutil import copytree
-
-                copytree(self._engines_folder_path, save_directory, dirs_exist_ok=True)
-            else:
-                raise ValueError(f"{save_directory} is not empty")
-
-    @classmethod
-    def _from_pretrained(
-        cls: Type,
-        *,
-        model_id: str,
-        revision: Optional[str],
-        cache_dir: Optional[Union[str, Path]],
-        force_download: bool,
-        proxies: Optional[Dict],
-        resume_download: bool,
-        local_files_only: bool,
-        token: Optional[Union[str, bool]],
-        **model_kwargs,
-    ):
-        # Build config
-        optimization_level = model_kwargs.get("opt_level", 2)
-        tp_degree = model_kwargs.get("tp", 1)
-        pp_degree = model_kwargs.get("pp", 1)
-        gpus_per_node = model_kwargs.get("gpus_per_node", 1)
-        world_size = model_kwargs.get("world_size", gpus_per_node)
-        use_cuda_graph = model_kwargs.get("use_cuda_graph", False)
-
-        # Let's make sure we have the config
-        model_config = model_kwargs.get("config", None)
-        if not model_config:
-            raise ValueError(
-                "Original model configuration (config.json) was not found."
-                "The model configuration is required to build TensorRT-LLM engines."
-            )
-
-        model_id_or_path = Path(model_id)
-        if model_id_or_path.exists() and model_id_or_path.is_dir():
-            LOGGER.debug(f"Loading prebuild engine(s) from: {model_id_or_path}")
-            engine_folder = model_id_or_path
-
-        else:
-            LOGGER.debug(f"Building engine(s) from model's hub: {model_id_or_path}")
-            builder = model_kwargs.get("builder", None)
-
-            # If the builder is not provided, let's create a new one
-            if not builder:
-                LOGGER.debug("No builder provided, using default one")
-
-                # Define some parameters the user can provide
-                model_dtype = DataType(model_kwargs.get("dtype", model_config["torch_dtype"]))
-                use_fp8 = model_kwargs.get("use_fp8", False)
-                max_batch_size = model_kwargs.get("max_batch_size", DEFAULT_BATCH_SIZE)
-                max_prompt_length = model_kwargs.get("max_prompt_length", DEFAULT_PROMPT_LENGTH)
-                max_new_tokens = model_kwargs.get("max_new_tokens", -1)
-                max_beam_width = model_kwargs.get("max_beam_width", DEFAULT_BEAM_WIDTH)
-
-                # max new tokens can be determined from the maximum sequence length supported by the model - len(prompt)
-                if max_new_tokens < 1:
-                    max_new_tokens = max(max_new_tokens, model_config["max_position_embeddings"] - max_prompt_length)
-
-                builder = (
-                    TensorRTEngineBuilder(model_id, model_config)
-                    .to(model_dtype)
-                    .shard(tp_degree, pp_degree, world_size, gpus_per_node)
-                    .with_generation_profile(max_batch_size, max_prompt_length, max_new_tokens)
-                    .with_sampling_strategy(max_beam_width)
-                )
-
-                if use_fp8:
-                    from tensorrt_llm.quantization import QuantMode
-                    from optimum.nvidia.quantization import get_default_calibration_dataset
-
-                    num_calibration_samples = model_kwargs.get("num_calibration_samples", 512)
-                    calibration = get_default_calibration_dataset(num_calibration_samples)
-
-                    LOGGER.debug(f"Calibrating for float8 (num_calibration_samples={num_calibration_samples}).")
-
-                    if hasattr(calibration, "tokenize"):
-                        tokenizer = AutoTokenizer.from_pretrained(
-                            model_id, use_agent=get_user_agent(), padding_side="left"
-                        )
-
-                        calibration.tokenize(
-                            tokenizer, max_length=max_prompt_length + max_new_tokens, pad_to_multiple_of=1
-                        )
-
-                    builder.with_quantization_profile(
-                        QuantMode.from_description(use_fp8_qdq=True, use_fp8_kv_cache=True),
-                        calibration,
-                    )
-
-            # Retrieve the path where to store and use this to store the TensorRTEngineBuilder artifacts
-            engine_folder = Path(DEFAULT_ENGINE_FOLDER)
-            builder.build(engine_folder, optimization_level)
-
-        # Let's load the TensorRT engine config as a JSON file
-        with open(engine_folder.joinpath(OPTIMUM_NVIDIA_CONFIG_FILE), "r") as trt_config_f:
-            trt_config = json.load(trt_config_f)
-
-        return cls(trt_config, engine_folder, gpus_per_node, use_cuda_graph)
 
 
-class TensorRTForCausalLM:
+class CausalLM(CompiledModel):
     __slots__ = (
         "_engines_folder",
         "_device",
@@ -162,23 +54,33 @@ class TensorRTForCausalLM:
         "max_output_length",
     )
 
-    def __init__(self, config: Dict[str, Any], engines_folder: Path, gpus_per_node: int, use_cuda_graph: bool = False):
-        self._engines_folder = engines_folder
+    def __init__(
+        self,
+        config: Union[Dict[str, Any], PathLike],
+        engines_folder: Path,
+        *,
+        gpus_per_node: int,
+        use_cuda_graph: bool = False
+    ):
+        super().__init__(engines_folder)
 
         self._device = torch.device("cuda")
-        self._config = ctrrt.GptJsonConfig.parse(json.dumps(config))
+
+        if isinstance(config, PathLike):
+            self._config = ctrrt.GptJsonConfig.parse_file(config)
+        else:
+            self._config = ctrrt.GptJsonConfig.parse(json.dumps(config))
         self._mapping = ctrrt.WorldConfig.mpi(
             gpus_per_node,
             self._config.tensor_parallelism,
             self._config.pipeline_parallelism,
         )
         self._session_config = ctrrt.GptSessionConfig(
-            max_batch_size=config["builder_config"].get("max_batch_size", 1),
-            max_beam_width=config["builder_config"].get("max_beam_width", 1),
-            max_sequence_length=config["builder_config"]["max_output_len"],
+            max_batch_size=self._config.model_config.max_batch_size,
+            max_beam_width=self._config.model_config.max_beam_width,
+            max_sequence_length=self._config.model_config.max_seq_len,
         )
         self._session_config.cuda_graph_mode = use_cuda_graph
-        # self._session_config.kv_cache_config =
 
         # Create the engine
         engine_file = self._config.engine_filename(self._mapping)
@@ -190,7 +92,7 @@ class TensorRTForCausalLM:
         )
 
         # Additional cached properties
-        self._use_packed_inputs = config["plugin_config"].get("remove_input_padding", False)
+        self._use_packed_inputs = self._config.model_config.use_packed_input
         self.max_batch_size = self._config.model_config.max_batch_size
         self.max_prompt_length = self._config.model_config.max_input_len
 
@@ -290,6 +192,6 @@ class TensorRTForCausalLM:
         return input_ids, lengths
 
 
-class TensorRTForSpeechSeq2Seq(TensorRTCompiledModel):
+class TensorRTForSpeechSeq2Seq(CompiledModel):
     # TODO: implement
     pass
