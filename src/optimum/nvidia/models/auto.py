@@ -19,14 +19,14 @@ from huggingface_hub import ModelHubMixin
 
 from optimum.nvidia.errors import UnsupportedModelException
 
-# from .gemma import GemmaForCausalLM
+from .gemma import GemmaForCausalLM
 from .llama import LlamaForCausalLM
 
 _SUPPORTED_MODEL_CLASS = {
     "llama": LlamaForCausalLM,
     "mistral": LlamaForCausalLM,
-    "mixtral": LlamaForCausalLM
-    # "gemma": GemmaForCausalLM
+    "mixtral": LlamaForCausalLM,
+    "gemma": GemmaForCausalLM
 }
 
 
