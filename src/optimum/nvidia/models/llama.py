@@ -16,10 +16,10 @@ from logging import getLogger
 from typing import Dict
 
 import numpy as np
-import torch
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
 from tensorrt_llm.models.llama.model import LLaMAForCausalLM
 from tensorrt_llm.models.llama.weight import load_from_hf_llama
+from tensorrt_llm.plugin import PluginConfig
 from transformers import (PretrainedConfig as TransformersPretrainedConfig,
                           LlamaForCausalLM as TransformersLlamaForCausalLM, \
                           PreTrainedModel as TransformersPretrainedModel)
@@ -76,6 +76,19 @@ class LlamaConfig(TensorRTConfig):
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
 
         return trt_config
+
+    def get_plugins_config(self) -> PluginConfig:
+        config = super().get_plugins_config()
+        config.moe_plugin = "disable"  # TODO : Mixtral?
+        config.bert_attention_plugin = "disable"
+        config.gpt_attention_plugin = self.dtype
+        config.gemm_plugin = self.dtype
+
+        return config
+
+    @staticmethod
+    def supports_strong_typing() -> bool:
+        return True
 
 
 class LlamaForCausalLM(HuggingFaceHubModel):

@@ -2,6 +2,7 @@ from logging import getLogger
 from typing import Optional
 
 from dataclasses import dataclass
+from tensorrt_llm.plugin import PluginConfig
 from transformers import PretrainedConfig as TransformersPretrainedConfig
 
 
@@ -19,7 +20,6 @@ class InferenceProfile:
 @dataclass
 class GenerationProfile:
     num_beams: int
-    max_new_tokens: int
     max_draft_length: int
 
 
@@ -33,6 +33,7 @@ class EngineConfig:
     logits_dtype: str
     workload_profile: InferenceProfile
     generation_profile: GenerationProfile
+    plugins_config: PluginConfig
 
 
 
@@ -45,6 +46,7 @@ class EngineConfigBuilder:
         self._strongly_typed: bool = False
         self._workload_profile: Optional[InferenceProfile] = None
         self._generation_profile: Optional[GenerationProfile] = None
+        self._plugin_config: Optional[PluginConfig] = None
 
     def strongly_typed(self) -> "EngineConfigBuilder":
         self._strongly_typed = True
@@ -70,7 +72,7 @@ class EngineConfigBuilder:
         self,
         max_batch_size: int,
         max_prompt_length: int,
-        max_output_length: int = -1
+        max_new_tokens: int
     ) -> "EngineConfigBuilder":
         if max_batch_size < 1:
             raise ValueError(f"max_batch_size should be >= 1 (got: {max_batch_size})")
@@ -85,32 +87,25 @@ class EngineConfigBuilder:
                 f" maximum sequence length supported by the model is {self._config.max_position_embeddings})"
             )
 
-        if max_output_length == -1:
-            # TODO: What if this is not defined?
-            max_output_length = self._config["max_position_embeddings"]
-
-        if max_output_length < 1:
-            raise ValueError(f"max_prompt_length should be >= 1 (got: {max_batch_size})")
-
-        if max_output_length > self._config.max_position_embeddings:
-            raise ValueError(
-                f"max_output_length should be shorter than the maximum length supported by the model."
-                f" (got: {max_output_length} and"
-                f" maximum sequence length supported by the model is {self._config.max_position_embeddings})"
-            )
-
-        self._workload_profile = InferenceProfile(max_batch_size, max_prompt_length, max_output_length)
-        LOGGER.info(f"Defined engine inference profile: {self._workload_profile}")
-        return self
-
-    def with_generation_profile(self, num_beams: int, max_new_tokens: int) -> "EngineConfigBuilder":
-        if num_beams < 1:
-            raise ValueError(f"num_beams should be >= 1 (got: {num_beams})")
-
         if max_new_tokens < 1:
             raise ValueError(f"max_new_tokens should be >= 1 (got: {max_new_tokens})")
 
-        self._generation_profile = GenerationProfile(num_beams, max_new_tokens, -1)
+        if max_new_tokens > self._config.max_position_embeddings:
+            raise ValueError(
+                f"max_new_tokens should be shorter than the maximum length supported by the model."
+                f" (got: {max_new_tokens} and"
+                f" maximum sequence length supported by the model is {self._config.max_position_embeddings})"
+            )
+
+        self._workload_profile = InferenceProfile(max_batch_size, max_prompt_length, max_new_tokens)
+        LOGGER.info(f"Defined engine inference profile: {self._workload_profile}")
+        return self
+
+    def with_generation_profile(self, num_beams: int) -> "EngineConfigBuilder":
+        if num_beams < 1:
+            raise ValueError(f"num_beams should be >= 1 (got: {num_beams})")
+
+        self._generation_profile = GenerationProfile(num_beams, -1)
         LOGGER.info(f"Defined engine generation profile: {self._generation_profile}")
         return self
 
@@ -126,10 +121,14 @@ class EngineConfigBuilder:
 
         self._generation_profile = GenerationProfile(
             self._generation_profile.num_beams,
-            self._generation_profile.max_new_tokens,
             max_draft_length
         )
         LOGGER.info(f"Defined engine generation profile with speculation: {self._generation_profile}")
+        return self
+
+    def with_plugins_config(self, plugin_config: PluginConfig) -> "EngineConfigBuilder":
+        self._plugin_config = plugin_config
+        LOGGER.info(f"Defined plugins config: {plugin_config}")
         return self
 
     def validate(self) -> bool:
@@ -139,15 +138,18 @@ class EngineConfigBuilder:
         if self._generation_profile is None:
             raise ValueError("You need to set a generation profile. Use EngineConfigBuilder.with_generation_profile().")
 
-        max_generated_length = self._workload_profile.max_input_len + self._generation_profile.max_new_tokens
-        if max_generated_length > self._workload_profile.max_output_len:
+        if self._plugin_config is None:
+            raise ValueError("You need to set a plugin profile. Use EngineConfigBuilder.with_plugins_config().")
+
+        max_generated_length = self._workload_profile.max_input_len + self._workload_profile.max_output_len - 1
+        if max_generated_length > self._config.max_position_embeddings:
             raise ValueError(
                 "max_prompt_length + max_new_tokens should be lesser or equals "
                 "to the maximum length supported by the model (got "
                 f"max_prompt_length={self._workload_profile.max_input_len}, "
-                f"max_new_tokens={self._generation_profile.max_new_tokens},"
-                f"{self._workload_profile.max_input_len + self._generation_profile.max_new_tokens}"
-                f" > {self._workload_profile.max_output_len}"
+                f"max_new_tokens={self._workload_profile.max_output_len},"
+                f"{self._workload_profile.max_input_len + self._workload_profile.max_output_len}"
+                f" > {self._config.max_position_embeddings}"
                 ")"
             )
 
@@ -161,4 +163,5 @@ class EngineConfigBuilder:
             logits_dtype=self._logits_dtype,
             workload_profile=self._workload_profile,
             generation_profile=self._generation_profile,
+            plugins_config=self._plugin_config
         )

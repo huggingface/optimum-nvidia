@@ -6,6 +6,7 @@ from typing import List, Optional, Union, Any, Dict
 
 from tensorrt_llm import Mapping
 from tensorrt_llm.models import PretrainedConfig as TensorRTPretrainedConfig
+from tensorrt_llm.plugin import PluginConfig
 from tensorrt_llm.quantization import QuantMode
 from transformers import AutoConfig, PretrainedConfig
 
@@ -125,6 +126,11 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
         )
         return TensorRTConfig.from_config(config)
 
+    @staticmethod
+    @abstractmethod
+    def supports_strong_typing() -> bool:
+        raise NotImplementedError()
+
     def shard(self, world_size: int, gpus_per_node: int, rank: int = 0, tp_degree: int = 1, pp_degree: int = 1):
         if tp_degree * pp_degree != world_size:
             raise ValueError(
@@ -138,4 +144,23 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
             tp_size=tp_degree,
             pp_size=pp_degree
         )
+
+    def get_plugins_config(self) -> PluginConfig:
+        return PluginConfig(
+            rmsnorm_quantization_plugin="disable",
+            layernorm_quantization_plugin="disable",
+            nccl_plugin="disable",
+            paged_kv_cache=None,
+            use_paged_context_fmha=None,
+            use_context_fmha_for_generation=None,
+            tokens_per_block=None,
+            attention_qk_half_accumulation=None,
+            multi_block_mode=None,
+            use_custom_all_reduce=True,
+            remove_input_padding=True,
+            context_fmha=None,
+            context_fmha_fp32_acc=None,
+            enable_xqa=True,
+        )
+
 
