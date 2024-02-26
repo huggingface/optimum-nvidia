@@ -151,7 +151,8 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
             rmsnorm_quantization_plugin="disable",
             layernorm_quantization_plugin="disable",
             nccl_plugin="disable",
-            paged_kv_cache=None,
+            paged_kv_cache="disable",
+            enable_xqa="disable",
             use_paged_context_fmha=None,
             use_context_fmha_for_generation=None,
             tokens_per_block=None,
@@ -161,7 +162,6 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
             remove_input_padding=True,
             context_fmha=None,
             context_fmha_fp32_acc=None,
-            enable_xqa=True,
         )
 
 
