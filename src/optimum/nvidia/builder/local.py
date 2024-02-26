@@ -111,7 +111,7 @@ class LocalEngineBuilder:
 
         if (result := run([LocalEngineBuilder.TRTLLM_BUILD_EXEC] + cli_params_list)).returncode != 0:
             raise ValueError(
-                f"Compilation failed ({result.returncode}, "
+                f"Compilation failed ({result.returncode}), "
                 "please open up an issue at https://github.com/huggingface/optimum-nvidia"
             )  # TODO: change with proper error
 
