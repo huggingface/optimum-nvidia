@@ -14,11 +14,10 @@
 #  limitations under the License.
 
 from abc import ABC, abstractmethod
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional, Union
 
 import torch
-from dataclasses import asdict, dataclass, field
-from typing import List, Optional, Union, Any, Dict
-
 from tensorrt_llm import Mapping
 from tensorrt_llm.models import PretrainedConfig as TensorRTPretrainedConfig
 from tensorrt_llm.plugin import PluginConfig
@@ -61,9 +60,7 @@ class QuantizationConfig:
 
 
 def convert_quant_method_to_trt(
-    method: str,
-    weight_num_bits: int,
-    activation_num_bits: Optional[int] = None
+    method: str, weight_num_bits: int, activation_num_bits: Optional[int] = None
 ) -> (QuantMode, str):
     if method == "awq":
         if not activation_num_bits:
@@ -106,7 +103,6 @@ def convert_quant_method_to_trt(
 
 
 class TensorRTConfig(ABC, TensorRTPretrainedConfig):
-
     @staticmethod
     def get_quantization_config(config: PretrainedConfig) -> (QuantMode, QuantizationConfig):
         if hasattr(config, "quantization_config"):
@@ -122,7 +118,7 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
                 kv_cache_quant_algo=None,
                 group_size=group_size,
                 has_zero_point=has_zero_point,
-                exclude_modules=exclude_modules
+                exclude_modules=exclude_modules,
             )
         else:
             return QuantMode.from_description(), QuantizationConfig(None, None, None)
@@ -135,10 +131,7 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
     @staticmethod
     def from_pretrained(model_id_or_path: str, revision: Optional[str] = None, token: Union[bool, str, None] = None):
         config = AutoConfig.from_pretrained(
-            model_id_or_path,
-            revision=revision,
-            token=token,
-            user_agent=get_user_agent()
+            model_id_or_path, revision=revision, token=token, user_agent=get_user_agent()
         )
         return TensorRTConfig.from_config(config)
 
@@ -151,14 +144,11 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
         if tp_degree * pp_degree != world_size:
             raise ValueError(
                 f"tensor parallelism ({tp_degree}) x pipeline parallelism ({pp_degree})"
-                f" != world size ({world_size})")
+                f" != world size ({world_size})"
+            )
 
         self.mapping = Mapping(
-            world_size=world_size,
-            rank=rank,
-            gpus_per_node=gpus_per_node,
-            tp_size=tp_degree,
-            pp_size=pp_degree
+            world_size=world_size, rank=rank, gpus_per_node=gpus_per_node, tp_size=tp_degree, pp_size=pp_degree
         )
 
     def get_plugins_config(self) -> PluginConfig:
@@ -178,5 +168,3 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
             context_fmha=None,
             context_fmha_fp32_acc=None,
         )
-
-

@@ -15,6 +15,7 @@
 
 from optimum.nvidia.utils.nvml import SM_FP8_SUPPORTED
 
+
 class OptimumNvidiaException(Exception):
     def __init__(self, operation: str, msg: str):
         super().__init__(f"[{operation}] {msg}.")
@@ -34,6 +35,7 @@ class UnsupportedHardwareFeature(OptimumNvidiaException):
     """
     Base exception class for all features not supported by underlying hardware
     """
+
     def __init__(self, msg):
         super("feature", msg)
 
@@ -46,6 +48,9 @@ class Float8NotSupported(UnsupportedHardwareFeature):
     """
     Thrown when attempting to target float8 inference but the underlying hardware doesn't support it
     """
+
     def __init__(self):
-        super("float8 is not supported on your device. "
-              f"Please use a device with compute capabilities {SM_FP8_SUPPORTED}")
+        super(
+            "float8 is not supported on your device. "
+            f"Please use a device with compute capabilities {SM_FP8_SUPPORTED}"
+        )

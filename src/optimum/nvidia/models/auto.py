@@ -24,17 +24,13 @@ from .gemma import GemmaForCausalLM
 from .llama import LlamaForCausalLM
 from .mistral import MistralForCausalLM
 
-_SUPPORTED_MODEL_CLASS = {
-    "llama": LlamaForCausalLM,
-    "mistral": MistralForCausalLM,
-    "gemma": GemmaForCausalLM
-}
+
+_SUPPORTED_MODEL_CLASS = {"llama": LlamaForCausalLM, "mistral": MistralForCausalLM, "gemma": GemmaForCausalLM}
 
 
 class AutoModelForCausalLM(ModelHubMixin):
-    """
+    """ """
 
-    """
     @classmethod
     def _from_pretrained(
         cls: Type,
@@ -68,7 +64,7 @@ class AutoModelForCausalLM(ModelHubMixin):
             resume_download=resume_download,
             local_files_only=local_files_only,
             token=token,
-            **model_kwargs
+            **model_kwargs,
         )
 
         return model

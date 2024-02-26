@@ -16,21 +16,23 @@
 import json
 from logging import getLogger
 from pathlib import Path
-from typing import Type, Optional, Union, Dict, Protocol, runtime_checkable, Any
+from typing import Dict, Optional, Protocol, Type, Union, runtime_checkable
 
 import numpy as np
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
 from safetensors.torch import save_file as to_safetensors
 from tensorrt_llm._utils import numpy_to_torch
-from tensorrt_llm.models.modeling_utils import PretrainedModel, PretrainedConfig
-from transformers import AutoConfig, PreTrainedModel as TransformersPretrainedModel
+from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
+from transformers import AutoConfig
+from transformers import PreTrainedModel as TransformersPretrainedModel
 from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
 
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.builder import LocalEngineBuilder
-from optimum.nvidia.builder.config import EngineConfigBuilder, EngineConfig
+from optimum.nvidia.builder.config import EngineConfigBuilder
 from optimum.nvidia.utils import get_user_agent
+
 
 LOGGER = getLogger()
 
@@ -43,9 +45,7 @@ class SupportsTensorrtConversion(Protocol):
 
     @staticmethod
     def convert_weights(
-        target: PretrainedModel,
-        source: TransformersPretrainedModel,
-        config: PretrainedConfig
+        target: PretrainedModel, source: TransformersPretrainedModel, config: PretrainedConfig
     ) -> Dict[str, np.ndarray]:
         ...
 
@@ -63,7 +63,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         resume_download: bool,
         local_files_only: bool,
         token: Optional[Union[str, bool]],
-        **model_kwargs
+        **model_kwargs,
     ) -> T:
         if not isinstance(cls, SupportsTensorrtConversion):
             raise ValueError(
@@ -102,7 +102,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         )
 
         # Load the weights
-        LOGGER.debug(f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})")
+        LOGGER.debug(
+            f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
+        )
         hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
             local_path,
             revision=revision,
@@ -133,9 +135,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             engine_config = model_kwargs.pop("engine_config")
         else:
             max_prompt_length = model_kwargs.pop("max_prompt_length", 128)
-            max_new_tokens = model_kwargs.pop(
-                "max_output_length", model_config.max_position_embeddings
-            ) - max_prompt_length
+            max_new_tokens = (
+                model_kwargs.pop("max_output_length", model_config.max_position_embeddings) - max_prompt_length
+            )
 
             if max_new_tokens < 1:
                 raise ValueError(
@@ -146,16 +148,15 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                     ")"
                 )
 
-            builder = EngineConfigBuilder(model_config) \
-            .with_plugins_config(
-                config.get_plugins_config()
-            ).with_inference_profile(
-                model_kwargs.pop("max_batch_size", 1),
-                max_prompt_length,
-                max_new_tokens
-            ).with_generation_profile(
-                model_kwargs.pop("num_beams", 1),
-            ).logits_as(model_kwargs.pop("logits_dtype", "float32"))
+            builder = (
+                EngineConfigBuilder(model_config)
+                .with_plugins_config(config.get_plugins_config())
+                .with_inference_profile(model_kwargs.pop("max_batch_size", 1), max_prompt_length, max_new_tokens)
+                .with_generation_profile(
+                    model_kwargs.pop("num_beams", 1),
+                )
+                .logits_as(model_kwargs.pop("logits_dtype", "float32"))
+            )
 
             if model_kwargs.pop("strongly_typed", False):
                 builder.strongly_typed()
@@ -172,7 +173,8 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             output_path / "config.json",
             output_path,
             gpus_per_node=config.mapping.gpus_per_node,
-            use_cuda_graph=model_kwargs.pop("use_cuda_graph", False))
+            use_cuda_graph=model_kwargs.pop("use_cuda_graph", False),
+        )
 
     @staticmethod
     def convert_config_to_trtllm(cls: Type[SupportsTensorrtConversion], config: PretrainedConfig) -> TensorRTConfig:

@@ -36,6 +36,7 @@ class DataType(Enum):
         :raise ValueError if provided dtype doesn't have counterpart
         """
         import tensorrt as trt
+
         if self == DataType.FLOAT32:
             return trt.DataType.FLOAT
         elif self == DataType.FLOAT16:
@@ -64,6 +65,7 @@ class DataType(Enum):
         :raise ValueError if provided dtype doesn't have counterpart
         """
         import torch
+
         if self == DataType.FLOAT32:
             return torch.float32
         elif self == DataType.FLOAT16:

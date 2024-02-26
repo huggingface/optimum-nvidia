@@ -18,17 +18,15 @@ import warnings
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import tensorrt_llm.bindings as ctrrt
 import torch
 from huggingface_hub import ModelHubMixin
-from transformers import AutoTokenizer
 
-from optimum.nvidia import DataType
+
 # from optimum.nvidia.builder import TensorRTEngineBuilder
-from optimum.nvidia.utils import get_user_agent
-from optimum.nvidia.utils.constants import DEFAULT_ENGINE_FOLDER, OPTIMUM_NVIDIA_CONFIG_FILE
+
 
 LOGGER = getLogger(__name__)
 
@@ -53,7 +51,6 @@ class CompiledModel(ModelHubMixin):
         return self._engines_folder_path
 
 
-
 class CausalLM(CompiledModel):
     __slots__ = (
         "_engines_folder",
@@ -75,7 +72,7 @@ class CausalLM(CompiledModel):
         engines_folder: Path,
         *,
         gpus_per_node: int,
-        use_cuda_graph: bool = False
+        use_cuda_graph: bool = False,
     ):
         super().__init__(engines_folder)
 
