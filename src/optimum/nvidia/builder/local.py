@@ -33,7 +33,6 @@ CLI_PLUGIN_NAMES = {
     "lookup_plugin",
     "lora_plugin",
     "moe_plugin",
-
     # Features
     "context_fmha",
     "context_fmha_fp32_acc",
@@ -45,19 +44,18 @@ CLI_PLUGIN_NAMES = {
     "attention_qk_half_accumulation",
     "tokens_per_block",
     "use_paged_context_fmha",
-    "use_context_fmha_for_generation"
+    "use_context_fmha_for_generation",
 }
 
 
 def process_plugin_flag(_: str, value: Any) -> str:
-    if type(value) == bool:
+    if isinstance(value, bool):
         return "enable" if value else "disable"
     else:
         return value
 
 
 class LocalEngineBuilder:
-
     TRTLLM_BUILD_EXEC = "trtllm-build"
 
     @staticmethod
@@ -77,7 +75,8 @@ class LocalEngineBuilder:
 
         plugins_params = {
             f"--{name}": process_plugin_flag(name, value)
-            for name in CLI_PLUGIN_NAMES if (value := getattr(build_config.plugins_config, name)) is not None
+            for name in CLI_PLUGIN_NAMES
+            if (value := getattr(build_config.plugins_config, name)) is not None
         }
 
         build_params = {
@@ -85,7 +84,7 @@ class LocalEngineBuilder:
             "--output_dir": root,
             "--model_config": root / "config.json",
             "--builder_opt": build_config.optimisation_level,
-            "--logits_dtype": build_config.logits_dtype
+            "--logits_dtype": build_config.logits_dtype,
         }
 
         if model_config.supports_strong_typing():
@@ -114,4 +113,3 @@ class LocalEngineBuilder:
                 f"Compilation failed ({result.returncode}), "
                 "please open up an issue at https://github.com/huggingface/optimum-nvidia"
             )  # TODO: change with proper error
-

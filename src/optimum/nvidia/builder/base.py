@@ -19,16 +19,16 @@ from logging import getLogger
 from multiprocessing import Pool
 from os import PathLike, sched_getaffinity
 from pathlib import Path
-from typing import Dict, List, NamedTuple, Optional, Type, Union, Any, Mapping
+from typing import Any, Dict, List, Mapping, NamedTuple, Optional, Type, Union
 
-import safetensors
 import torch
 from huggingface_hub import CONFIG_NAME, ModelHubMixin
 from huggingface_hub.hub_mixin import T
 from psutil import virtual_memory
-from tensorrt_llm import graph_rewriting, Mapping as Shard
+from tensorrt_llm import Mapping as Shard
+from tensorrt_llm import graph_rewriting
 from tensorrt_llm.builder import Builder
-from tensorrt_llm.models import LLaMAForCausalLM#, TaurusForCausalLM
+from tensorrt_llm.models import LLaMAForCausalLM  # , TaurusForCausalLM
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode
@@ -38,8 +38,12 @@ from optimum.nvidia import DataType
 from optimum.nvidia.errors import UnsupportedHardwareFeature
 from optimum.nvidia.models import SupportsFromHuggingFace
 from optimum.nvidia.quantization import Calibration
-from optimum.nvidia.utils import (maybe_offload_weights_to_cpu, parse_flag_from_env,
-                                  OPTIMUM_NVIDIA_CONFIG_FILE, TENSORRT_TIMINGS_FILE)
+from optimum.nvidia.utils import (
+    OPTIMUM_NVIDIA_CONFIG_FILE,
+    TENSORRT_TIMINGS_FILE,
+    maybe_offload_weights_to_cpu,
+    parse_flag_from_env,
+)
 from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
 
 
@@ -55,7 +59,9 @@ _MODEL_TYPE_TO_TRT_IMPL: Mapping[str, SupportsFromHuggingFace] = {
 
 
 # Utility classes to store build information
-BuildInfo = NamedTuple("BuildInfo", [("parallel", bool), ("num_parallel_jobs", int), ("quantized_path", Optional[Path])])
+BuildInfo = NamedTuple(
+    "BuildInfo", [("parallel", bool), ("num_parallel_jobs", int), ("quantized_path", Optional[Path])]
+)
 SERIAL_BUILD = BuildInfo(False, 1, None)
 
 # Utility classes to store shape information
@@ -178,6 +184,7 @@ class TensorRTEngineBuilder(ModelHubMixin):
         """
         if mode.has_fp8_qdq() or mode.has_fp8_kv_cache():
             from optimum.nvidia.utils.nvml import has_float8_support
+
             if not has_float8_support():
                 raise UnsupportedHardwareFeature.float8()
 
@@ -318,10 +325,8 @@ class TensorRTEngineBuilder(ModelHubMixin):
                     self._dtype,
                     self._sharding_info.tp_degree,
                     quantizer_overrides={
-                        "*lm_head*": {
-                            "enable": False
-                        },
-                    }
+                        "*lm_head*": {"enable": False},
+                    },
                 )
                 quantizer.calibrate(self._quantization_calibration)
                 quantizer.save(calibration_path)
@@ -332,7 +337,6 @@ class TensorRTEngineBuilder(ModelHubMixin):
                 LOGGER.info(f"Reusing already precomputed calibration data at {calibration_path}")
 
         self._build_info = BuildInfo(self._build_info.parallel, self._build_info.num_parallel_jobs, calibration_path)
-
 
     def build(self, output_path: PathLike, optimization_level: int = None) -> PathLike:
         # Sharding info
@@ -407,16 +411,11 @@ class TensorRTEngineBuilder(ModelHubMixin):
         config = self._model_config
         qconfig = self._qconfig
 
-        ranked_engine_name = create_unique_engine_name(
-            config["model_type"], self._dtype, shard.rank, shard.tp_size
-        )
+        ranked_engine_name = create_unique_engine_name(config["model_type"], self._dtype, shard.rank, shard.tp_size)
 
         builder = Builder()
         build_config = self.create_builder_config(
-            tensorrt_llm_builder=builder,
-            shard=shard,
-            is_parallel=is_parallel,
-            opt_level=opt_level
+            tensorrt_llm_builder=builder, shard=shard, is_parallel=is_parallel, opt_level=opt_level
         )
 
         # Let's build the network

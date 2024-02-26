@@ -32,7 +32,7 @@ from optimum.nvidia.lang import DataType
         ("float8", torch.float8_e4m3fn),  # Change this when supported
         ("int8", torch.int8),
         ("uint8", torch.uint8),
-        ("bool", torch.bool)
+        ("bool", torch.bool),
     ],
 )
 def test_convert_str_to_torch(literal_dtype: str, dtype):
@@ -49,7 +49,7 @@ def test_convert_str_to_torch(literal_dtype: str, dtype):
         ("int32", trt.int32),
         ("float8", trt.fp8),
         ("int8", trt.int8),
-        ("uint8", trt.uint8)
+        ("uint8", trt.uint8),
     ],
 )
 def test_convert_str_to_tensorrt(literal_dtype: str, dtype):

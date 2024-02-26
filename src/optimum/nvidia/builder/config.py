@@ -14,10 +14,10 @@
 #  limitations under the License.
 
 
+from dataclasses import dataclass
 from logging import getLogger
 from typing import Optional
 
-from dataclasses import dataclass
 from tensorrt_llm.plugin import PluginConfig
 from transformers import PretrainedConfig as TransformersPretrainedConfig
 
@@ -44,6 +44,7 @@ class EngineConfig:
     """
     Represent all the parameters required to tune and build the final TRTLLM engine(s)
     """
+
     optimisation_level: int
     strongly_typed: bool
     logits_dtype: str
@@ -52,9 +53,7 @@ class EngineConfig:
     plugins_config: PluginConfig
 
 
-
 class EngineConfigBuilder:
-
     def __init__(self, config: TransformersPretrainedConfig):
         self._config = config
 
@@ -66,7 +65,7 @@ class EngineConfigBuilder:
 
     def strongly_typed(self) -> "EngineConfigBuilder":
         self._strongly_typed = True
-        LOGGER.info(f"Defined engine as strongly typed")
+        LOGGER.info("Defined engine as strongly typed")
         return self
 
     def with_optimisation_level(self, level: int) -> "EngineConfigBuilder":
@@ -85,10 +84,7 @@ class EngineConfigBuilder:
         return self
 
     def with_inference_profile(
-        self,
-        max_batch_size: int,
-        max_prompt_length: int,
-        max_new_tokens: int
+        self, max_batch_size: int, max_prompt_length: int, max_new_tokens: int
     ) -> "EngineConfigBuilder":
         if max_batch_size < 1:
             raise ValueError(f"max_batch_size should be >= 1 (got: {max_batch_size})")
@@ -135,10 +131,7 @@ class EngineConfigBuilder:
                 "Please use EngineConfigBuilder.with_generation_profile()"
             )
 
-        self._generation_profile = GenerationProfile(
-            self._generation_profile.num_beams,
-            max_draft_length
-        )
+        self._generation_profile = GenerationProfile(self._generation_profile.num_beams, max_draft_length)
         LOGGER.info(f"Defined engine generation profile with speculation: {self._generation_profile}")
         return self
 
@@ -152,7 +145,9 @@ class EngineConfigBuilder:
             raise ValueError("You need to set an inference profile. Use EngineConfigBuilder.with_inference_profile().")
 
         if self._generation_profile is None:
-            raise ValueError("You need to set a generation profile. Use EngineConfigBuilder.with_generation_profile().")
+            raise ValueError(
+                "You need to set a generation profile. Use EngineConfigBuilder.with_generation_profile()."
+            )
 
         if self._plugin_config is None:
             raise ValueError("You need to set a plugin profile. Use EngineConfigBuilder.with_plugins_config().")
@@ -170,6 +165,7 @@ class EngineConfigBuilder:
             )
 
         return True
+
     def build(self) -> EngineConfig:
         self.validate()
 
@@ -179,5 +175,5 @@ class EngineConfigBuilder:
             logits_dtype=self._logits_dtype,
             workload_profile=self._workload_profile,
             generation_profile=self._generation_profile,
-            plugins_config=self._plugin_config
+            plugins_config=self._plugin_config,
         )

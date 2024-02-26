@@ -14,7 +14,7 @@
 #  limitations under the License.
 
 
-from typing import Protocol, Optional, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 
 from tensorrt_llm import Mapping
 from tensorrt_llm.quantization import QuantMode
@@ -30,10 +30,10 @@ class SupportsFromHuggingFace(Protocol):
     def from_hugging_face(
         cls,
         hf_model_dir,
-        dtype='float16',
+        dtype="float16",
         mapping: Optional[Mapping] = None,
         quant_mode: Optional[QuantMode] = None,
-        **kwargs
+        **kwargs,
     ):
         """
 

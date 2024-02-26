@@ -15,7 +15,7 @@
 
 from logging import getLogger
 from pathlib import Path
-from typing import Dict, Iterable, Union, Any
+from typing import Any, Dict, Iterable, Union
 
 import torch
 from ammo.torch import export as ate
@@ -24,39 +24,16 @@ from tensorrt_llm.quantization import QuantMode
 
 from optimum.nvidia import DataType
 
+
 LOGGER = getLogger(__name__)
 
 KV_CACHE_CFG = {
-    "*.query_key_value.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
-    "*.Wqkv.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
-    "*.W_pack.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
-    "*.c_attn.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
-    "*.k_proj.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
-    "*.v_proj.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
+    "*.query_key_value.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
+    "*.Wqkv.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
+    "*.W_pack.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
+    "*.c_attn.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
+    "*.k_proj.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
+    "*.v_proj.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
 }
 
 
@@ -130,5 +107,5 @@ class AmmoQuantizer:
                 dtype=DataType(self._dtype).to_torch(),  # The exported weights data type as torch.dtype.
                 export_dir=path,  # The directory where the exported files will be stored.
                 inference_tensor_parallel=self._tp_degree,  # The number of GPUs used in the inference time for tensor parallelism.
-                export_tensorrt_llm_config=True
+                export_tensorrt_llm_config=True,
             )

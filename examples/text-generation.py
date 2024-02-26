@@ -19,7 +19,8 @@ from pathlib import Path
 
 from transformers import AutoTokenizer
 
-from optimum.nvidia import setup_logging, AutoModelForCausalLM
+from optimum.nvidia import AutoModelForCausalLM, setup_logging
+
 
 # Setup logging needs to happen before importing TRT ...
 setup_logging(True)
@@ -49,6 +50,7 @@ if __name__ == "__main__":
 
     if args.hub_token is not None:
         from huggingface_hub import login
+
         login(args.hub_token)
 
     tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")

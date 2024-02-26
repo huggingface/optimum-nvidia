@@ -20,14 +20,15 @@ from tensorrt_llm.models import PretrainedConfig, PretrainedModel
 from tensorrt_llm.models.llama.model import LLaMAForCausalLM
 from tensorrt_llm.models.llama.weight import load_from_hf_llama
 from tensorrt_llm.plugin import PluginConfig
-from transformers import (PretrainedConfig as TransformersPretrainedConfig,
-                          LlamaForCausalLM as TransformersLlamaForCausalLM, \
-                          PreTrainedModel as TransformersPretrainedModel)
+from transformers import LlamaForCausalLM as TransformersLlamaForCausalLM
+from transformers import PretrainedConfig as TransformersPretrainedConfig
+from transformers import PreTrainedModel as TransformersPretrainedModel
 
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.config import dtype_to_str
 from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.runtime import CausalLM
+
 
 LOGGER = getLogger(__name__)
 
@@ -99,9 +100,7 @@ class LlamaForCausalLM(CausalLM, HuggingFaceHubModel):
 
     @staticmethod
     def convert_weights(
-        target: PretrainedModel,
-        source: TransformersPretrainedModel,
-        config: PretrainedConfig
+        target: PretrainedModel, source: TransformersPretrainedModel, config: PretrainedConfig
     ) -> Dict[str, np.ndarray]:
         if config.quant_mode.has_any_quant():
             raise NotImplementedError("Quantization is not supported yet.")

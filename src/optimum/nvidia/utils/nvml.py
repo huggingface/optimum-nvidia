@@ -19,6 +19,7 @@ from typing import NamedTuple, Optional, Tuple
 
 from pynvml import nvmlDeviceGetCudaComputeCapability, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo, nvmlInit
 
+
 LOGGER = getLogger()
 
 
