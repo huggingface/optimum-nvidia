@@ -22,15 +22,12 @@ from typing import Dict, Optional, Type, Union
 from huggingface_hub import ModelHubMixin
 from huggingface_hub.hub_mixin import T  # What is this? T?
 from tensorrt_llm import Mapping as Shard
-from tensorrt_llm._utils import trt_version
 from tensorrt_llm.builder import Builder
 from tensorrt_llm.quantization import QuantMode
 from transformers import AutoModelForSpeechSeq2Seq
 
-from ..configs import ModelConfig, QuantizationConfig, TransformersConfig
-from ..lang import DataType
-from ..models.whisper import WhisperDecoderWeightAdapter, WhisperEncoderWeightAdapter
-from .base import TensorRTEngineBuilder
+from optimum.nvidia import DataType
+from optimum.nvidia.builder import TensorRTEngineBuilder
 
 
 LOGGER = getLogger(__name__)
@@ -53,12 +50,12 @@ class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
         return inputs
 
     def validate(self) -> bool:
-        if self._quantization_config is None:
+        if self._qconfig is None:
             LOGGER.warning(
                 "Quantization descriptor was None, assuming no quantization will be applied. "
                 "If you want to change this behaviour, please use TRTEngineBuilder.with_quantization_schema()"
             )
-            self._quantization_config = QuantizationConfig(QuantMode(0), 0)
+            self._qconfig = QuantMode(0)
 
         # Optimization profile
         if self._optimization_profile is None:
@@ -88,7 +85,7 @@ class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
         Prepares the builder for the model. This is kept for backward compatibility in the base class for Llama, but this should be overridden for each architecture as `Builder.create_builder_config` takes different arguments depending on the architecture.
         """
         config = self._model_config
-        qconfig = self._quantization_config
+        qconfig = self._qconfig
 
         is_multilingual = config.vocab_size >= 51865
         num_languages = config.vocab_size - 51765 - int(is_multilingual)
@@ -110,9 +107,8 @@ class TensorRTWhisperEncoderEngineBuilder(TensorRTEngineBuilder):
             max_batch_size=self._optimization_profile.max_batch_size,
             tensor_parallel=1,
             use_refit=False,
-            quant_mode=self._quantization_config.mode,
+            quant_mode=self._qconfig,
             huggingface=dict(**config),
-            tensorrt=trt_version(),
             n_mels=config.config["num_mel_bins"],
             num_languages=num_languages,
             num_heads=config.config["encoder_attention_heads"],
@@ -139,7 +135,7 @@ class TensorRTWhisperDecoderEngineBuilder(TensorRTEngineBuilder):
         self, tensorrt_llm_builder: Builder, shard: Shard, is_parallel: bool, opt_level: Optional[int]
     ):
         config = self._model_config
-        qconfig = self._quantization_config
+        qconfig = self._qconfig
 
         if opt_level is not None:
             # TensorRT-LLM example always uses opt_level=None.
@@ -154,9 +150,8 @@ class TensorRTWhisperDecoderEngineBuilder(TensorRTEngineBuilder):
             max_batch_size=self._optimization_profile.max_batch_size,
             tensor_parallel=shard.tp_size,
             use_refit=False,
-            quant_mode=self._quantization_config.mode,
+            quant_mode=self._qconfig.mode,
             huggingface=dict(**config),
-            tensorrt=trt_version(),
             hidden_act="gelu",
             max_position_embeddings=config.config["max_target_positions"],
             apply_query_key_layer_scaling=False,
@@ -177,12 +172,12 @@ class TensorRTForSpeechSeq2SeqEngineBuilder(ModelHubMixin):
         self._model_id_or_path: Union[str, "PathLike"] = model_id_or_path
         self._model_config: "ModelConfig" = config
 
-        self.encoder_builder = TensorRTWhisperEncoderEngineBuilder(
-            model_id_or_path, config, WhisperEncoderWeightAdapter
-        )
-        self.decoder_builder = TensorRTWhisperDecoderEngineBuilder(
-            model_id_or_path, config, WhisperDecoderWeightAdapter
-        )
+        # self.encoder_builder = TensorRTWhisperEncoderEngineBuilder(
+        #     model_id_or_path, config, WhisperEncoderWeightAdapter
+        # )
+        # self.decoder_builder = TensorRTWhisperDecoderEngineBuilder(
+        #     model_id_or_path, config, WhisperDecoderWeightAdapter
+        # )
 
     @classmethod
     def _from_pretrained(
@@ -199,12 +194,6 @@ class TensorRTForSpeechSeq2SeqEngineBuilder(ModelHubMixin):
         **model_kwargs,
     ) -> "T":
         config = model_kwargs.get("config", None)
-
-        if config and not isinstance(config, TransformersConfig):
-            config = TransformersConfig(config)
-        else:
-            raise ValueError(f"Unsupported configuration type ({type(config).__name__})")
-
         return cls(model_id, config)
 
     def build(self, output_path: "PathLike", optimization_level: int = None) -> "PathLike":
@@ -213,6 +202,7 @@ class TensorRTForSpeechSeq2SeqEngineBuilder(ModelHubMixin):
 
         LOGGER.info("Building TensorRT decoder engine...")
         self.decoder_builder.build(Path(output_path, "decoder"), optimization_level)
+        return output_path
 
     def to(self, dtype: Union[str, "DataType"]) -> "TensorRTForSpeechSeq2SeqEngineBuilder":
         self.encoder_builder.to(dtype)
