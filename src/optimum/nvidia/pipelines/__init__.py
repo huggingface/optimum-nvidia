@@ -1,19 +1,35 @@
+#  coding=utf-8
+#  Copyright 2024 The HuggingFace Inc. team. All rights reserved.
+#  #
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#  #
+#      http://www.apache.org/licenses/LICENSE-2.0
+#  #
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
 from os import PathLike
 from typing import Dict, Optional, Tuple, Type, Union
 
 from huggingface_hub import model_info
 from tensorrt_llm import Module
-from transformers import AutoConfig, AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
+from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
 
-from optimum.nvidia import AutoModelForCausalLM, TensorRTForCausalLM
+from optimum.nvidia import AutoModelForCausalLM
 from optimum.nvidia.pipelines.text_generation import TextGenerationPipeline
-from optimum.nvidia.utils import get_user_agent
 
 from .base import Pipeline
 
 
 SUPPORTED_MODEL_WITH_TASKS: Dict[str, Dict[str, Tuple[Type[Pipeline], Type]]] = {
-    "llama": {"text-generation": (TextGenerationPipeline, AutoModelForCausalLM)}
+    "gemma": {"text-generation": (TextGenerationPipeline, AutoModelForCausalLM)},
+    "llama": {"text-generation": (TextGenerationPipeline, AutoModelForCausalLM)},
+    "mistral": {"text-generation": (TextGenerationPipeline, AutoModelForCausalLM)},
 }
 
 
@@ -94,8 +110,6 @@ def pipeline(
 
     # Allocate
     pipeline_factory, model_factory = SUPPORTED_MODEL_WITH_TASKS[model_type][task]
-
-    if not isinstance(model, TensorRTForCausalLM):
-        model = model_factory.from_pretrained(model, **kwargs)
+    model = model_factory.from_pretrained(model, **kwargs)
 
     return pipeline_factory(model, tokenizer)
