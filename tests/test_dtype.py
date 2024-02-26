@@ -24,15 +24,16 @@ from optimum.nvidia.lang import DataType
 @pytest.mark.parametrize(
     "literal_dtype,dtype",
     [
-        ("int64", torch.int16),
-        ("float32", torch.float32),
+        ("bool", torch.bool),
+        ("uint8", torch.uint8),
+        ("int8", torch.int8),
+        ("int16", torch.int16),
         ("int32", torch.int32),
+        ("int64", torch.int64),
+        ("float32", torch.float32),
         ("float16", torch.float16),
         ("bfloat16", torch.bfloat16),
         ("float8", torch.float8_e4m3fn),  # Change this when supported
-        ("int8", torch.int8),
-        ("uint8", torch.uint8),
-        ("bool", torch.bool),
     ],
 )
 def test_convert_str_to_torch(literal_dtype: str, dtype):
