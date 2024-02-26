@@ -167,6 +167,9 @@ class CausalLM(CompiledModel):
                 packed=self._use_packed_inputs,
             )
 
+            if max_new_tokens is None or max_new_tokens < 1:
+                max_new_tokens = self.max_output_length - input_ids.shape[1]
+
             trt_inputs.max_new_tokens = max_new_tokens
 
             # Tensors are being allocated as in/out parameters and TRTLLM will resize

@@ -38,6 +38,8 @@ class TextGenerationPipeline(Pipeline):
     __slots__ = ("tokenizer", "_runtime", "_bos_token_id", "_eos_token_id", "_pad_token_id")
 
     def __init__(self, model: CausalLM, tokenizer: PreTrainedTokenizer):
+        super().__init__()
+
         if tokenizer.eos_token and not tokenizer.pad_token:
             tokenizer.pad_token = tokenizer.eos_token
 
