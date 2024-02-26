@@ -168,7 +168,7 @@ class CausalLM(CompiledModel):
             )
 
             if max_new_tokens is None or max_new_tokens < 1:
-                max_new_tokens = self.max_output_length - max(map(len, input_ids))
+                max_new_tokens = self.max_output_length - input_ids.shape[1]
 
             trt_inputs.max_new_tokens = max_new_tokens
 
