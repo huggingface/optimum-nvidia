@@ -21,7 +21,7 @@ from tensorrt_llm.models.llama.model import LLaMAForCausalLM
 from tensorrt_llm.models.llama.weight import load_from_hf_llama
 from tensorrt_llm.plugin import PluginConfig
 from transformers import (PretrainedConfig as TransformersPretrainedConfig,
-                          LlamaForCausalLM as TransformersLlamaForCausalLM, \
+                          MistralForCausalLM as TransformersMistralForCausalLM, \
                           PreTrainedModel as TransformersPretrainedModel)
 
 from optimum.nvidia import TensorRTConfig
@@ -32,7 +32,7 @@ from optimum.nvidia.runtime import CausalLM
 LOGGER = getLogger(__name__)
 
 
-class LlamaConfig(TensorRTConfig):
+class MistralConfig(TensorRTConfig):
     r"""
     This is the configuration class to store the configuration of a [`LlamaModel`]. It is used to instantiate an LLaMA
     model according to the specified arguments, defining the model architecture. Instantiating a configuration with the
@@ -47,7 +47,7 @@ class LlamaConfig(TensorRTConfig):
         # Retrieve the quantization from the transformers config (if provided)
         qmode, qconfig = TensorRTConfig.get_quantization_config(config)
 
-        trt_config = LlamaConfig(
+        trt_config = MistralConfig(
             architecture=config.architectures[0],
             dtype=dtype_to_str(config.torch_dtype),
             logits_dtype="float32",
@@ -92,9 +92,9 @@ class LlamaConfig(TensorRTConfig):
         return False
 
 
-class LlamaForCausalLM(CausalLM, HuggingFaceHubModel):
-    MODEL_CONFIG = LlamaConfig
-    HF_LIBRARY_TARGET_MODEL_CLASS = TransformersLlamaForCausalLM
+class MistralForCausalLM(CausalLM, HuggingFaceHubModel):
+    MODEL_CONFIG = MistralConfig
+    HF_LIBRARY_TARGET_MODEL_CLASS = TransformersMistralForCausalLM
     TRT_LLM_TARGET_MODEL_CLASS = LLaMAForCausalLM
 
     @staticmethod

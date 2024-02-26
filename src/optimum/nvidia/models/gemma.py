@@ -405,7 +405,6 @@ class GemmaConfig(TensorRTConfig):
         config.moe_plugin = "disable"
         config.bert_attention_plugin = "disable"
         config.gpt_attention_plugin = self.dtype
-        config.rmsnorm_quantization_plugin=self.dtype
         config.gemm_plugin = self.dtype
 
         return config
