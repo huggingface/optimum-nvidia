@@ -378,6 +378,7 @@ class GemmaConfig(TensorRTConfig):
             num_hidden_layers=config.num_hidden_layers,
             num_attention_heads=config.num_attention_heads,
             num_key_value_heads=getattr(config, "num_key_value_heads", config.num_attention_heads),
+            head_size=config.head_dim,
             hidden_act=config.hidden_act,
             intermediate_size=config.intermediate_size,
             norm_epsilon=config.rms_norm_eps,
@@ -392,7 +393,6 @@ class GemmaConfig(TensorRTConfig):
             embedding_sharding_dim=0,
             share_embedding_table=False,
             max_lora_rank=64,
-            head_size=config.hidden_size / config.num_attention_heads,
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
