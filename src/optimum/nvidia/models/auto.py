@@ -22,11 +22,11 @@ from optimum.nvidia.errors import UnsupportedModelException
 
 from .gemma import GemmaForCausalLM
 from .llama import LlamaForCausalLM
+from .mistral import MistralForCausalLM
 
 _SUPPORTED_MODEL_CLASS = {
     "llama": LlamaForCausalLM,
-    "mistral": LlamaForCausalLM,
-    "mixtral": LlamaForCausalLM,
+    "mistral": MistralForCausalLM,
     "gemma": GemmaForCausalLM
 }
 
