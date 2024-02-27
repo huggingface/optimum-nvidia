@@ -26,25 +26,18 @@ try:
 except Exception as error:
     assert False, "Error: Could not open '%s' due %s\n" % (filepath, error)
 
-PYTHON_VERSION = f"{pyversion.major}{pyversion.minor}"
-NVIDIA_PYPI_INDEX = "https://pypi.nvidia.com"
-TRT_LLM_VERSION = "0.9.0.dev2024020600"
-TRT_LLM_TARGET_HOSTED_VERSION = f"{TRT_LLM_VERSION}-cp{PYTHON_VERSION}-cp{PYTHON_VERSION}-{system().lower()}_{machine()}"
-
-print("VERSION: ", TRT_LLM_TARGET_HOSTED_VERSION)
-
 INSTALL_REQUIRES = [
     "accelerate",
     "dataset",
-    "fsspec",
     "huggingface_hub >= 0.14.0",
     "hf-transfer",
-    "numpy >= 1.22.0",
+    "numpy >= 1.26.0",
     "onnx >= 1.12.0",
     "optimum >= 1.13.0",
     "setuptools",
-    "transformers >= 4.32.1",
-    f"tensorrt-llm @ {NVIDIA_PYPI_INDEX}/tensorrt-llm/tensorrt_llm-{TRT_LLM_TARGET_HOSTED_VERSION}.whl",
+    "transformers >= 4.38.1",
+    "tensorrt-llm == 0.9.0dev2024022000",
+    "nvidia-ammo >= 0.7.0",
     "pynvml"
 ]
 
@@ -64,17 +57,9 @@ QUALITY_REQUIRES = [
 ]
 
 
-QUANTIZATION_REQUIRES = [
-    "ammo"  # This one is a bit harder to install ...
-    "datasets"
-    "transformers",
-    "torch",
-]
-
 EXTRAS_REQUIRE = {
     "tests": TESTS_REQUIRES,
     "quality": QUALITY_REQUIRES,
-    "quantization": QUANTIZATION_REQUIRES,
 }
 
 setup(
@@ -105,6 +90,7 @@ setup(
     packages=find_namespace_packages(include=["optimum*"]),
     install_requires=INSTALL_REQUIRES,
     extras_require=EXTRAS_REQUIRE,
+    dependency_links=["https://pypi.nvidia.com"],
     include_package_data=True,
     zip_safe=False,
 )
