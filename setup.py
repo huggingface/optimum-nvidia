@@ -35,7 +35,7 @@ INSTALL_REQUIRES = [
     "numpy >= 1.22.0",
     "onnx >= 1.12.0",
     "optimum >= 1.13.0",
-    "transformers >= 4.32.1",
+    "transformers >= 4.38.1",
     "pynvml"
 ]
 
