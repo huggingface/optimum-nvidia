@@ -10,7 +10,7 @@ description =  """Optimum Nvidia is the interface between the Hugging Face Trans
 authors = [{name = "HuggingFace Inc. Machine Learning Optimization Team", email = "hardware@huggingface.co"}]
 keywords = ["transformers", "neural-network", "inference", "nvidia", "tensorrt", "ampere", "hopper"]
 readme = "README.md"
-license = {text = "Apache/2.0", file="LICENSE"}
+license = {text = "Apache/2.0"}
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "License :: OSI Approved :: Apache Software License",
@@ -21,11 +21,6 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
-
-[project.urls]
-Homepage = "https://huggingface.co/hardware/nvidia"
-Repository = "https://github.com/huggingface/optimum-nvidia"
-Issues = "https://github.com/huggingface/optimum-nvidia/issues"
 
 # List dependencies
 dependencies = [
@@ -38,9 +33,15 @@ dependencies = [
     "optimum >= 1.13.0",
     "setuptools",
     "transformers >= 4.38.1",
-#    "tensorrt_llm",
     "pynvml"
 ]
+
+
+[project.urls]
+Homepage = "https://huggingface.co/hardware/nvidia"
+Repository = "https://github.com/huggingface/optimum-nvidia"
+Issues = "https://github.com/huggingface/optimum-nvidia/issues"
+
 
 # List additional dependencies
 [project.optional-dependencies]
