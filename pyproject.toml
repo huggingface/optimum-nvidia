@@ -1,3 +1,57 @@
+[project]
+name = "optimum-nvidia"
+requires-python = ">= 3.10"
+dynamic = ["version"]
+description =  """Optimum Nvidia is the interface between the Hugging Face Transformers and NVIDIA GPUs. "
+"It provides a set of tools enabling easy model loading, training and "
+"inference on single and multiple GPU cards for different downstream tasks."""
+
+# Some contact information
+authors = [{name = "HuggingFace Inc. Machine Learning Optimization Team", email = "hardware@huggingface.co"}]
+keywords = ["transformers", "neural-network", "inference", "nvidia", "tensorrt", "ampere", "hopper"]
+readme = "README.md"
+license = {text = "Apache/2.0", file="LICENSE"}
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "License :: OSI Approved :: Apache Software License",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.urls]
+Homepage = "https://huggingface.co/hardware/nvidia"
+Repository = "https://github.com/huggingface/optimum-nvidia"
+Issues = "https://github.com/huggingface/optimum-nvidia/issues"
+
+# List dependencies
+dependencies = [
+    "accelerate",
+    "dataset",
+    "huggingface_hub > 0.17.0, < 0.21.0",
+    "hf-transfer",
+    "numpy >= 1.22.0",
+    "onnx >= 1.12.0",
+    "optimum >= 1.13.0",
+    "setuptools",
+    "transformers >= 4.38.1",
+#    "tensorrt_llm",
+    "pynvml"
+]
+
+# List additional dependencies
+[project.optional-dependencies]
+test = ["pytest", "psutil", "parameterized", "datasets", "safetensors",]
+quality = ["black", "ruff", "isort", "hf_doc_builder @ git+https://github.com/huggingface/doc-builder.git",]
+
+# Configure build system
+[build-system]
+requires = ["setuptools"]
+
+# Configure tools around
 [tool.ruff]
 # Never enforce `E501` (line length violations).
 ignore = ["C901", "E501", "E741", "F402", "F823" ]

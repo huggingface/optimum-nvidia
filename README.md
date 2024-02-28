@@ -6,10 +6,9 @@ Optimum-NVIDIA
 <h4> Optimized inference with NVIDIA and Hugging Face </h4>
 
 [![Documentation](https://img.shields.io/badge/docs-latest-brightgreen.svg?style=flat)](https://huggingface.co/docs/optimum/index)
-[![python](https://img.shields.io/badge/python-3.10.12-green)](https://www.python.org/downloads/release/python-31012/)
+[![python](https://img.shields.io/badge/python-3.10.12-green)](https://www.python.org/downloads/release/python-31013/)
 [![cuda](https://img.shields.io/badge/cuda-12.2-green)](https://developer.nvidia.com/cuda-downloads)
-[![trt-llm](https://img.shields.io/badge/TensorRT--LLM-0.6.1-green)](https://github.com/nvidia/tensorrt-llm)
-[![version](https://img.shields.io/badge/release-0.1.0-green)]()
+[![trt-llm](https://img.shields.io/badge/TensorRT--LLM-0.9.0-green)](https://github.com/nvidia/tensorrt-llm)
 [![license](https://img.shields.io/badge/license-Apache%202-blue)](./LICENSE)
 
 ---
@@ -85,10 +84,10 @@ model = AutoModelForCausalLM.from_pretrained(
 model_inputs = tokenizer(["How is autonomous vehicle technology transforming the future of transportation and urban planning?"], return_tensors="pt").to("cuda")
 
 generated_ids = model.generate(
-                    **model_inputs, 
-                    top_k=40, 
-                    top_p=0.7, 
-                    repetition_penalty=10,
+    **model_inputs, 
+    top_k=40, 
+    top_p=0.7, 
+    repetition_penalty=10,
 )
 
 tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
@@ -99,8 +98,7 @@ To learn more about text generation with LLMs, check out [this guide](https://hu
 <!-- For more details, read our [documentation](https://huggingface.com/docs/optimum/nvidia/index). -->
 
 # Support Matrix
-We test Optimum-NVIDIA on 4090, L40S, and H100 Tensor Core GPUs, though it is expected to work on any GPU based on the following architectures:
-* Volta
+We test Optimum-NVIDIA on 4090, L40S, and H100 Tensor Core GPUs, though it is expected to work on any GPU based on the following architectures: 
 * Turing (with experimental support for T4 / RTX Quadro x000)
 * Ampere (A100/A30 are supported. Experimental support for A10, A40, RTX Ax000)
 * Hopper
@@ -116,7 +114,9 @@ Optimum-NVIDIA currently accelerates text-generation with LLaMAForCausalLM, and 
 
 | Model             | Tasks           |
 | :----             | :----           |
-| LLaMAForCausalLM  | TextGeneration  |
+| Gemma             | TextGeneration  |
+| Llama             | TextGeneration  |
+| Mistral           | TextGeneration  |
 | Additional Models | Coming soon     | -->
 
 # Contributing
