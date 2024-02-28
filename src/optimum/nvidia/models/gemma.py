@@ -64,8 +64,8 @@ def load_from_hf_gemma(
 
     model_params = dict(hf_gemma.named_parameters())
     # concatenate, duplicate and reshape q, k, v -> qkv
-    for l in range(hf_gemma.config.num_hidden_layers):
-        prefix = f"model.layers.{l}.self_attn."
+    for layer in range(hf_gemma.config.num_hidden_layers):
+        prefix = f"model.layers.{layer}.self_attn."
         q_weight = model_params[prefix + "q_proj.weight"]
         k_weight = model_params[prefix + "k_proj.weight"]
         v_weight = model_params[prefix + "v_proj.weight"]
@@ -90,7 +90,7 @@ def load_from_hf_gemma(
         tensorrt_llm_llama.config.moe_normalization_mode,
     )
     # concatenate MoE gated activations & stack experts
-    for l in range(hf_gemma.config.num_hidden_layers):
+    for layer in range(hf_gemma.config.num_hidden_layers):
         if not moe_config.has_moe():
             continue
 
@@ -98,23 +98,23 @@ def load_from_hf_gemma(
         if moe_config.tp_mode == moe_config.ParallelismMode.EXPERT_PARALLEL:
             rank_experts = mapping.ep_experts(moe_config.num_experts)
         for suffix in ["w1", "w2", "w3"]:
-            model_params[f"model.layers.{l}.block_sparse_moe.experts.{suffix}.weight"] = torch.stack(
+            model_params[f"model.layers.{layer}.block_sparse_moe.experts.{suffix}.weight"] = torch.stack(
                 [
-                    model_params[f"model.layers.{l}.block_sparse_moe.experts.{expert}.{suffix}.weight"]
+                    model_params[f"model.layers.{layer}.block_sparse_moe.experts.{expert}.{suffix}.weight"]
                     for expert in rank_experts
                 ]
             )
 
-        w3 = model_params[f"model.layers.{l}.block_sparse_moe.experts.w3.weight"]
-        w2 = model_params[f"model.layers.{l}.block_sparse_moe.experts.w2.weight"]
-        w1 = model_params[f"model.layers.{l}.block_sparse_moe.experts.w1.weight"]
+        w3 = model_params[f"model.layers.{layer}.block_sparse_moe.experts.w3.weight"]
+        w2 = model_params[f"model.layers.{layer}.block_sparse_moe.experts.w2.weight"]
+        w1 = model_params[f"model.layers.{layer}.block_sparse_moe.experts.w1.weight"]
         if moe_config.tp_mode == moe_config.ParallelismMode.TENSOR_PARALLEL:
             w3 = split(w3, mapping.tp_size, mapping.tp_rank, dim=1)
             w2 = split(w2, mapping.tp_size, mapping.tp_rank, dim=2)
             w1 = split(w1, mapping.tp_size, mapping.tp_rank, dim=1)
         # concat w3 and w1 for gated expert
-        model_params[f"model.layers.{l}.block_sparse_moe.experts.w3w1.weight"] = torch.concat([w3, w1], dim=-2)
-        model_params[f"model.layers.{l}.block_sparse_moe.experts.w2.weight"] = w2
+        model_params[f"model.layers.{layer}.block_sparse_moe.experts.w3w1.weight"] = torch.concat([w3, w1], dim=-2)
+        model_params[f"model.layers.{layer}.block_sparse_moe.experts.w2.weight"] = w2
 
     torch_dtype = str_dtype_to_torch(dtype)
     layers_range = mapping.pp_layers(hf_gemma.config.num_hidden_layers)

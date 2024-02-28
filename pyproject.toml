@@ -31,15 +31,14 @@ Issues = "https://github.com/huggingface/optimum-nvidia/issues"
 dependencies = [
     "accelerate",
     "dataset",
-    "fsspec",
-    "huggingface_hub >= 0.14.0",
+    "huggingface_hub > 0.17.0, < 0.21.0",
     "hf-transfer",
     "numpy >= 1.22.0",
     "onnx >= 1.12.0",
     "optimum >= 1.13.0",
     "setuptools",
-    "transformers >= 4.32.1",
-    "tensorrt_llm",
+    "transformers >= 4.38.1",
+#    "tensorrt_llm",
     "pynvml"
 ]
 

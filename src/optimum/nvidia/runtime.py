@@ -25,9 +25,6 @@ import torch
 from huggingface_hub import ModelHubMixin
 
 
-# from optimum.nvidia.builder import TensorRTEngineBuilder
-
-
 LOGGER = getLogger(__name__)
 
 PackedTensor = List[torch.Tensor]
