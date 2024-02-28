@@ -140,14 +140,13 @@ def load_from_hf_gemma(
                         v = torch.from_numpy(
                             np.pad(v.detach().cpu().numpy(), ((0, pad_width), (0, 0)), "constant", constant_values=0)
                         )
-                    # v_ = torch_to_numpy(numpy_to_torch(v) * np.sqrt(2048.0))
                     weights["lm_head.weight"] = split(v, mapping.tp_size, mapping.tp_rank)
 
             if tensorrt_llm_llama.config.use_parallel_embedding:
                 v = split(v, mapping.tp_size, mapping.tp_rank, tensorrt_llm_llama.config.embedding_sharding_dim)
             if mapping.is_first_pp_rank():
                 weights["transformer.vocab_embedding.weight"] = torch_to_numpy(
-                    numpy_to_torch(v).to(torch.float32) * np.sqrt(2048.0)
+                    numpy_to_torch(v).to(torch.float32) * np.sqrt(tensorrt_llm_llama.config.hidden_size)
                 )
         elif "model.norm.weight" in k:
             if mapping.is_last_pp_rank():
