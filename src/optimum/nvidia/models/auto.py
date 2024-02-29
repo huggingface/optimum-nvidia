@@ -50,7 +50,16 @@ class AutoModelForCausalLM(ModelHubMixin):
         if not config:
             raise ValueError("Unable to determine the model type without config")
 
-        model_type = config["model_type"]
+        if "model_type" in config:
+            model_type = config["model_type"]
+        elif "architecture" in config:
+            model_type = config["architecture"]
+        else:
+            raise ValueError(
+                "Unable to determine the model type from the provided config. "
+                "Please open-up an issue at https://github.com/huggingface/optimum-nvidia/issues"
+            )
+
         if model_type not in _SUPPORTED_MODEL_CLASS:
             raise UnsupportedModelException(model_type)
 
