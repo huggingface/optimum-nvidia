@@ -59,6 +59,7 @@ if __name__ == "__main__":
 
     # Create the model
     model = AutoModelForCausalLM.from_pretrained(args.model, use_fp8=args.fp8)
+    model.save_pretrained(args.output)
 
     prompt = "What is the latest generation of Nvidia GPUs?"
     tokens = tokenizer(prompt, padding=True, return_tensors="pt")
