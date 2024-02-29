@@ -65,7 +65,6 @@ class CausalLM(CompiledModel):
 
     def __init__(
         self,
-        config: Union[Dict[str, Any], PathLike],
         engines_folder: Path,
         *,
         gpus_per_node: int,
@@ -74,11 +73,7 @@ class CausalLM(CompiledModel):
         super().__init__(engines_folder)
 
         self._device = torch.device("cuda")
-
-        if isinstance(config, PathLike):
-            self._config = ctrrt.GptJsonConfig.parse_file(config)
-        else:
-            self._config = ctrrt.GptJsonConfig.parse(json.dumps(config))
+        self._config = ctrrt.GptJsonConfig.parse_file(engines_folder / "config.json")
         self._mapping = ctrrt.WorldConfig.mpi(
             gpus_per_node,
             self._config.tensor_parallelism,
