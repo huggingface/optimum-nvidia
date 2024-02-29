@@ -15,10 +15,10 @@
 
 import json
 import shutil
-from glob import iglob
+from glob import iglob, glob
 from logging import getLogger
 from pathlib import Path
-from typing import Dict, Optional, Protocol, Type, Union, runtime_checkable
+from typing import Dict, Optional, Protocol, Type, Union, runtime_checkable, Set
 
 import numpy as np
 from huggingface_hub import ModelHubMixin, snapshot_download
@@ -37,8 +37,25 @@ from optimum.nvidia.utils import get_user_agent
 
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
+FILE_TRTLLM_ENGINE_PATTERN = "rank*.safetensors"
+HUB_TRTLLM_ENGINE_PATTERNS = ["config.json", FILE_TRTLLM_ENGINE_PATTERN]
+HUB_SAFETENSORS_PATTERNS = ["config.json", "*.safetensors", SAFE_WEIGHTS_INDEX_NAME]
 
 LOGGER = getLogger()
+
+
+def find_prebuilt_engine_files(root: Path) -> Optional[Set[Path]]:
+    """
+    Attempt to locate any prebuilt TRT engine files at the provided root folder and return the path to each of them.
+    :param root: The directory we should look into for the engine files.
+    :return: None if no engine was found, set of `Path` otherwise
+    """
+
+    # Look for engine file
+    if len(engines := glob(FILE_TRTLLM_ENGINE_PATTERN)):
+        return {root.joinpath(engine) for engine in engines}
+
+    return None
 
 
 @runtime_checkable
@@ -56,53 +73,11 @@ class SupportsTensorrtConversion(Protocol):
 
 class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
-    @classmethod
-    def _from_pretrained(
-        cls: Type[T],
-        *,
-        model_id: str,
-        revision: Optional[str],
-        cache_dir: Optional[Union[str, Path]],
-        force_download: bool,
-        proxies: Optional[Dict],
-        resume_download: bool,
-        local_files_only: bool,
-        token: Optional[Union[str, bool]],
-        **model_kwargs,
-    ) -> T:
-        if not isinstance(cls, SupportsTensorrtConversion):
-            raise ValueError(
-                f"{cls} doesn't support converting from Hugging Face Hub model."
-                " Please open up an issue at https://github.com/huggingface/optimum-nvidia/issues"
-            )
-
-        # Let's make sure we have the config
-        model_config = model_kwargs.get("config", None)
-        if not model_config:
-            raise ValueError(
-                "Original model configuration (config.json) was not found."
-                "The model configuration is required to build TensorRT-LLM engines."
-            )
-
-        # Convert the config from Hugging Face to something TRTLLM understand
-        LOGGER.debug(f"Parsing Hub configuration to TRTLLM compatible one (model_type: {model_config['model_type']}).")
-        model_config = AutoConfig.for_model(**model_config)
-        config = HuggingFaceHubModel.convert_config_to_trtllm(cls, model_config)
-
+    @staticmethod
+    def convert_and_build():
         # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
         LOGGER.debug("Allocating TRTLLM model to build the checkpoint")
         model = cls.TRT_LLM_TARGET_MODEL_CLASS.from_config(config)
-
-        # Let's retrieve the weights for this model
-        # NOTE: We use `snapshot_download` to be able to provide a custom user-agent
-        # NOTE: maybe we can do the same with `from_pretrained`
-        LOGGER.debug(f"Loading the weights from the Hub ({model_id}@{revision})")
-        local_path = HuggingFaceHubModel.retrieve_snapshot_from_hub(
-            model_id, revision, cache_dir, force_download, proxies, resume_download, local_files_only, token
-        )
-
-        if not isinstance(local_path, Path):
-            local_path = Path(local_path)
 
         # Load the weights
         LOGGER.debug(
@@ -139,7 +114,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         else:
             max_prompt_length = model_kwargs.pop("max_prompt_length", 128)
             max_new_tokens = (
-                model_kwargs.pop("max_output_length", model_config.max_position_embeddings) - max_prompt_length
+                    model_kwargs.pop("max_output_length", model_config.max_position_embeddings) - max_prompt_length
             )
 
             if max_new_tokens < 1:
@@ -172,6 +147,56 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         engine_builder = LocalEngineBuilder(config, local_path)
         engine_builder.build(engine_config)
 
+
+    @classmethod
+    def _from_pretrained(
+        cls: Type[T],
+        *,
+        model_id: str,
+        revision: Optional[str],
+        cache_dir: Optional[Union[str, Path]],
+        force_download: bool,
+        proxies: Optional[Dict],
+        resume_download: bool,
+        local_files_only: bool,
+        token: Optional[Union[str, bool]],
+        **model_kwargs,
+    ) -> T:
+        if not isinstance(cls, SupportsTensorrtConversion):
+            raise ValueError(
+                f"{cls} doesn't support converting from Hugging Face Hub model."
+                " Please open up an issue at https://github.com/huggingface/optimum-nvidia/issues"
+            )
+
+        # Let's make sure we have the config
+        model_config = model_kwargs.get("config", None)
+        if not model_config:
+            raise ValueError(
+                "Original model configuration (config.json) was not found."
+                "The model configuration is required to build TensorRT-LLM engines."
+            )
+
+        # Convert the config from Hugging Face to something TRTLLM understand
+        LOGGER.debug(f"Parsing Hub configuration to TRTLLM compatible one (model_type: {model_config['model_type']}).")
+        model_config = AutoConfig.for_model(**model_config)
+        config = HuggingFaceHubModel.convert_config_to_trtllm(cls, model_config)
+
+        # Let's retrieve the weights for this model
+        # NOTE: We use `snapshot_download` to be able to provide a custom user-agent
+        # NOTE: maybe we can do the same with `from_pretrained`
+        local_path = HuggingFaceHubModel.retrieve_snapshot_from_hub(
+            model_id, revision, cache_dir, force_download, proxies, resume_download, local_files_only, token, engines_only=True
+        )
+
+        if not isinstance(local_path, Path):
+            local_path = Path(local_path)
+
+        # Look for prebuilt engine files, if none found, we convert and build
+        if (engine_files := find_prebuilt_engine_files(local_path)) is None:
+            LOGGER.info(f"No engine file found in {local_path}, converting and building engines")
+            LOGGER.debug(f"Loading the weights from the Hub ({model_id}@{revision})")
+            raise NotImplementedError("Cannot convert for now")
+
         model = cls(
             local_path,
             gpus_per_node=config.mapping.gpus_per_node,
@@ -195,7 +220,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             LOGGER.debug(f"Saving engines at {save_directory}")
 
             # Move the engine(s)
-            for engine in iglob("rank*.safetensors", root_dir=engine_folder):
+            for engine in iglob(FILE_TRTLLM_ENGINE_PATTERN, root_dir=engine_folder):
                 LOGGER.debug(f"Moving file {engine_folder / engine} to {save_directory / engine}")
                 shutil.move(engine_folder / engine, save_directory / engine)
 
@@ -232,6 +257,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         resume_download: bool,
         local_files_only: bool,
         token: Optional[Union[str, bool]],
+        prebuilt_engines_only: bool = False
     ) -> Path:
         """
 
@@ -243,13 +269,16 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         :param resume_download:
         :param local_files_only:
         :param token:
+        :param prebuilt_engines_only:
         :return:
         """
+        patterns = HUB_TRTLLM_ENGINE_PATTERNS if prebuilt_engines_only else HUB_SAFETENSORS_PATTERNS
+
         local_path = snapshot_download(
             repo_id=model_id,
             revision=revision,
             cache_dir=cache_dir,
-            allow_patterns=["config.json", "*.safetensors", SAFE_WEIGHTS_INDEX_NAME],
+            allow_patterns=patterns,
             force_download=force_download,
             proxies=proxies,
             resume_download=resume_download,
