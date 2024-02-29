@@ -14,6 +14,8 @@
 #  limitations under the License.
 
 import json
+import shutil
+from glob import iglob
 from logging import getLogger
 from pathlib import Path
 from typing import Dict, Optional, Protocol, Type, Union, runtime_checkable
@@ -34,6 +36,8 @@ from optimum.nvidia.builder.config import EngineConfigBuilder
 from optimum.nvidia.utils import get_user_agent
 
 
+ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
+
 LOGGER = getLogger()
 
 
@@ -51,6 +55,7 @@ class SupportsTensorrtConversion(Protocol):
 
 
 class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
+
     @classmethod
     def _from_pretrained(
         cls: Type[T],
@@ -79,11 +84,6 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 "The model configuration is required to build TensorRT-LLM engines."
             )
 
-        # TODO: How to handle if there is already a checkpoint or whatever?
-        output_path = Path(".engine")
-        if not output_path.exists():
-            output_path.mkdir()
-
         # Convert the config from Hugging Face to something TRTLLM understand
         LOGGER.debug(f"Parsing Hub configuration to TRTLLM compatible one (model_type: {model_config['model_type']}).")
         model_config = AutoConfig.for_model(**model_config)
@@ -100,6 +100,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         local_path = HuggingFaceHubModel.retrieve_snapshot_from_hub(
             model_id, revision, cache_dir, force_download, proxies, resume_download, local_files_only, token
         )
+
+        if not isinstance(local_path, Path):
+            local_path = Path(local_path)
 
         # Load the weights
         LOGGER.debug(
@@ -124,10 +127,10 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             model.load(converted_weights)
 
             # Write ranked-checkpoints
-            to_safetensors(converted_weights, output_path / f"rank{config.mapping.rank}.safetensors")
+            to_safetensors(converted_weights, local_path / f"rank{config.mapping.rank}.safetensors")
 
         # Write global config
-        with open(output_path / "config.json", "w") as config_f:
+        with open(local_path / "config.json", "w") as config_f:
             json.dump(config.to_dict(), config_f)
 
         # Retrieve the parameters for building the engine
@@ -166,15 +169,43 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
             engine_config = builder.build()
 
-        engine_builder = LocalEngineBuilder(config, output_path)
+        engine_builder = LocalEngineBuilder(config, local_path)
         engine_builder.build(engine_config)
 
-        return cls(
-            output_path / "config.json",
-            output_path,
+        model = cls(
+            local_path,
             gpus_per_node=config.mapping.gpus_per_node,
             use_cuda_graph=model_kwargs.pop("use_cuda_graph", False),
         )
+
+        setattr(model, ATTR_TRTLLM_ENGINE_FOLDER, local_path)
+        return model
+
+    def _save_pretrained(self, save_directory: Path) -> None:
+        if not hasattr(self, ATTR_TRTLLM_ENGINE_FOLDER):
+            raise ValueError(
+                "Unable to determine the root folder containing TensorRT-LLM engines. "
+                "Please open-up an issue at https://github.com/huggingface/optimum-nvidia"
+            )
+
+        # Retrieve the folder
+        engine_folder = Path(getattr(self, ATTR_TRTLLM_ENGINE_FOLDER))
+
+        if engine_folder != save_directory:
+            LOGGER.debug(f"Saving engines at {save_directory}")
+
+            # Move the engine(s)
+            for engine in iglob("rank*.safetensors", root_dir=engine_folder):
+                LOGGER.debug(f"Moving file {engine_folder / engine} to {save_directory / engine}")
+                shutil.move(engine_folder / engine, save_directory / engine)
+
+            # Move the configuration
+            if (config_path := engine_folder / "config.json").exists():
+                shutil.move(config_path, save_directory / "config.json")
+            else:
+                LOGGER.warning(
+                    f"No config.json found at {config_path}. It might not be possible to reload the engines."
+                )
 
     @staticmethod
     def convert_config_to_trtllm(cls: Type[SupportsTensorrtConversion], config: PretrainedConfig) -> TensorRTConfig:
