@@ -21,7 +21,6 @@ from typing import List, Optional, Tuple, Union
 
 import tensorrt_llm.bindings as ctrrt
 import torch
-from huggingface_hub import ModelHubMixin
 
 
 LOGGER = getLogger(__name__)
