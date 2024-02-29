@@ -68,7 +68,6 @@ def find_prebuilt_engine_files(root: Path) -> Optional[Set[Path]]:
     :return: None if no engine was found, set of `Path` otherwise
     """
 
-    print(f"LOOKING AT: {root}")
     # Look for engine file
     if len(engines := glob(FILE_TRTLLM_ENGINE_PATTERN, root_dir=root)):
         return {root.joinpath(engine) for engine in engines}
