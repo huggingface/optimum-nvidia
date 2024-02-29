@@ -34,7 +34,7 @@ DEFAULT_PROMPT_LENGTH: int = 128
 DEFAULT_BEAM_WIDTH: int = 1
 
 
-class CompiledModel(ModelHubMixin):
+class CompiledModel:
     def __init__(self, engines_folder_path: Union[Path, PathLike]):
         self._engines_folder_path = Path(engines_folder_path)
 
