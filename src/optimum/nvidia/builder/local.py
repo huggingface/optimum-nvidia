@@ -12,8 +12,6 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
-
 from itertools import chain
 from logging import getLogger
 from pathlib import Path
@@ -108,7 +106,10 @@ class LocalEngineBuilder:
             if not (self._output_folder / ranked_checkpoint).exists():
                 raise ValueError(f"Missing rank-{rank} checkpoints (rank{rank}.safetensors), cannot build.")
 
-        if (result := run([LocalEngineBuilder.TRTLLM_BUILD_EXEC] + cli_params_list)).returncode != 0:
+        # Run the build
+        result = run([LocalEngineBuilder.TRTLLM_BUILD_EXEC] + cli_params_list)
+
+        if result.returncode != 0:
             raise ValueError(
                 f"Compilation failed ({result.returncode}), "
                 "please open up an issue at https://github.com/huggingface/optimum-nvidia"
