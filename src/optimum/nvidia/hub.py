@@ -15,10 +15,10 @@
 
 import json
 import shutil
-from glob import iglob, glob
+from glob import glob, iglob
 from logging import getLogger
 from pathlib import Path
-from typing import Dict, Optional, Protocol, Type, Union, runtime_checkable, Set
+from typing import Any, Dict, Optional, Protocol, Set, Tuple, Type, Union, runtime_checkable
 
 import numpy as np
 from huggingface_hub import ModelHubMixin, snapshot_download
@@ -37,11 +37,28 @@ from optimum.nvidia.utils import get_user_agent
 
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
-FILE_TRTLLM_ENGINE_PATTERN = "rank*.safetensors"
+FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]*.engine"
 HUB_TRTLLM_ENGINE_PATTERNS = ["config.json", FILE_TRTLLM_ENGINE_PATTERN]
 HUB_SAFETENSORS_PATTERNS = ["config.json", "*.safetensors", SAFE_WEIGHTS_INDEX_NAME]
 
 LOGGER = getLogger()
+
+
+def extract_model_type(config: Dict[str, Any]) -> Tuple[Optional[str], bool]:
+    if "model_type" in config:
+        model_type = config["model_type"]
+        is_tensorrt_config = False
+
+    # This path try to extract from the TensorRTLLM config
+    elif "pretrained_config" in config and "architecture" in config["pretrained_config"]:
+        model_type = config["pretrained_config"]["architecture"]
+        prefix_pos = model_type.index("For")
+        model_type = model_type[:prefix_pos].lower()
+        is_tensorrt_config = True
+    else:
+        return None, False
+
+    return model_type, is_tensorrt_config
 
 
 def find_prebuilt_engine_files(root: Path) -> Optional[Set[Path]]:
@@ -51,8 +68,9 @@ def find_prebuilt_engine_files(root: Path) -> Optional[Set[Path]]:
     :return: None if no engine was found, set of `Path` otherwise
     """
 
+    print(f"LOOKING AT: {root}")
     # Look for engine file
-    if len(engines := glob(FILE_TRTLLM_ENGINE_PATTERN)):
+    if len(engines := glob(FILE_TRTLLM_ENGINE_PATTERN, root_dir=root)):
         return {root.joinpath(engine) for engine in engines}
 
     return None
@@ -72,11 +90,9 @@ class SupportsTensorrtConversion(Protocol):
 
 
 class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
-
     @staticmethod
     def convert_and_build():
         pass
-
 
     @classmethod
     def _from_pretrained(
@@ -107,15 +123,22 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             )
 
         # Convert the config from Hugging Face to something TRTLLM understand
-        LOGGER.debug(f"Parsing Hub configuration to TRTLLM compatible one (model_type: {model_config['model_type']}).")
-        model_config = AutoConfig.for_model(**model_config)
-        config = HuggingFaceHubModel.convert_config_to_trtllm(cls, model_config)
+        model_type, is_tensorrt_config = extract_model_type(model_config)
+        LOGGER.debug(f"Parsing Hub configuration to TRTLLM compatible one (model_type: {model_type}).")
 
         # Let's retrieve the weights for this model
         # NOTE: We use `snapshot_download` to be able to provide a custom user-agent
         # NOTE: maybe we can do the same with `from_pretrained`
         local_path = HuggingFaceHubModel.retrieve_snapshot_from_hub(
-            model_id, revision, cache_dir, force_download, proxies, resume_download, local_files_only, token, prebuilt_engines_only=True
+            model_id,
+            revision,
+            cache_dir,
+            force_download,
+            proxies,
+            resume_download,
+            local_files_only,
+            token,
+            prebuilt_engines_only=True,
         )
 
         if not isinstance(local_path, Path):
@@ -123,10 +146,21 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
         # Look for prebuilt engine files, if none found, we convert and build
         if find_prebuilt_engine_files(local_path) is None:
+            model_config = AutoConfig.for_model(model_type, **model_config)
+            config = HuggingFaceHubModel.convert_config_to_trtllm(cls, model_config, is_tensorrt_config)
+
             LOGGER.info(f"No engine file found in {local_path}, converting and building engines")
             LOGGER.debug(f"Loading the weights from the Hub ({model_id}@{revision})")
             local_path = HuggingFaceHubModel.retrieve_snapshot_from_hub(
-                model_id, revision, cache_dir, force_download, proxies, resume_download, local_files_only, token, prebuilt_engines_only=False
+                model_id,
+                revision,
+                cache_dir,
+                force_download,
+                proxies,
+                resume_download,
+                local_files_only,
+                token,
+                prebuilt_engines_only=False,
             )
 
             # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
@@ -168,7 +202,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             else:
                 max_prompt_length = model_kwargs.pop("max_prompt_length", 128)
                 max_new_tokens = (
-                        model_kwargs.pop("max_output_length", model_config.max_position_embeddings) - max_prompt_length
+                    model_kwargs.pop("max_output_length", model_config.max_position_embeddings) - max_prompt_length
                 )
 
                 if max_new_tokens < 1:
@@ -203,7 +237,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
         model = cls(
             local_path,
-            gpus_per_node=config.mapping.gpus_per_node,
+            gpus_per_node=model_kwargs.pop("gpus_per_node", 1),
             use_cuda_graph=model_kwargs.pop("use_cuda_graph", False),
         )
 
@@ -237,15 +271,20 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 )
 
     @staticmethod
-    def convert_config_to_trtllm(cls: Type[SupportsTensorrtConversion], config: PretrainedConfig) -> TensorRTConfig:
+    def convert_config_to_trtllm(
+        cls: Type[SupportsTensorrtConversion],
+        config: Union[PretrainedConfig, Dict[str, Any]],
+        is_tensorrt_config: bool,
+    ) -> TensorRTConfig:
         """
         Convert a configuration initially generated by various Hugging Face libraries like transformers, diffusers, etc.
         to TensorRT-LLM `tensorrt_llm.modeling_utils.PretrainedConfig`.
         :param cls: The target class to allocate the model
         :param config: The original library configuration file
+        :param is_tensorrt_config: Flag specifying if the provided config is a transformers or tensorrt-llm one
         :return: `tensorrt_llm.modeling_utils.PretrainedConfig`
         """
-        config = cls.MODEL_CONFIG.from_config(config)
+        config = cls.MODEL_CONFIG.from_dict(config) if is_tensorrt_config else cls.MODEL_CONFIG.from_config(config)
         if hasattr(config, "check_config"):
             config.check_config()
 
@@ -261,7 +300,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         resume_download: bool,
         local_files_only: bool,
         token: Optional[Union[str, bool]],
-        prebuilt_engines_only: bool = False
+        prebuilt_engines_only: bool = False,
     ) -> Path:
         """
 
