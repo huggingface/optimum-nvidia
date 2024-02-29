@@ -75,77 +75,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
     @staticmethod
     def convert_and_build():
-        # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
-        LOGGER.debug("Allocating TRTLLM model to build the checkpoint")
-        model = cls.TRT_LLM_TARGET_MODEL_CLASS.from_config(config)
-
-        # Load the weights
-        LOGGER.debug(
-            f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
-        )
-        hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
-            local_path,
-            revision=revision,
-            cache_dir=cache_dir,
-            local_files_only=True,
-            token=token,
-        )
-
-        # Apply the conversion from Hugging Face weights to TRTLLM
-        for rank in range(config.mapping.world_size):
-            LOGGER.debug(f"Converting weights from Hugging Face checkpoint {model_id} for rank {rank}")
-            config.set_rank(rank)
-            converted_weights = cls.convert_weights(model, hf_model, config)
-            converted_weights = {name: numpy_to_torch(tensor) for name, tensor in converted_weights.items()}
-
-            # Bind the converted weights against the TRTLLM model
-            model.load(converted_weights)
-
-            # Write ranked-checkpoints
-            to_safetensors(converted_weights, local_path / f"rank{config.mapping.rank}.safetensors")
-
-        # Write global config
-        with open(local_path / "config.json", "w") as config_f:
-            json.dump(config.to_dict(), config_f)
-
-        # Retrieve the parameters for building the engine
-        if "engine_config" in model_kwargs:
-            engine_config = model_kwargs.pop("engine_config")
-        else:
-            max_prompt_length = model_kwargs.pop("max_prompt_length", 128)
-            max_new_tokens = (
-                    model_kwargs.pop("max_output_length", model_config.max_position_embeddings) - max_prompt_length
-            )
-
-            if max_new_tokens < 1:
-                raise ValueError(
-                    "Unable to build the engine because the generation would lead to max_num_tokens < 1. ("
-                    f"max_prompt_length = {max_prompt_length}, "
-                    f"max_position_embeddings={model_config.max_position_embeddings}, "
-                    f"max_new_tokens={max_new_tokens}"
-                    ")"
-                )
-
-            builder = (
-                EngineConfigBuilder(model_config)
-                .with_plugins_config(config.get_plugins_config())
-                .with_inference_profile(model_kwargs.pop("max_batch_size", 1), max_prompt_length, max_new_tokens)
-                .with_generation_profile(
-                    model_kwargs.pop("num_beams", 1),
-                )
-                .logits_as(model_kwargs.pop("logits_dtype", "float32"))
-            )
-
-            if model_kwargs.pop("strongly_typed", False):
-                builder.strongly_typed()
-
-            if "max_speculated_draft_length" in model_kwargs:
-                builder.with_speculated_decoding(model_kwargs.pop("max_speculated_draft_length"))
-
-            engine_config = builder.build()
-
-        engine_builder = LocalEngineBuilder(config, local_path)
-        engine_builder.build(engine_config)
+        pass
 
 
     @classmethod
@@ -185,17 +115,91 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         # NOTE: We use `snapshot_download` to be able to provide a custom user-agent
         # NOTE: maybe we can do the same with `from_pretrained`
         local_path = HuggingFaceHubModel.retrieve_snapshot_from_hub(
-            model_id, revision, cache_dir, force_download, proxies, resume_download, local_files_only, token, engines_only=True
+            model_id, revision, cache_dir, force_download, proxies, resume_download, local_files_only, token, prebuilt_engines_only=True
         )
 
         if not isinstance(local_path, Path):
             local_path = Path(local_path)
 
         # Look for prebuilt engine files, if none found, we convert and build
-        if (engine_files := find_prebuilt_engine_files(local_path)) is None:
+        if find_prebuilt_engine_files(local_path) is None:
             LOGGER.info(f"No engine file found in {local_path}, converting and building engines")
             LOGGER.debug(f"Loading the weights from the Hub ({model_id}@{revision})")
-            raise NotImplementedError("Cannot convert for now")
+            local_path = HuggingFaceHubModel.retrieve_snapshot_from_hub(
+                model_id, revision, cache_dir, force_download, proxies, resume_download, local_files_only, token, prebuilt_engines_only=False
+            )
+
+            # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
+            LOGGER.debug("Allocating TRTLLM model to build the checkpoint")
+            model = cls.TRT_LLM_TARGET_MODEL_CLASS.from_config(config)
+
+            # Load the weights
+            LOGGER.debug(
+                f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
+            )
+            hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
+                local_path,
+                revision=revision,
+                cache_dir=cache_dir,
+                local_files_only=True,
+                token=token,
+            )
+
+            # Apply the conversion from Hugging Face weights to TRTLLM
+            for rank in range(config.mapping.world_size):
+                LOGGER.debug(f"Converting weights from Hugging Face checkpoint {model_id} for rank {rank}")
+                config.set_rank(rank)
+                converted_weights = cls.convert_weights(model, hf_model, config)
+                converted_weights = {name: numpy_to_torch(tensor) for name, tensor in converted_weights.items()}
+
+                # Bind the converted weights against the TRTLLM model
+                model.load(converted_weights)
+
+                # Write ranked-checkpoints
+                to_safetensors(converted_weights, local_path / f"rank{config.mapping.rank}.safetensors")
+
+            # Write global config
+            with open(local_path / "config.json", "w") as config_f:
+                json.dump(config.to_dict(), config_f)
+
+            # Retrieve the parameters for building the engine
+            if "engine_config" in model_kwargs:
+                engine_config = model_kwargs.pop("engine_config")
+            else:
+                max_prompt_length = model_kwargs.pop("max_prompt_length", 128)
+                max_new_tokens = (
+                        model_kwargs.pop("max_output_length", model_config.max_position_embeddings) - max_prompt_length
+                )
+
+                if max_new_tokens < 1:
+                    raise ValueError(
+                        "Unable to build the engine because the generation would lead to max_num_tokens < 1. ("
+                        f"max_prompt_length = {max_prompt_length}, "
+                        f"max_position_embeddings={model_config.max_position_embeddings}, "
+                        f"max_new_tokens={max_new_tokens}"
+                        ")"
+                    )
+
+                builder = (
+                    EngineConfigBuilder(model_config)
+                    .with_plugins_config(config.get_plugins_config())
+                    .with_inference_profile(model_kwargs.pop("max_batch_size", 1), max_prompt_length, max_new_tokens)
+                    .with_generation_profile(
+                        model_kwargs.pop("num_beams", 1),
+                    )
+                    .logits_as(model_kwargs.pop("logits_dtype", "float32"))
+                )
+
+                if model_kwargs.pop("strongly_typed", False):
+                    builder.strongly_typed()
+
+                if "max_speculated_draft_length" in model_kwargs:
+                    builder.with_speculated_decoding(model_kwargs.pop("max_speculated_draft_length"))
+
+                engine_config = builder.build()
+
+            engine_builder = LocalEngineBuilder(config, local_path)
+            engine_builder.build(engine_config)
 
         model = cls(
             local_path,
