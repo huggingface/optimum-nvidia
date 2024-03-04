@@ -122,7 +122,6 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             )
 
         # Convert the config from Hugging Face to something TRTLLM understand
-        # model_type, is_tensorrt_config = extract_model_type(model_config)
         model_type = model_config["model_type"]
         LOGGER.debug(f"Parsing Hub configuration to TRTLLM compatible one (model_type: {model_type}).")
 
