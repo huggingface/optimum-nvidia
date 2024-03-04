@@ -121,27 +121,24 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 "The model configuration is required to build TensorRT-LLM engines."
             )
 
-        # Convert the config from Hugging Face to something TRTLLM understand
-        model_type = model_config["model_type"]
-        LOGGER.debug(f"Parsing Hub configuration to TRTLLM compatible one (model_type: {model_type}).")
+        # Check if we are using a local path
+        if not (local_path := Path(model_id)).exists():
+            LOGGER.debug(f"Loading potential prebuilt engines from the Hub ({model_id}@{revision})")
 
-        # Let's retrieve the weights for this model
-        # NOTE: We use `snapshot_download` to be able to provide a custom user-agent
-        # NOTE: maybe we can do the same with `from_pretrained`
-        local_path = HuggingFaceHubModel.retrieve_snapshot_from_hub(
-            model_id,
-            revision,
-            cache_dir,
-            force_download,
-            proxies,
-            resume_download,
-            local_files_only,
-            token,
-            prebuilt_engines_only=True,
-        )
-
-        if not isinstance(local_path, Path):
-            local_path = Path(local_path)
+            # Let's retrieve the weights for this model
+            # NOTE: We use `snapshot_download` to be able to provide a custom user-agent
+            # NOTE: maybe we can do the same with `from_pretrained`
+            local_path = HuggingFaceHubModel.retrieve_snapshot_from_hub(
+                model_id,
+                revision,
+                cache_dir,
+                force_download,
+                proxies,
+                resume_download,
+                local_files_only,
+                token,
+                prebuilt_engines_only=True,
+            )
 
         # Look for prebuilt engine files, if none found, we convert and build
         engines_folder = local_path / "engines"
@@ -152,18 +149,22 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             config = HuggingFaceHubModel.convert_config_to_trtllm(cls, model_config)
 
             LOGGER.info(f"No engine file found in {local_path}, converting and building engines")
-            LOGGER.debug(f"Loading the weights from the Hub ({model_id}@{revision})")
-            local_path = HuggingFaceHubModel.retrieve_snapshot_from_hub(
-                model_id,
-                revision,
-                cache_dir,
-                force_download,
-                proxies,
-                resume_download,
-                local_files_only,
-                token,
-                prebuilt_engines_only=False,
-            )
+
+            # If local_path exists and is not empty we have a local snapshot
+            if not local_path.exists() or len(list(local_path.iterdir())) == 0:
+                LOGGER.debug(f"Loading original transformers weights from the Hub ({model_id}@{revision})")
+
+                local_path = HuggingFaceHubModel.retrieve_snapshot_from_hub(
+                    model_id,
+                    revision,
+                    cache_dir,
+                    force_download,
+                    proxies,
+                    resume_download,
+                    local_files_only,
+                    token,
+                    prebuilt_engines_only=False,
+                )
 
             # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
             LOGGER.debug("Allocating TRTLLM model to build the checkpoint")
