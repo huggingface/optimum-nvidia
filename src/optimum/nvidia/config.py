@@ -78,7 +78,7 @@ def convert_quant_method_to_trt(
                 "Only 8 and 16-bits activations' quantization schemas are supported."
             )
 
-        mode = QuantMode.from_description(quantize_weights=True, per_group=True)
+        mode = QuantMode.from_description(quantize_weights=True, per_group=True, use_int4_weights=weight_num_bits == 4)
         return mode, f"W{weight_num_bits}A{activation_num_bits}_AWQ"
     elif method == "gptq":
         if not activation_num_bits:
@@ -96,7 +96,7 @@ def convert_quant_method_to_trt(
                 "Only 16-bits activations' quantization schemas are supported."
             )
 
-        mode = QuantMode.from_description(quantize_weights=True, per_group=False)
+        mode = QuantMode.from_description(quantize_weights=True, per_group=False, use_int4_weights=weight_num_bits == 4)
         return mode, f"W{weight_num_bits}A16_GPTQ"
     else:
         raise ValueError(f"Unsupported quantization method: {method}")
