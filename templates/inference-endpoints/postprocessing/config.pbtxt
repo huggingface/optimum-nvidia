@@ -45,7 +45,7 @@ output [
 parameters {
   key: "tokenizer_dir"
   value: {
-    string_value: "tokenizer"
+    string_value: "/opt/endpoints/tokenizer"
   }
 }
 

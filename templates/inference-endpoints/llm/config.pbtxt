@@ -142,7 +142,7 @@ parameters: {
 parameters: {
   key: "gpt_model_path"
   value: {
-    string_value: "/opt/optimum/templates/inference-endpoints/llm/1"
+    string_value: "/opt/endpoints/llm/1"
   }
 }
 parameters: {
