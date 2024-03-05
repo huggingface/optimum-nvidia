@@ -26,9 +26,11 @@ jobs:
             runner: [ci, nvidia-gpu]
             image: huggingface/optimum-nvidia:devel
             report: dev
+#        cuda_arch: [sm_86, sm_89]
+        cuda_arch: [sm_89]
 
     name: ${{ matrix.config.name }}
-    runs-on: ${{ matrix.config.runner }}
+    runs-on: [ci, nvidia-gpu, multi-gpu, "${{ matrix.cuda_arch }}"]
 
     container:
       image: ${{ matrix.config.image }}

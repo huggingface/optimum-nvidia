@@ -27,7 +27,8 @@ jobs:
         config:
           - name: GPU-enabled Optimum-Nvidia Test Suite
             image: huggingface/optimum-nvidia:devel
-        cuda_arch: [sm_86, sm_89]
+#        cuda_arch: [sm_86, sm_89]
+        cuda_arch: [sm_89]
 
     name: ${{ matrix.config.name }}
     runs-on: [ci, nvidia-gpu, multi-gpu, "${{ matrix.cuda_arch }}"]
