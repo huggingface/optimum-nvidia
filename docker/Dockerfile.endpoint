@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/tritonserver:23.10-trtllm-python-py3
+FROM nvcr.io/nvidia/tritonserver:24.02-trtllm-python-py3
 
 LABEL maintainer="Morgan Funtowicz <morgan@hf.co>"
 
