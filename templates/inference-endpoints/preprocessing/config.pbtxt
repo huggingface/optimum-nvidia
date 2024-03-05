@@ -84,13 +84,6 @@ parameters {
   }
 }
 
-parameters {
-    key: "pad_to_multiple_of"
-    value: {
-        string_value: "16"
-    }
-}
-
 instance_group [
     {
         count: 1

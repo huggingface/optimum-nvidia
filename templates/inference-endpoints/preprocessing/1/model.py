@@ -73,7 +73,6 @@ class TritonPythonModel:
         model_config = json.loads(args['model_config'])
         tokenizer_dir = Path(model_config['parameters']['tokenizer_dir']['string_value'])
         tokenizer_path = tokenizer_dir.joinpath("tokenizer.json")
-        pad_to_multiple_of = int(model_config['parameters']['pad_to_multiple_of']['string_value'])
 
         special_tokens_map_path = tokenizer_dir.joinpath("special_tokens_map.json")
         with open(special_tokens_map_path, "r", encoding="utf-8") as special_tokens_f:
@@ -85,9 +84,6 @@ class TritonPythonModel:
             eos_token = special_tokens_map["eos_token"]["content"]
             eos_token_id = self.tokenizer.encode(eos_token, add_special_tokens=False).ids[0]
 
-            # self.tokenizer.enable_padding(
-            #     direction="left", pad_id=eos_token_id, pad_token=eos_token, pad_to_multiple_of=pad_to_multiple_of
-            # )
             self.pad_token = eos_token
             self.pad_token_id = eos_token_id
 
