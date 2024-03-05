@@ -20,6 +20,7 @@ from huggingface_hub import ModelHubMixin
 
 from optimum.nvidia.errors import UnsupportedModelException
 
+from ..hub import extract_model_type
 from .gemma import GemmaForCausalLM
 from .llama import LlamaForCausalLM
 from .mistral import MistralForCausalLM
@@ -46,11 +47,16 @@ class AutoModelForCausalLM(ModelHubMixin):
         **model_kwargs,
     ):
         config = model_kwargs.pop("config", None)
-
         if not config:
             raise ValueError("Unable to determine the model type without config")
 
-        model_type = config["model_type"]
+        model_type, _ = extract_model_type(config)
+        if model_type is None:
+            raise ValueError(
+                "Unable to determine the model type from the provided config. "
+                "Please open-up an issue at https://github.com/huggingface/optimum-nvidia/issues"
+            )
+
         if model_type not in _SUPPORTED_MODEL_CLASS:
             raise UnsupportedModelException(model_type)
 

@@ -13,16 +13,14 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import json
 import warnings
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import tensorrt_llm.bindings as ctrrt
 import torch
-from huggingface_hub import ModelHubMixin
 
 
 LOGGER = getLogger(__name__)
@@ -35,7 +33,7 @@ DEFAULT_PROMPT_LENGTH: int = 128
 DEFAULT_BEAM_WIDTH: int = 1
 
 
-class CompiledModel(ModelHubMixin):
+class CompiledModel:
     def __init__(self, engines_folder_path: Union[Path, PathLike]):
         self._engines_folder_path = Path(engines_folder_path)
 
@@ -65,7 +63,6 @@ class CausalLM(CompiledModel):
 
     def __init__(
         self,
-        config: Union[Dict[str, Any], PathLike],
         engines_folder: Path,
         *,
         gpus_per_node: int,
@@ -74,11 +71,7 @@ class CausalLM(CompiledModel):
         super().__init__(engines_folder)
 
         self._device = torch.device("cuda")
-
-        if isinstance(config, PathLike):
-            self._config = ctrrt.GptJsonConfig.parse_file(config)
-        else:
-            self._config = ctrrt.GptJsonConfig.parse(json.dumps(config))
+        self._config = ctrrt.GptJsonConfig.parse_file(engines_folder / "config.json")
         self._mapping = ctrrt.WorldConfig.mpi(
             gpus_per_node,
             self._config.tensor_parallelism,
