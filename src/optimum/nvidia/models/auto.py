@@ -26,7 +26,11 @@ from .llama import LlamaForCausalLM
 from .mistral import MistralForCausalLM
 
 
-_SUPPORTED_MODEL_CLASS = {"llama": LlamaForCausalLM, "mistral": MistralForCausalLM, "gemma": GemmaForCausalLM}
+_SUPPORTED_MODEL_CLASS = {
+    "llama": LlamaForCausalLM,
+    "mistral": MistralForCausalLM,
+    "gemma": GemmaForCausalLM,
+}
 
 
 class AutoModelForCausalLM(ModelHubMixin):

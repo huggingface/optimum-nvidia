@@ -77,7 +77,9 @@ class EngineConfigBuilder:
 
     def logits_as(self, dtype: str) -> "EngineConfigBuilder":
         if dtype not in SUPPORTED_LOGITS_DTYPE:
-            raise ValueError(f"logits dtype should be one of {SUPPORTED_LOGITS_DTYPE} (got: {dtype})")
+            raise ValueError(
+                f"logits dtype should be one of {SUPPORTED_LOGITS_DTYPE} (got: {dtype})"
+            )
 
         self._logits_dtype = dtype
         LOGGER.info(f"Defined logits dtype to: {self._logits_dtype}")
@@ -90,7 +92,9 @@ class EngineConfigBuilder:
             raise ValueError(f"max_batch_size should be >= 1 (got: {max_batch_size})")
 
         if max_prompt_length < 1:
-            raise ValueError(f"max_prompt_length should be >= 1 (got: {max_batch_size})")
+            raise ValueError(
+                f"max_prompt_length should be >= 1 (got: {max_batch_size})"
+            )
 
         if max_prompt_length >= self._config.max_position_embeddings:
             raise ValueError(
@@ -109,7 +113,9 @@ class EngineConfigBuilder:
                 f" maximum sequence length supported by the model is {self._config.max_position_embeddings})"
             )
 
-        self._workload_profile = InferenceProfile(max_batch_size, max_prompt_length, max_new_tokens)
+        self._workload_profile = InferenceProfile(
+            max_batch_size, max_prompt_length, max_new_tokens
+        )
         LOGGER.info(f"Defined engine inference profile: {self._workload_profile}")
         return self
 
@@ -123,7 +129,9 @@ class EngineConfigBuilder:
 
     def with_speculated_decoding(self, max_draft_length: int) -> "EngineConfigBuilder":
         if max_draft_length < 1:
-            raise ValueError(f"max_draft_length should be >= 1 (got: {max_draft_length})")
+            raise ValueError(
+                f"max_draft_length should be >= 1 (got: {max_draft_length})"
+            )
 
         if self._generation_profile is None:
             raise ValueError(
@@ -131,8 +139,12 @@ class EngineConfigBuilder:
                 "Please use EngineConfigBuilder.with_generation_profile()"
             )
 
-        self._generation_profile = GenerationProfile(self._generation_profile.num_beams, max_draft_length)
-        LOGGER.info(f"Defined engine generation profile with speculation: {self._generation_profile}")
+        self._generation_profile = GenerationProfile(
+            self._generation_profile.num_beams, max_draft_length
+        )
+        LOGGER.info(
+            f"Defined engine generation profile with speculation: {self._generation_profile}"
+        )
         return self
 
     def with_plugins_config(self, plugin_config: PluginConfig) -> "EngineConfigBuilder":
@@ -142,7 +154,9 @@ class EngineConfigBuilder:
 
     def validate(self) -> bool:
         if self._workload_profile is None:
-            raise ValueError("You need to set an inference profile. Use EngineConfigBuilder.with_inference_profile().")
+            raise ValueError(
+                "You need to set an inference profile. Use EngineConfigBuilder.with_inference_profile()."
+            )
 
         if self._generation_profile is None:
             raise ValueError(
@@ -150,9 +164,15 @@ class EngineConfigBuilder:
             )
 
         if self._plugin_config is None:
-            raise ValueError("You need to set a plugin profile. Use EngineConfigBuilder.with_plugins_config().")
+            raise ValueError(
+                "You need to set a plugin profile. Use EngineConfigBuilder.with_plugins_config()."
+            )
 
-        max_generated_length = self._workload_profile.max_input_len + self._workload_profile.max_output_len - 1
+        max_generated_length = (
+            self._workload_profile.max_input_len
+            + self._workload_profile.max_output_len
+            - 1
+        )
         if max_generated_length > self._config.max_position_embeddings:
             raise ValueError(
                 "max_prompt_length + max_new_tokens should be lesser or equals "

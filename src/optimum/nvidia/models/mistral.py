@@ -57,7 +57,9 @@ class MistralConfig(TensorRTConfig):
             hidden_size=config.hidden_size,
             num_hidden_layers=config.num_hidden_layers,
             num_attention_heads=config.num_attention_heads,
-            num_key_value_heads=getattr(config, "num_key_value_heads", config.num_attention_heads),
+            num_key_value_heads=getattr(
+                config, "num_key_value_heads", config.num_attention_heads
+            ),
             hidden_act=config.hidden_act,
             intermediate_size=config.intermediate_size,
             norm_epsilon=config.rms_norm_eps,
@@ -100,7 +102,9 @@ class MistralForCausalLM(CausalLM, HuggingFaceHubModel):
 
     @staticmethod
     def convert_weights(
-        target: PretrainedModel, source: TransformersPretrainedModel, config: PretrainedConfig
+        target: PretrainedModel,
+        source: TransformersPretrainedModel,
+        config: PretrainedConfig,
     ) -> Dict[str, np.ndarray]:
         if config.quant_mode.has_any_quant():
             raise NotImplementedError("Quantization is not supported yet.")

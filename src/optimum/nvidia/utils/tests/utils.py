@@ -25,8 +25,12 @@ ENVVAR_NAME_RUN_SLOW = "RUN_SLOW"
 ENVVAR_NAME_RUN_CPU_ONLY = "RUN_CPU_ONLY"
 
 
-nightly = pytest.mark.skipif(parse_flag_from_env(ENVVAR_NAME_RUN_NIGHTLY, False), reason="Nightly test")
-slow = pytest.mark.skipif(parse_flag_from_env(ENVVAR_NAME_RUN_SLOW, False), reason="Slow test")
+nightly = pytest.mark.skipif(
+    parse_flag_from_env(ENVVAR_NAME_RUN_NIGHTLY, False), reason="Nightly test"
+)
+slow = pytest.mark.skipif(
+    parse_flag_from_env(ENVVAR_NAME_RUN_SLOW, False), reason="Slow test"
+)
 
 requires_gpu = pytest.mark.skipif(
     parse_flag_from_env(ENVVAR_NAME_RUN_CPU_ONLY, False) or not get_device_count(),

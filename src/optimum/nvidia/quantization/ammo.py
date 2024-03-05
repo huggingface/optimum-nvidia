@@ -94,7 +94,9 @@ class AmmoQuantizer:
 
             def _loop():
                 for sample in tqdm(calibration_data):
-                    inputs = {name: tensor[0].to("cuda") for name, tensor in sample.items()}
+                    inputs = {
+                        name: tensor[0].to("cuda") for name, tensor in sample.items()
+                    }
                     self._model(**inputs)
 
             atq.quantize(self._model, self._ammo_config, _loop)
@@ -104,7 +106,9 @@ class AmmoQuantizer:
             ate.export_model_config(
                 model=self._model,  # The quantized model.
                 decoder_type="llama",  # The type of the model as str, e.g gptj, llama or gptnext.
-                dtype=DataType(self._dtype).to_torch(),  # The exported weights data type as torch.dtype.
+                dtype=DataType(
+                    self._dtype
+                ).to_torch(),  # The exported weights data type as torch.dtype.
                 export_dir=path,  # The directory where the exported files will be stored.
                 inference_tensor_parallel=self._tp_degree,  # The number of GPUs used in the inference time for tensor parallelism.
                 export_tensorrt_llm_config=True,

@@ -17,7 +17,12 @@ import functools
 from logging import getLogger
 from typing import NamedTuple, Optional, Tuple
 
-from pynvml import nvmlDeviceGetCudaComputeCapability, nvmlDeviceGetHandleByIndex, nvmlDeviceGetMemoryInfo, nvmlInit
+from pynvml import (
+    nvmlDeviceGetCudaComputeCapability,
+    nvmlDeviceGetHandleByIndex,
+    nvmlDeviceGetMemoryInfo,
+    nvmlInit,
+)
 
 
 LOGGER = getLogger()
@@ -83,5 +88,7 @@ def has_float8_support() -> bool:
 
         return compute_capabilities_ in SM_FP8_SUPPORTED
     else:
-        LOGGER.warning("Failed to retrieve the proper compute capabilities on the device")
+        LOGGER.warning(
+            "Failed to retrieve the proper compute capabilities on the device"
+        )
         return False

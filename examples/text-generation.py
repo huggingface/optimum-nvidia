@@ -38,13 +38,19 @@ LOGGER = getLogger(__name__)
 
 if __name__ == "__main__":
     parser = ArgumentParser("🤗 Optimum-Nvidia Text-Generation Example")
-    parser.add_argument("--hub-token", type=str, help="Hugging Face Hub Token to retrieve private weights.")
+    parser.add_argument(
+        "--hub-token",
+        type=str,
+        help="Hugging Face Hub Token to retrieve private weights.",
+    )
     register_common_model_topology_args(parser)
     register_optimization_profiles_args(parser)
     register_quantization_args(parser)  # Inject params.quantization_config
 
     parser.add_argument("model", type=str, help="The model's id or path to use.")
-    parser.add_argument("output", type=Path, help="Path to store generated TensorRT engine.")
+    parser.add_argument(
+        "output", type=Path, help="Path to store generated TensorRT engine."
+    )
     args = parser.parse_args()
     args = postprocess_quantization_parameters(args)
 
@@ -73,5 +79,7 @@ if __name__ == "__main__":
         max_new_tokens=args.max_new_tokens,
     )
 
-    generated_text = tokenizer.batch_decode(generated.flatten(0, 1), skip_special_tokens=True)
+    generated_text = tokenizer.batch_decode(
+        generated.flatten(0, 1), skip_special_tokens=True
+    )
     print(generated_text)

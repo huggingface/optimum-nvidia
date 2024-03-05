@@ -50,23 +50,65 @@ def create_prompt_for_length(batch: int, length: int) -> Union[str, List[str]]:
 
 if __name__ == "__main__":
     parser = ArgumentParser("Hugging Face Optimum-Nvidia Pipelines Benchmarking tool")
-    parser.add_argument("--token", type=str, help="Hugging Face Hub token to authenticate the request.")
-    parser.add_argument("--warmup", type=int, default=10, help="Number of warmup runs before collecting metrics.")
-    parser.add_argument("--repeat", type=int, default=20, help="Number of runs collecting metrics.")
-    parser.add_argument("--batch-size", type=int, required=True, help="Size of the batch.")
-    parser.add_argument("--prompt-length", type=int, required=True, help="Size of the prompt to use.")
-    parser.add_argument("--output-length", type=int, help="Size of the desired output (prompt included).")
-
-    parser.add_argument("--use-transformers", action="store_true", help="Use transformers pipeline as baseline.")
-    parser.add_argument("--use-cuda-graph", action="store_true", help="Turn on CUDA Graph.")
-    parser.add_argument("--use-fp8", action="store_true", help="Attempt to benchmark in float8 precision.")
-    parser.add_argument("--dtype", type=str, default="float16", help="Specify the precision for the model.")
-    parser.add_argument("--tp", type=int, default=1, help="Degree of tensor parallelism to apply.")
-    parser.add_argument("--pp", type=int, default=1, help="Degree of pipeline parallelism to apply.")
-    parser.add_argument("--gpus-per-node", type=int, default=1, help="Number of GPUs per node.")
-    parser.add_argument("--world-size", type=int, help="Total number of GPUs over all the node.")
     parser.add_argument(
-        "--time-to-first-token", action="store_true", help="Indicate we will only generating a single token."
+        "--token", type=str, help="Hugging Face Hub token to authenticate the request."
+    )
+    parser.add_argument(
+        "--warmup",
+        type=int,
+        default=10,
+        help="Number of warmup runs before collecting metrics.",
+    )
+    parser.add_argument(
+        "--repeat", type=int, default=20, help="Number of runs collecting metrics."
+    )
+    parser.add_argument(
+        "--batch-size", type=int, required=True, help="Size of the batch."
+    )
+    parser.add_argument(
+        "--prompt-length", type=int, required=True, help="Size of the prompt to use."
+    )
+    parser.add_argument(
+        "--output-length",
+        type=int,
+        help="Size of the desired output (prompt included).",
+    )
+
+    parser.add_argument(
+        "--use-transformers",
+        action="store_true",
+        help="Use transformers pipeline as baseline.",
+    )
+    parser.add_argument(
+        "--use-cuda-graph", action="store_true", help="Turn on CUDA Graph."
+    )
+    parser.add_argument(
+        "--use-fp8",
+        action="store_true",
+        help="Attempt to benchmark in float8 precision.",
+    )
+    parser.add_argument(
+        "--dtype",
+        type=str,
+        default="float16",
+        help="Specify the precision for the model.",
+    )
+    parser.add_argument(
+        "--tp", type=int, default=1, help="Degree of tensor parallelism to apply."
+    )
+    parser.add_argument(
+        "--pp", type=int, default=1, help="Degree of pipeline parallelism to apply."
+    )
+    parser.add_argument(
+        "--gpus-per-node", type=int, default=1, help="Number of GPUs per node."
+    )
+    parser.add_argument(
+        "--world-size", type=int, help="Total number of GPUs over all the node."
+    )
+    parser.add_argument(
+        "--time-to-first-token",
+        action="store_true",
+        help="Indicate we will only generating a single token.",
     )
     parser.add_argument("model", type=str, help="Model's id to use for the benchmark.")
 
@@ -89,11 +131,20 @@ if __name__ == "__main__":
         args.max_new_tokens = args.output_length - args.prompt_length
 
     prompt = create_prompt_for_length(args.batch_size, args.prompt_length)
-    pipe = get_transformers_pipeline(args) if args.use_transformers else get_trtllm_pipeline(args)
+    pipe = (
+        get_transformers_pipeline(args)
+        if args.use_transformers
+        else get_trtllm_pipeline(args)
+    )
 
     # Warm up
     for _ in trange(args.warmup, desc="Warming up..."):
-        _ = pipe(prompt, max_new_tokens=args.max_new_tokens, min_length=args.min_length, use_cache=True)
+        _ = pipe(
+            prompt,
+            max_new_tokens=args.max_new_tokens,
+            min_length=args.min_length,
+            use_cache=True,
+        )
 
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
@@ -102,7 +153,12 @@ if __name__ == "__main__":
     latencies = []
     for _ in trange(args.repeat, desc="Benchmarking..."):
         start.record()
-        _ = pipe(prompt, max_new_tokens=args.max_new_tokens, min_length=args.min_length, use_cache=True)
+        _ = pipe(
+            prompt,
+            max_new_tokens=args.max_new_tokens,
+            min_length=args.min_length,
+            use_cache=True,
+        )
         end.record()
         torch.cuda.synchronize()
 

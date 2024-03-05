@@ -35,7 +35,13 @@ class ReturnType(Enum):
 class TextGenerationPipeline(Pipeline):
     TARGET_FACTORY = AutoModelForCausalLM
 
-    __slots__ = ("tokenizer", "_runtime", "_bos_token_id", "_eos_token_id", "_pad_token_id")
+    __slots__ = (
+        "tokenizer",
+        "_runtime",
+        "_bos_token_id",
+        "_eos_token_id",
+        "_pad_token_id",
+    )
 
     def __init__(self, model: CausalLM, tokenizer: PreTrainedTokenizer):
         super().__init__()
@@ -51,7 +57,9 @@ class TextGenerationPipeline(Pipeline):
         self._pad_token_id = tokenizer.pad_token_id
 
     def __call__(self, inputs: Union[str, List[str]], **kwargs):
-        preprocess_params, forward_params, postprocess_params = self._sanitize_parameters(**kwargs)
+        preprocess_params, forward_params, postprocess_params = (
+            self._sanitize_parameters(**kwargs)
+        )
         model_inputs = self.preprocess(inputs, **preprocess_params)
         model_outputs = self._forward(model_inputs, **forward_params)
         outputs = self.postprocess(model_outputs, **postprocess_params)
@@ -75,7 +83,10 @@ class TextGenerationPipeline(Pipeline):
             preprocess_params["prefix"] = prefix
         if prefix:
             prefix_inputs = self.tokenizer(
-                prefix, padding=False, add_special_tokens=add_special_tokens, return_tensors=TensorType.PYTORCH
+                prefix,
+                padding=False,
+                add_special_tokens=add_special_tokens,
+                return_tensors=TensorType.PYTORCH,
             )
             generate_kwargs["prefix_length"] = prefix_inputs["input_ids"].shape[-1]
 
@@ -93,21 +104,33 @@ class TextGenerationPipeline(Pipeline):
         postprocess_params = {}
         if return_full_text is not None and return_type is None:
             if return_text is not None:
-                raise ValueError("`return_text` is mutually exclusive with `return_full_text`")
+                raise ValueError(
+                    "`return_text` is mutually exclusive with `return_full_text`"
+                )
             if return_tensors is not None:
-                raise ValueError("`return_full_text` is mutually exclusive with `return_tensors`")
-            return_type = ReturnType.FULL_TEXT if return_full_text else ReturnType.NEW_TEXT
+                raise ValueError(
+                    "`return_full_text` is mutually exclusive with `return_tensors`"
+                )
+            return_type = (
+                ReturnType.FULL_TEXT if return_full_text else ReturnType.NEW_TEXT
+            )
         if return_tensors is not None and return_type is None:
             if return_text is not None:
-                raise ValueError("`return_text` is mutually exclusive with `return_tensors`")
+                raise ValueError(
+                    "`return_text` is mutually exclusive with `return_tensors`"
+                )
             return_type = ReturnType.TENSORS
         if return_type is not None:
             postprocess_params["return_type"] = return_type
         if clean_up_tokenization_spaces is not None:
-            postprocess_params["clean_up_tokenization_spaces"] = clean_up_tokenization_spaces
+            postprocess_params["clean_up_tokenization_spaces"] = (
+                clean_up_tokenization_spaces
+            )
 
         if stop_sequence is not None:
-            stop_sequence_ids = self.tokenizer.encode(stop_sequence, add_special_tokens=False)
+            stop_sequence_ids = self.tokenizer.encode(
+                stop_sequence, add_special_tokens=False
+            )
             if len(stop_sequence_ids) > 1:
                 warnings.warn(
                     "Stopping on a multiple token sequence is not yet supported on transformers. The first token of"
@@ -176,7 +199,12 @@ class TextGenerationPipeline(Pipeline):
         }
 
     def preprocess(
-        self, prompt_text, prefix="", handle_long_generation=None, add_special_tokens=False, **generate_kwargs
+        self,
+        prompt_text,
+        prefix="",
+        handle_long_generation=None,
+        add_special_tokens=False,
+        **generate_kwargs,
     ) -> Dict[str, torch.Tensor]:
         if isinstance(prompt_text, List):
             text = [prefix + prompt for prompt in prompt_text]
@@ -184,13 +212,21 @@ class TextGenerationPipeline(Pipeline):
             text = prefix + prompt_text
 
         inputs = self.tokenizer(
-            text, padding=False, add_special_tokens=add_special_tokens, return_tensors=TensorType.PYTORCH
+            text,
+            padding=False,
+            add_special_tokens=add_special_tokens,
+            return_tensors=TensorType.PYTORCH,
         )
         inputs["prompt_text"] = prompt_text
 
         return inputs
 
-    def postprocess(self, model_outputs, return_type=ReturnType.FULL_TEXT, clean_up_tokenization_spaces=True):
+    def postprocess(
+        self,
+        model_outputs,
+        return_type=ReturnType.FULL_TEXT,
+        clean_up_tokenization_spaces=True,
+    ):
         generated_sequence = model_outputs["generated_sequence"]
         # lengths = model_outputs["lengths"]
         # input_ids = model_outputs["input_ids"]
@@ -199,7 +235,9 @@ class TextGenerationPipeline(Pipeline):
         records = []
 
         if return_type == ReturnType.TENSORS:
-            return [{"generated_token_ids": generated for generated in generated_sequence}]
+            return [
+                {"generated_token_ids": generated for generated in generated_sequence}
+            ]
 
         for sequence in generated_sequence:
             # Decode text
