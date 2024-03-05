@@ -97,7 +97,7 @@ def convert_quant_method_to_trt(
             )
 
         mode = QuantMode.from_description(quantize_weights=True, per_group=False)
-        return mode, "W4A16_GPTQ"
+        return mode, f"W{weight_num_bits}A16_GPTQ"
     else:
         raise ValueError(f"Unsupported quantization method: {method}")
 
