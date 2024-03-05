@@ -66,7 +66,7 @@ from optimum.nvidia.config import convert_quant_method_to_trt
                 QuantMode.from_description(
                     quantize_weights=True, per_group=False, use_int4_weights=False
                 ),
-                "W*A16_GPTQ",
+                "W8A16_GPTQ",
             ),
         ),
     ),
