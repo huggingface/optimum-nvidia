@@ -6,6 +6,9 @@ ARG VCS_REF
 ARG BUILD_DATE
 ARG BUILD_VERSION
 
+# Triton Inference Server specifics args
+ARG TOKENIZER_FOLDER=/opt/endpoints/tokenizer
+
 LABEL org.label-schema.schema-version="1.0"
 LABEL org.label-schema.name="huggingface/inference-endpoints-trtllm"
 LABEL org.label-schema.build-date=$BUILD_DATE
@@ -23,6 +26,19 @@ EXPOSE 8000/tcp
 EXPOSE 8001/tcp
 EXPOSE 8002/tcp
 
+# Create the Triton Inference Server layout
+COPY templates/inference-endpoints /opt/endpoints
+
+# Processing layer
+RUN ln -s /repository/tokenizer.json /opt/endpoints/tokenizer/tokenizer.json && \
+    ln -s /repository/special_tokens_map.json /opt/endpoints/tokenizer/special_tokens_map.json && \
+    ln -s /repository/tokenizer_config.json /opt/endpoints/tokenizer/tokenizer_config.json
+
+# Modeling layer
+RUN ln -s /repository/engines/config.json /opt/endpoints/llm/1/config.json && \
+    ln -s /repository/engines/*.engine /opt/endpoints/llm/1/
+
+# Inference-endpoint mount the content of the repository in /repository, so let's place ourselves here
 WORKDIR /repository
 
-CMD ["mpirun", "--allow-run-as-root", "-n", "1", "/opt/tritonserver/bin/tritonserver", "--exit-on-error=false", "--model-repo=/repository"]
+CMD ["mpirun", "--allow-run-as-root", "-n", "1", "/opt/tritonserver/bin/tritonserver", "--exit-on-error=false", "--model-repo=/opt/endpoint"]
