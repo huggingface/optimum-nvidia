@@ -17,8 +17,6 @@ LABEL org.label-schema.url="https://hf.co/hardware"
 LABEL org.label-schema.vcs-url="https://github.com/huggingface/optimum-nvidia"
 LABEL org.label-schema.decription="Hugging Face Inference Server docker image for TensorRT-LLM Inference"
 
-ENV HF_HUB_TOKEN ""
-
 
 # Expose (in-order) HTTP, GRPC, Metrics endpoints
 EXPOSE 8000/tcp
@@ -27,5 +25,4 @@ EXPOSE 8002/tcp
 
 WORKDIR /repository
 
-#ENTRYPOINT "huggingface-cli login --token ${HF_HUB_TOKEN}
 CMD ["mpirun", "--allow-run-as-root", "-n", "1", "/opt/tritonserver/bin/tritonserver", "--exit-on-error=false", "--model-repo=/repository"]
