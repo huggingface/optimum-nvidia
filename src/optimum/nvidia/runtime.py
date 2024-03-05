@@ -192,7 +192,9 @@ class CausalLM(CompiledModel):
             lengths = torch.tensor(shape, dtype=torch.int32).flatten()
 
         if self._use_packed_inputs and shape[0] > 1:
-            input_ids = torch.masked_select(input_ids, attention_mask.bool()).view(1, -1)
+            input_ids = torch.masked_select(input_ids, attention_mask.bool()).view(
+                1, -1
+            )
 
         return input_ids, lengths
 

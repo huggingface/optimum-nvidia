@@ -57,7 +57,9 @@ class LocalEngineBuilder:
     TRTLLM_BUILD_EXEC = "trtllm-build"
 
     @staticmethod
-    def build_cli_command(root: Path, model_config: TensorRTConfig, build_config: EngineConfig) -> Dict[str, Any]:
+    def build_cli_command(
+        root: Path, model_config: TensorRTConfig, build_config: EngineConfig
+    ) -> Dict[str, Any]:
         workload_params = {
             "--max_batch_size": build_config.workload_profile.max_batch_size,
             "--max_input_len": build_config.workload_profile.max_input_len,
@@ -69,7 +71,9 @@ class LocalEngineBuilder:
         }
 
         if build_config.generation_profile.max_draft_length >= 1:
-            generation_params["--max_draft_len"] = build_config.generation_profile.max_draft_length
+            generation_params["--max_draft_len"] = (
+                build_config.generation_profile.max_draft_length
+            )
 
         plugins_params = {
             f"--{name}": process_plugin_flag(name, value)
@@ -95,7 +99,9 @@ class LocalEngineBuilder:
         self._output_folder = output_folder
 
     def build(self, config: EngineConfig):
-        cli_params = LocalEngineBuilder.build_cli_command(self._output_folder, self._config, config)
+        cli_params = LocalEngineBuilder.build_cli_command(
+            self._output_folder, self._config, config
+        )
         cli_params_list = [str(t) for t in chain.from_iterable(cli_params.items())]
         cli_params_list = [i for i in cli_params_list if i != "None"]
 
@@ -104,7 +110,9 @@ class LocalEngineBuilder:
         for rank in range(self._config.mapping.world_size):
             ranked_checkpoint = f"rank{rank}.safetensors"
             if not (self._output_folder / ranked_checkpoint).exists():
-                raise ValueError(f"Missing rank-{rank} checkpoints (rank{rank}.safetensors), cannot build.")
+                raise ValueError(
+                    f"Missing rank-{rank} checkpoints (rank{rank}.safetensors), cannot build."
+                )
 
         # Run the build
         result = run([LocalEngineBuilder.TRTLLM_BUILD_EXEC] + cli_params_list)

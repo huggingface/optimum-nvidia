@@ -37,4 +37,6 @@ def parse_flag_from_env(name: str, default: bool) -> bool:
     try:
         return strtobool(value) == INT_TRUE_VALUE
     except ValueError:
-        raise ValueError(f"Failed to convert environment variable {name}={value} to a bool")
+        raise ValueError(
+            f"Failed to convert environment variable {name}={value} to a bool"
+        )

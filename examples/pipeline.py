@@ -7,8 +7,15 @@ from optimum.nvidia import pipeline
 
 if __name__ == "__main__":
     parser = ArgumentParser("Hugging Face optimum-nvidia pipeline example")
-    parser.add_argument("--token", type=str, required=False, help="Hugging Face Hub authentication token.")
-    parser.add_argument("model_id_or_path", type=str, help="Model's id or path for the pipeline")
+    parser.add_argument(
+        "--token",
+        type=str,
+        required=False,
+        help="Hugging Face Hub authentication token.",
+    )
+    parser.add_argument(
+        "model_id_or_path", type=str, help="Model's id or path for the pipeline"
+    )
 
     args = parser.parse_args()
     if hasattr(args, "token"):

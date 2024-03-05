@@ -78,38 +78,48 @@ def convert_quant_method_to_trt(
                 "Only 8 and 16-bits activations' quantization schemas are supported."
             )
 
-        mode = QuantMode.from_description(quantize_weights=True, per_group=True)
+        mode = QuantMode.from_description(
+            quantize_weights=True, per_group=True, use_int4_weights=weight_num_bits == 4
+        )
         return mode, f"W{weight_num_bits}A{activation_num_bits}_AWQ"
     elif method == "gptq":
         if not activation_num_bits:
             activation_num_bits = 16
 
-        if weight_num_bits in {4, 8}:
+        if weight_num_bits not in {4, 8}:
             raise ValueError(
                 f"Unsupported GPTQ quantization schema with {weight_num_bits}-bits weights. "
                 "Only 4 and 8-bits weights' quantization schemas are supported."
             )
 
-        if activation_num_bits == 16:
+        if activation_num_bits != 16:
             raise ValueError(
                 f"Unsupported GPTQ quantization schema with {activation_num_bits}-bits activations. "
                 "Only 16-bits activations' quantization schemas are supported."
             )
 
-        mode = QuantMode.from_description(quantize_weights=True, per_group=False)
-        return mode, "W4A16_GPTQ"
+        mode = QuantMode.from_description(
+            quantize_weights=True,
+            per_group=False,
+            use_int4_weights=weight_num_bits == 4,
+        )
+        return mode, f"W{weight_num_bits}A16_GPTQ"
     else:
         raise ValueError(f"Unsupported quantization method: {method}")
 
 
 class TensorRTConfig(ABC, TensorRTPretrainedConfig):
     @staticmethod
-    def get_quantization_config(config: PretrainedConfig) -> (QuantMode, QuantizationConfig):
+    def get_quantization_config(
+        config: PretrainedConfig,
+    ) -> (QuantMode, QuantizationConfig):
         if hasattr(config, "quantization_config"):
             qconfig = config.quantization_config
             num_bits = qconfig.num_bits
             group_size = qconfig.group_size
-            mode, quant_method = convert_quant_method_to_trt(qconfig.quant_method, num_bits)
+            mode, quant_method = convert_quant_method_to_trt(
+                qconfig.quant_method, num_bits
+            )
             has_zero_point = qconfig.get("zero_point", False)
             exclude_modules = qconfig.get("module_to_not_convert", [])
 
@@ -129,9 +139,16 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
         raise NotImplementedError()
 
     @staticmethod
-    def from_pretrained(model_id_or_path: str, revision: Optional[str] = None, token: Union[bool, str, None] = None):
+    def from_pretrained(
+        model_id_or_path: str,
+        revision: Optional[str] = None,
+        token: Union[bool, str, None] = None,
+    ):
         config = AutoConfig.from_pretrained(
-            model_id_or_path, revision=revision, token=token, user_agent=get_user_agent()
+            model_id_or_path,
+            revision=revision,
+            token=token,
+            user_agent=get_user_agent(),
         )
         return TensorRTConfig.from_config(config)
 
@@ -140,7 +157,14 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
     def supports_strong_typing() -> bool:
         raise NotImplementedError()
 
-    def shard(self, world_size: int, gpus_per_node: int, rank: int = 0, tp_degree: int = 1, pp_degree: int = 1):
+    def shard(
+        self,
+        world_size: int,
+        gpus_per_node: int,
+        rank: int = 0,
+        tp_degree: int = 1,
+        pp_degree: int = 1,
+    ):
         if tp_degree * pp_degree != world_size:
             raise ValueError(
                 f"tensor parallelism ({tp_degree}) x pipeline parallelism ({pp_degree})"
@@ -148,7 +172,11 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
             )
 
         self.mapping = Mapping(
-            world_size=world_size, rank=rank, gpus_per_node=gpus_per_node, tp_size=tp_degree, pp_size=pp_degree
+            world_size=world_size,
+            rank=rank,
+            gpus_per_node=gpus_per_node,
+            tp_size=tp_degree,
+            pp_size=pp_degree,
         )
 
     def get_plugins_config(self) -> PluginConfig:

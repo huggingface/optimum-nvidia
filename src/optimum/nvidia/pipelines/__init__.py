@@ -52,7 +52,9 @@ def get_target_class_for_model_and_task(task: str, architecture: str) -> Optiona
 def pipeline(
     task: str = None,
     model: Union[str, PathLike, Module] = None,
-    tokenizer: Optional[Union[str, PreTrainedTokenizer, PreTrainedTokenizerFast]] = None,
+    tokenizer: Optional[
+        Union[str, PreTrainedTokenizer, PreTrainedTokenizerFast]
+    ] = None,
     **kwargs,
 ):
     """
@@ -88,7 +90,9 @@ def pipeline(
     try:
         info = model_info(model)
     except Exception as e:
-        raise RuntimeError(f"Failed to instantiate the pipeline inferring the task for model {model}: {e}")
+        raise RuntimeError(
+            f"Failed to instantiate the pipeline inferring the task for model {model}: {e}"
+        )
 
     # Retrieve the model type
     model_type = info.config.get("model_type", None)
@@ -99,7 +103,9 @@ def pipeline(
 
     if not task and getattr(info, "library_name", "transformers") == "transformers":
         if not info.pipeline_tag:
-            raise RuntimeError(f"Failed to infer the task for model {model}, please use `task` parameter")
+            raise RuntimeError(
+                f"Failed to infer the task for model {model}, please use `task` parameter"
+            )
         task = info.pipeline_tag
 
     if task not in SUPPORTED_MODEL_WITH_TASKS[model_type]:

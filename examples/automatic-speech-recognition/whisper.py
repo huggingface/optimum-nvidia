@@ -36,13 +36,19 @@ from optimum.nvidia.utils.cli import (
 
 if __name__ == "__main__":
     parser = ArgumentParser("🤗 TensorRT-LLM Whisper implementation")
-    parser.add_argument("--hub-token", type=str, help="Hugging Face Hub Token to retrieve private weights.")
+    parser.add_argument(
+        "--hub-token",
+        type=str,
+        help="Hugging Face Hub Token to retrieve private weights.",
+    )
     register_common_model_topology_args(parser)
     register_optimization_profiles_args(parser)
     register_quantization_args(parser)  # Inject params.quantization_config
 
     parser.add_argument("model", type=str, help="The model's id or path to use.")
-    parser.add_argument("output", type=Path, help="Path to store generated TensorRT engine.")
+    parser.add_argument(
+        "output", type=Path, help="Path to store generated TensorRT engine."
+    )
     args = parser.parse_args()
     args = postprocess_quantization_parameters(args)
 
@@ -67,7 +73,12 @@ if __name__ == "__main__":
     builder = (
         TensorRTForSpeechSeq2SeqEngineBuilder.from_pretrained(args.model)
         .to(args.dtype)
-        .shard(args.tensor_parallelism, args.pipeline_parallelism, args.world_size, args.gpus_per_node)
+        .shard(
+            args.tensor_parallelism,
+            args.pipeline_parallelism,
+            args.world_size,
+            args.gpus_per_node,
+        )
         .with_generation_profile(args.max_batch_size)
         .with_sampling_strategy(args.max_beam_width)
     )
