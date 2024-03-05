@@ -84,7 +84,7 @@ def convert_quant_method_to_trt(
         if not activation_num_bits:
             activation_num_bits = 16
 
-        if weight_num_bits in {4, 8}:
+        if weight_num_bits not in {4, 8}:
             raise ValueError(
                 f"Unsupported GPTQ quantization schema with {weight_num_bits}-bits weights. "
                 "Only 4 and 8-bits weights' quantization schemas are supported."
