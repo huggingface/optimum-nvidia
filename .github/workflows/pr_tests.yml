@@ -1,4 +1,4 @@
-name: CPU Only Test Suite on PRs
+name: Test Suite on PRs
 
 on:
   pull_request:
@@ -24,8 +24,8 @@ jobs:
         config:
           - name: Fast Optimum-Nvidia Test Suite
             runner: [ci, nvidia-gpu]
-            image: huggingface/optimum-nvidia
-            report: cpu_only
+            image: huggingface/optimum-nvidia:devel
+            report: dev
 
     name: ${{ matrix.config.name }}
     runs-on: ${{ matrix.config.runner }}
