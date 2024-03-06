@@ -13,5 +13,6 @@ The following variable are supported:
 - `VAR_BATCH_SCHEDULER_POLICY`: Indicate the batching policy. Should be either `max_utilization` to greedily pack as many requests as possible in each current in-flight batching iteration or `guaranteed_no_evict` to guarantee that a started request is never paused
 - `VAR_ENABLE_STREAMING`: Flag allowing the server to send token while they are generated
 - `VAR_ENABLE_OVERLAP`: Flag allowing to partition available requests into 2 'microbatches' that can be run concurrently to hide exposed CPU runtime
+- `VAR_MAX_BATCH_SIZE`: Maximum concurrent samples to be stacked on the first axis to send to the GPU (integer greater than 0)
 - `VAR_MAX_BEAM_WIDTH`: Maximum allowed number of beam to use for sampling (integer greater than 0)
 - `VAR_KV_CACHE_MEMORY_PERCENT`: The percentage of maximum GPU memory dedicated to store KV cache (float between 0 and 1)

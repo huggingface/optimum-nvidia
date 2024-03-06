@@ -27,7 +27,7 @@ EXPOSE 8001/tcp
 EXPOSE 8002/tcp
 
 # Create the Triton Inference Server layout
-COPY templates/inference-endpoints /opt/endpoints
+COPY templates/triton /opt/endpoints
 
 # Processing layer
 RUN ln -s /repository/tokenizer.json /opt/endpoints/tokenizer/tokenizer.json && \
