@@ -3,7 +3,7 @@ backend: "tensorrtllm"
 max_batch_size: 32
 
 model_transaction_policy {
-  decoupled: false
+  decoupled: ${VAR_ENABLE_STREAMING}
 }
 
 input [
@@ -124,7 +124,7 @@ output [
 parameters: {
   key: "max_beam_width"
   value: {
-    string_value: "1"
+    string_value: "${VAR_MAX_BEAM_WIDTH}"
   }
 }
 parameters: {
@@ -136,13 +136,13 @@ parameters: {
 parameters: {
   key: "gpt_model_type"
   value: {
-    string_value: "inflight_fused_batching"
+    string_value: "${VAR_GPT_MODEL_TYPE}"
   }
 }
 parameters: {
   key: "gpt_model_path"
   value: {
-    string_value: "/opt/endpoints/llm/1"
+    string_value: "${VAR_GPT_MODEL_PATH}"
   }
 }
 parameters: {
@@ -154,25 +154,19 @@ parameters: {
 parameters: {
   key: "batch_scheduler_policy"
   value: {
-    string_value: "guaranteed_no_evict"
+    string_value: "${VAR_BATCH_SCHEDULER_POLICY}"
   }
 }
 parameters: {
   key: "kv_cache_free_gpu_mem_fraction"
   value: {
-    string_value: "0.2"
-  }
-}
-parameters: {
-  key: "max_num_sequences"
-  value: {
-    string_value: "16"
+    string_value: "${VAR_KV_CACHE_MEMORY_PERCENT}"
   }
 }
 parameters: {
   key: "enable_trt_overlap"
   value: {
-    string_value: "true"
+    string_value: "${VAR_ENABLE_OVERLAP}"
   }
 }
 
