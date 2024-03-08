@@ -3,7 +3,7 @@ backend: "tensorrtllm"
 max_batch_size: ${VAR_MAX_BATCH_SIZE}
 
 model_transaction_policy {
-  decoupled: ${VAR_ENABLE_STREAMING}
+  decoupled: true
 }
 
 input [
@@ -160,13 +160,13 @@ parameters: {
 parameters: {
   key: "kv_cache_free_gpu_mem_fraction"
   value: {
-    string_value: "${VAR_KV_CACHE_MEMORY_PERCENT}"
+    string_value: "0.9"
   }
 }
 parameters: {
   key: "enable_trt_overlap"
   value: {
-    string_value: "${VAR_ENABLE_OVERLAP}"
+    string_value: "true"
   }
 }
 

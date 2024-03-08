@@ -26,19 +26,18 @@ EXPOSE 8000/tcp
 EXPOSE 8001/tcp
 EXPOSE 8002/tcp
 
-# Create the Triton Inference Server layout
-COPY templates/triton /opt/endpoints
-
-# Processing layer
-RUN ln -s /repository/tokenizer.json /opt/endpoints/tokenizer/tokenizer.json && \
-    ln -s /repository/special_tokens_map.json /opt/endpoints/tokenizer/special_tokens_map.json && \
-    ln -s /repository/tokenizer_config.json /opt/endpoints/tokenizer/tokenizer_config.json
-
-# Modeling layer
-RUN ln -s /repository/engines/config.json /opt/endpoints/llm/1/config.json && \
-    ln -s /repository/engines/*.engine /opt/endpoints/llm/1/
-
 # Inference-endpoint mount the content of the repository in /repository, so let's place ourselves here
-WORKDIR /repository
+WORKDIR /opt/endpoint
 
-CMD ["mpirun", "--allow-run-as-root", "-n", "1", "/opt/tritonserver/bin/tritonserver", "--exit-on-error=false", "--model-repo=/opt/endpoint"]
+COPY templates/triton/postprocessing/1/model.py /opt/endpoint/postprocessing/1/model.py
+COPY templates/triton/preprocessing/1/model.py /opt/endpoint/preprocessing/1/model.py
+
+# Retrieve the Nvidia Triton launcher script
+RUN wget https://raw.githubusercontent.com/triton-inference-server/tensorrtllm_backend/main/scripts/launch_triton_server.py
+
+# Copy our Inference Endpoint specific start script
+COPY docker/scripts/hf_endpoint_start.sh /opt/endpoint/start.sh
+RUN chmod +x /opt/endpoint/start.sh
+
+# Run
+CMD /opt/endpoint/start.sh
