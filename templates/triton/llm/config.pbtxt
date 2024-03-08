@@ -146,12 +146,6 @@ parameters: {
   }
 }
 parameters: {
-  key: "max_tokens_in_paged_kv_cache"
-  value: {
-    string_value: ""
-  }
-}
-parameters: {
   key: "batch_scheduler_policy"
   value: {
     string_value: "${VAR_BATCH_SCHEDULER_POLICY}"
