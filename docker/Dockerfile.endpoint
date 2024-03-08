@@ -43,9 +43,6 @@ WORKDIR /opt/endpoint
 
 COPY templates/triton/ /opt/endpoint/
 
-# Retrieve the Nvidia Triton launcher script
-RUN wget https://raw.githubusercontent.com/triton-inference-server/tensorrtllm_backend/main/scripts/launch_triton_server.py
-
 # Copy our Inference Endpoint specific start script
 COPY docker/scripts/hf_endpoint_start.sh /opt/endpoint/start.sh
 RUN chmod +x /opt/endpoint/start.sh

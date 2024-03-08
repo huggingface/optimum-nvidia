@@ -1,4 +1,6 @@
-# Then we retrieve values from config to inject into the template
+#!/bin/bash
+
+# We retrieve values from config to inject into the template
 MAX_BATCH_SIZE=`cat /repository/engines/config.json | jq -r ".build_config.max_batch_size"`
 MAX_BEAM_WIDTH=`cat /repository/engines/config.json | jq -r ".build_config.max_beam_width"`
 
@@ -15,6 +17,6 @@ sed -i 's/${VAR_BATCH_SCHEDULER_POLICY}/'"$ARG_BATCH_SCHEDULER_POLICY"'/g' llm/c
 sed -i 's/${VAR_KV_CACHE_FREE_GPU_MEMORY_FRACTION}/'"$ARG_KV_CACHE_RESERVED_MEMORY_FRACTION"'/g' **/config.pbtxt
 
 
-python3 launch_triton_server.py \
+python3 launch_triton.py \
   --model_repo /opt/endpoint \
   --tensorrt_llm_model_name text-generation
