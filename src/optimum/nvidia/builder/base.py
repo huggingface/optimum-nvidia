@@ -25,10 +25,11 @@ import torch
 from huggingface_hub import CONFIG_NAME, ModelHubMixin
 from huggingface_hub.hub_mixin import T
 from psutil import virtual_memory
+
 from tensorrt_llm import Mapping as Shard
 from tensorrt_llm import graph_rewriting
 from tensorrt_llm.builder import Builder
-from tensorrt_llm.models import LLaMAForCausalLM  # , TaurusForCausalLM
+from tensorrt_llm.models import LLaMAForCausalLM
 from tensorrt_llm.network import net_guard
 from tensorrt_llm.plugin.plugin import ContextFMHAType
 from tensorrt_llm.quantization import QuantMode

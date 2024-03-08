@@ -6,8 +6,14 @@ ARG VCS_REF
 ARG BUILD_DATE
 ARG BUILD_VERSION
 
-# Triton Inference Server specifics args
-ARG TOKENIZER_FOLDER=/opt/endpoints/tokenizer
+# Runtime parameters
+ARG ALLOW_STREAMING="true"
+ARG BATCH_SCHEDULER_POLICY="max_utilization"
+ARG KV_CACHE_RESERVED_MEMORY_FRACTION="0.9"
+
+ENV ARG_ALLOW_STREAMING=$ALLOW_STREAMING
+ENV ARG_BATCH_SCHEDULER_POLICY=$BATCH_SCHEDULER_POLICY
+ENV ARG_KV_CACHE_RESERVED_MEMORY_FRACTION=$KV_CACHE_RESERVED_MEMORY_FRACTION
 
 LABEL org.label-schema.schema-version="1.0"
 LABEL org.label-schema.name="huggingface/inference-endpoints-trtllm"
@@ -21,6 +27,12 @@ LABEL org.label-schema.vcs-url="https://github.com/huggingface/optimum-nvidia"
 LABEL org.label-schema.decription="Hugging Face Inference Server docker image for TensorRT-LLM Inference"
 
 
+RUN apt update && \
+    apt upgrade -y && \
+    apt install -y jq && \
+    rm -rf /var/lib/apt/lists/*
+
+
 # Expose (in-order) HTTP, GRPC, Metrics endpoints
 EXPOSE 8000/tcp
 EXPOSE 8001/tcp
@@ -29,8 +41,7 @@ EXPOSE 8002/tcp
 # Inference-endpoint mount the content of the repository in /repository, so let's place ourselves here
 WORKDIR /opt/endpoint
 
-COPY templates/triton/postprocessing/1/model.py /opt/endpoint/postprocessing/1/model.py
-COPY templates/triton/preprocessing/1/model.py /opt/endpoint/preprocessing/1/model.py
+COPY templates/triton/ /opt/endpoint/
 
 # Retrieve the Nvidia Triton launcher script
 RUN wget https://raw.githubusercontent.com/triton-inference-server/tensorrtllm_backend/main/scripts/launch_triton_server.py

@@ -80,7 +80,7 @@ output [
 parameters {
   key: "tokenizer_dir"
   value: {
-    string_value: "/repository"
+    string_value: "${VAR_TOKENIZER_PATH}"
   }
 }
 

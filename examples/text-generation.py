@@ -12,7 +12,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
+import time
 from argparse import ArgumentParser
 from logging import getLogger
 from pathlib import Path
@@ -20,6 +20,7 @@ from pathlib import Path
 from transformers import AutoTokenizer
 
 from optimum.nvidia import AutoModelForCausalLM, setup_logging
+from optimum.nvidia.serving import TritonInferenceEndpoint
 
 
 # Setup logging needs to happen before importing TRT ...
@@ -62,24 +63,31 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
     if not tokenizer.pad_token:
         tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.save_pretrained(args.output)
 
     # Create the model
     model = AutoModelForCausalLM.from_pretrained(args.model, use_fp8=args.fp8)
     model.save_pretrained(args.output)
 
-    prompt = "What is the latest generation of Nvidia GPUs?"
-    tokens = tokenizer(prompt, padding=True, return_tensors="pt")
-    generated, lengths = model.generate(
-        **tokens,
-        top_k=40,
-        top_p=0.95,
-        repetition_penalty=10,
-        pad_token_id=tokenizer.eos_token_id,
-        eos_token_id=tokenizer.eos_token_id,
-        max_new_tokens=args.max_new_tokens,
-    )
+    start = time.time()
+    triton = TritonInferenceEndpoint(model.config)
+    triton.save_pretrained(args.output / "triton", only_config=True)
+    end = time.time()
+    print(f"Triton layout generated in {(end - start) * 1000} ms")
 
-    generated_text = tokenizer.batch_decode(
-        generated.flatten(0, 1), skip_special_tokens=True
-    )
-    print(generated_text)
+    # prompt = "What is the latest generation of Nvidia GPUs?"
+    # tokens = tokenizer(prompt, padding=True, return_tensors="pt")
+    # generated, lengths = model.generate(
+    #     **tokens,
+    #     top_k=40,
+    #     top_p=0.95,
+    #     repetition_penalty=10,
+    #     pad_token_id=tokenizer.eos_token_id,
+    #     eos_token_id=tokenizer.eos_token_id,
+    #     max_new_tokens=args.max_new_tokens,
+    # )
+    #
+    # generated_text = tokenizer.batch_decode(
+    #     generated.flatten(0, 1), skip_special_tokens=True
+    # )
+    # print(generated_text)

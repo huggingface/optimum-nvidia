@@ -3,7 +3,7 @@ backend: "tensorrtllm"
 max_batch_size: ${VAR_MAX_BATCH_SIZE}
 
 model_transaction_policy {
-  decoupled: true
+  decoupled: ${VAR_ALLOW_STREAMING}
 }
 
 input [
@@ -160,7 +160,7 @@ parameters: {
 parameters: {
   key: "kv_cache_free_gpu_mem_fraction"
   value: {
-    string_value: "0.9"
+    string_value: "${VAR_KV_CACHE_FREE_GPU_MEMORY_FRACTION}"
   }
 }
 parameters: {
