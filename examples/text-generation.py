@@ -66,7 +66,13 @@ if __name__ == "__main__":
     tokenizer.save_pretrained(args.output)
 
     # Create the model
-    model = AutoModelForCausalLM.from_pretrained(args.model, use_fp8=args.fp8)
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model,
+        use_fp8=args.fp8,
+        max_batch_size=args.max_batch_size,
+        max_prompt_length=args.max_prompt_length,
+        num_beams=args.max_beam_width,
+    )
     model.save_pretrained(args.output)
 
     start = time.time()
