@@ -33,6 +33,7 @@ from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.builder import LocalEngineBuilder
 from optimum.nvidia.builder.config import EngineConfigBuilder
+from optimum.nvidia.quantization.ammo import AmmoQuantizer
 from optimum.nvidia.utils import get_user_agent
 
 
@@ -95,6 +96,7 @@ class SupportsTensorrtConversion(Protocol):
 
 
 class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
+
     @classmethod
     def convert_and_build(
         cls, local_path: Path, hf_model_config: Dict, **model_kwargs
@@ -112,12 +114,25 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         engines_folder.mkdir(exist_ok=True)
 
         # Retrieve configuration
-        model_config = AutoConfig.for_model(**hf_model_config)
-        config = HuggingFaceHubModel.convert_config_to_trtllm(cls, model_config)
+        config = AutoConfig.for_model(**hf_model_config)
+
+        # Convert the original config to a model config TRTLLM understands
+        model_config = HuggingFaceHubModel.convert_config_to_trtllm(cls, config, **model_kwargs)
 
         # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
         LOGGER.debug("Allocating TRTLLM model to build the checkpoint")
-        model = cls.TRT_LLM_TARGET_MODEL_CLASS.from_config(config)
+        model = cls.TRT_LLM_TARGET_MODEL_CLASS.from_config(model_config)
+
+        # Retrieve the parameters for building the engine
+        if "engine_config" in model_kwargs:
+            engine_config = model_kwargs.pop("engine_config")
+        else:
+            builder = EngineConfigBuilder.from_dict(config, **model_kwargs)
+            builder.with_plugins_config(model_config.get_plugins_config())
+            engine_config = builder.build()
+
+        if engine_config.plugins_config is None:
+            engine_config.plugins_config = model_config.get_plugins_config()
 
         # Load the weights
         LOGGER.debug(
@@ -127,13 +142,32 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             local_path, local_files_only=True
         )
 
+        # Retrieve potential quantization config (If provided) - follow the transformers parameter's name
+        if (qconfig := model_kwargs.pop("quantization_config", None)) is not None:
+            LOGGER.debug("Found quantization config")
+
+            calibration_path = local_path / "calibration"
+            calibration_path.mkdir(exist_ok=True)
+
+            LOGGER.debug(f"Saving calibration artifacts at {calibration_path}")
+
+            hf_quantizer = AmmoQuantizer(
+                quantization_config=qconfig,
+                artifact_path=calibration_path,
+                tensor_parallel_degree=engine_config.sharding_profile.tensor_parallelism,
+                pipeline_parallel_degree=engine_config.sharding_profile.pipeline_parallelism
+            )
+
+            hf_quantizer.preprocess_model(hf_model)
+            hf_quantizer.postprocess_model(hf_model)
+
         # Apply the conversion from Hugging Face weights to TRTLLM
-        for rank in range(config.mapping.world_size):
+        for rank in range(model_config.mapping.world_size):
             LOGGER.debug(
                 f"Converting weights from Hugging Face checkpoint for rank {rank}"
             )
-            config.set_rank(rank)
-            converted_weights = cls.convert_weights(model, hf_model, config)
+            model_config.set_rank(rank)
+            converted_weights = cls.convert_weights(model, hf_model, model_config)
             converted_weights = {
                 name: numpy_to_torch(tensor)
                 for name, tensor in converted_weights.items()
@@ -145,59 +179,15 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             # Write ranked-checkpoints
             to_safetensors(
                 converted_weights,
-                engines_folder / f"rank{config.mapping.rank}.safetensors",
+                engines_folder / f"rank{model_config.mapping.rank}.safetensors",
             )
 
         # Write global config
         with open(engines_folder / "config.json", "w") as config_f:
-            json.dump(config.to_dict(), config_f)
+            json.dump(model_config.to_dict(), config_f)
 
-        # Retrieve the parameters for building the engine
-        if "engine_config" in model_kwargs:
-            engine_config = model_kwargs.pop("engine_config")
-        else:
-            max_prompt_length = model_kwargs.pop("max_prompt_length", 128)
-            max_new_tokens = (
-                model_kwargs.pop(
-                    "max_output_length", model_config.max_position_embeddings
-                )
-                - max_prompt_length
-            )
-
-            if max_new_tokens < 1:
-                raise ValueError(
-                    "Unable to build the engine because the generation would lead to max_num_tokens < 1. ("
-                    f"max_prompt_length = {max_prompt_length}, "
-                    f"max_position_embeddings={model_config.max_position_embeddings}, "
-                    f"max_new_tokens={max_new_tokens}"
-                    ")"
-                )
-
-            builder = (
-                EngineConfigBuilder(model_config)
-                .with_plugins_config(config.get_plugins_config())
-                .with_inference_profile(
-                    model_kwargs.pop("max_batch_size", 1),
-                    max_prompt_length,
-                    max_new_tokens,
-                )
-                .with_generation_profile(
-                    model_kwargs.pop("num_beams", 1),
-                )
-                .logits_as(model_kwargs.pop("logits_dtype", "float32"))
-            )
-
-            if model_kwargs.pop("strongly_typed", False):
-                builder.strongly_typed()
-
-            if "max_speculated_draft_length" in model_kwargs:
-                builder.with_speculated_decoding(
-                    model_kwargs.pop("max_speculated_draft_length")
-                )
-
-            engine_config = builder.build()
-
-        engine_builder = LocalEngineBuilder(config, engines_folder)
+        # Build
+        engine_builder = LocalEngineBuilder(model_config, engines_folder)
         engine_builder.build(engine_config)
 
         return engines_folder
@@ -320,12 +310,14 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
     def convert_config_to_trtllm(
         cls: Type[SupportsTensorrtConversion],
         config: Union[PretrainedConfig, Dict[str, Any]],
+        **additional_params
     ) -> TensorRTConfig:
         """
         Convert a configuration initially generated by various Hugging Face libraries like transformers, diffusers, etc.
         to TensorRT-LLM `tensorrt_llm.modeling_utils.PretrainedConfig`.
         :param cls: The target class to allocate the model
         :param config: The original library configuration file
+        :param additional_params:
         :return: `tensorrt_llm.modeling_utils.PretrainedConfig`
         """
         trt_config = cls.MODEL_CONFIG.from_config(config)

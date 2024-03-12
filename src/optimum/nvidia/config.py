@@ -14,16 +14,17 @@
 #  limitations under the License.
 
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from dataclasses import dataclass, asdict
+from typing import Optional, Union, List, Any, Dict
 
 import torch
 from tensorrt_llm import Mapping
+from tensorrt_llm.quantization import QuantMode
 from tensorrt_llm.models import PretrainedConfig as TensorRTPretrainedConfig
 from tensorrt_llm.plugin import PluginConfig
-from tensorrt_llm.quantization import QuantMode
 from transformers import AutoConfig, PretrainedConfig
 
+from optimum.nvidia.quantization import AmmoQuantizationConfig
 from optimum.nvidia.utils import get_user_agent
 
 
@@ -46,21 +47,8 @@ def dtype_to_str(dtype: torch.dtype) -> str:
         raise ValueError(f"Unsupported torch.dtype ({dtype}) value")
 
 
-@dataclass
-class QuantizationConfig:
-    quantization_algo: Optional[str]
-    kv_cache_quant_algo: Optional[str]
-    group_size: Optional[int]
-    has_zero_point: bool = False
-    pre_quant_scale: bool = False
-    exclude_modules: List[str] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-
 def convert_quant_method_to_trt(
-    method: str, weight_num_bits: int, activation_num_bits: Optional[int] = None
+        method: str, weight_num_bits: int, activation_num_bits: Optional[int] = None
 ) -> (QuantMode, str):
     if method == "awq":
         if not activation_num_bits:
@@ -108,11 +96,23 @@ def convert_quant_method_to_trt(
         raise ValueError(f"Unsupported quantization method: {method}")
 
 
+@dataclass
+class TensorRTQuantizationConfig:
+    quantization_algo: Optional[str]
+    kv_cache_quant_algo: Optional[str]
+    group_size: Optional[int]
+    has_zero_point: bool
+    exclude_modules: Optional[List[str]]
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
 class TensorRTConfig(ABC, TensorRTPretrainedConfig):
     @staticmethod
     def get_quantization_config(
         config: PretrainedConfig,
-    ) -> (QuantMode, QuantizationConfig):
+    ) -> (QuantMode, AmmoQuantizationConfig):
         if hasattr(config, "quantization_config"):
             qconfig = config.quantization_config
             num_bits = qconfig.num_bits
@@ -123,7 +123,7 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
             has_zero_point = qconfig.get("zero_point", False)
             exclude_modules = qconfig.get("module_to_not_convert", [])
 
-            return mode, QuantizationConfig(
+            return mode, TensorRTQuantizationConfig(
                 quantization_algo=quant_method,
                 kv_cache_quant_algo=None,
                 group_size=group_size,
@@ -131,7 +131,7 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
                 exclude_modules=exclude_modules,
             )
         else:
-            return QuantMode.from_description(), QuantizationConfig(None, None, None)
+            return QuantMode.from_description(), TensorRTQuantizationConfig(None, None, None, False, None)
 
     @staticmethod
     @abstractmethod

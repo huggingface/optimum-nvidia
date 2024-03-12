@@ -12,15 +12,15 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
-
+import torch
 from dataclasses import dataclass
 from logging import getLogger
-from typing import Optional
+from typing import Optional, Union
 
 from tensorrt_llm.plugin import PluginConfig
 from transformers import PretrainedConfig as TransformersPretrainedConfig
 
+from optimum.nvidia.lang import DataType
 
 LOGGER = getLogger()
 SUPPORTED_LOGITS_DTYPE = {"float32", "float16"}
@@ -40,6 +40,14 @@ class GenerationProfile:
 
 
 @dataclass
+class ShardingProfile:
+    tensor_parallelism: int = 1
+    pipeline_parallelism: int = 1
+    world_size: int = 1
+    gpus_per_node: int = 1
+
+
+@dataclass
 class EngineConfig:
     """
     Represent all the parameters required to tune and build the final TRTLLM engine(s)
@@ -50,15 +58,51 @@ class EngineConfig:
     logits_dtype: str
     workload_profile: InferenceProfile
     generation_profile: GenerationProfile
+    sharding_profile: ShardingProfile
     plugins_config: PluginConfig
 
 
 class EngineConfigBuilder:
+
+    @staticmethod
+    def from_dict(config: TransformersPretrainedConfig, **additional_params):
+        builder = EngineConfigBuilder(config)
+
+        # Define the data type to export the logits
+        builder.logits_as(additional_params.pop("logits_dtype", config.torch_dtype))
+
+        # Workload related
+        max_batch_size = additional_params.pop("max_batch_size", 1)
+        max_prompt_length = additional_params.pop("max_prompt_length", 128)
+        max_new_tokens = additional_params.pop("max_output_length", config.max_position_embeddings) - max_prompt_length
+
+        if max_new_tokens < 1:
+            raise ValueError(
+                "Unable to build the engine because the generation would lead to max_num_tokens < 1. ("
+                f"max_prompt_length = {max_prompt_length}, "
+                f"max_position_embeddings={config.max_position_embeddings}, "
+                f"max_new_tokens={max_new_tokens}"
+                ")"
+            )
+
+        builder.with_inference_profile(max_batch_size, max_prompt_length, max_new_tokens)
+
+        # Generation related
+        builder.with_generation_profile(additional_params.pop("num_beams", 1))
+
+        # Speculative decoding
+        if "max_speculated_draft_length" in additional_params:
+            builder.with_speculated_decoding(additional_params.pop("max_speculated_draft_length"))
+
+        return builder
+
     def __init__(self, config: TransformersPretrainedConfig):
         self._config = config
 
         self._optimisation_level: int = 3
+        self._logits_dtype = config.torch_dtype
         self._strongly_typed: bool = False
+        self._sharding_profile: ShardingProfile = ShardingProfile()
         self._workload_profile: Optional[InferenceProfile] = None
         self._generation_profile: Optional[GenerationProfile] = None
         self._plugin_config: Optional[PluginConfig] = None
@@ -68,6 +112,18 @@ class EngineConfigBuilder:
         LOGGER.info("Defined engine as strongly typed")
         return self
 
+    def shard(
+        self,
+        tensor_parallelism: int = 1,
+        pipeline_parallelism: int = 1,
+        world_size: int = 1,
+        gpus_per_node: int = 1
+    ) -> "EngineConfigBuilder":
+        self._sharding_profile = ShardingProfile(tensor_parallelism, pipeline_parallelism, world_size, gpus_per_node)
+        LOGGER.debug(f"Defined sharding profile as: {self._sharding_profile}")
+
+        return self
+
     def with_optimisation_level(self, level: int) -> "EngineConfigBuilder":
         if level < 1:
             raise ValueError(f"level should be >= 1 (got: {level})")
@@ -75,11 +131,15 @@ class EngineConfigBuilder:
         LOGGER.info(f"Defined optimisation level to {self._optimisation_level}")
         return self
 
-    def logits_as(self, dtype: str) -> "EngineConfigBuilder":
+    def logits_as(self, dtype: Union[str, torch.dtype, DataType]) -> "EngineConfigBuilder":
+        if isinstance(dtype, torch.dtype):
+            dtype = DataType.from_torch(dtype)
+
+        if isinstance(dtype, DataType):
+            dtype = dtype.value
+
         if dtype not in SUPPORTED_LOGITS_DTYPE:
-            raise ValueError(
-                f"logits dtype should be one of {SUPPORTED_LOGITS_DTYPE} (got: {dtype})"
-            )
+            dtype = "float32"
 
         self._logits_dtype = dtype
         LOGGER.info(f"Defined logits dtype to: {self._logits_dtype}")
@@ -191,6 +251,7 @@ class EngineConfigBuilder:
 
         return EngineConfig(
             optimisation_level=self._optimisation_level,
+            sharding_profile=self._sharding_profile,
             strongly_typed=self._strongly_typed,
             logits_dtype=self._logits_dtype,
             workload_profile=self._workload_profile,
