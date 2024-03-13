@@ -173,10 +173,6 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             hf_quantizer.preprocess_model(hf_model, batch_size=1)
             hf_quantizer.postprocess_model(hf_model)
 
-            # We are freeing memory used by the HF Model to let the engine build goes forward
-            del hf_model
-            torch.cuda.empty_cache()
-
         else:
             # Apply the conversion from Hugging Face weights to TRTLLM
             for rank in range(model_config.mapping.world_size):
@@ -202,6 +198,10 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             # Write global config
             with open(engines_folder / "config.json", "w") as config_f:
                 json.dump(model_config.to_dict(), config_f)
+
+        # We are freeing memory used by the HF Model to let the engine build goes forward
+        del hf_model
+        torch.cuda.empty_cache()
 
         # Build
         engine_builder = LocalEngineBuilder(model_config, engines_folder)
