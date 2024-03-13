@@ -170,8 +170,8 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 pipeline_parallel_degree=engine_config.sharding_profile.pipeline_parallelism
             )
 
-            hf_quantizer.preprocess_model(hf_model)
-            hf_quantizer.postprocess_model(hf_model, batch_size=1)
+            hf_quantizer.preprocess_model(hf_model, batch_size=1)
+            hf_quantizer.postprocess_model(hf_model)
 
             # We are freeing memory used by the HF Model to let the engine build goes forward
             del hf_model

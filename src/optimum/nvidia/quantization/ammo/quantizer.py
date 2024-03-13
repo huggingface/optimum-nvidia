@@ -92,7 +92,7 @@ class AmmoQuantizer(HfQuantizer):
     def is_trainable(self):
         return False
 
-    def _process_model_after_weight_loading(self, model, batch_size: int = 1, **kwargs):
+    def _process_model_before_weight_loading(self, model, batch_size: int = 1, **kwargs):
         assert isinstance(self.quantization_config, AmmoQuantizationConfig)
         qconfig = self.quantization_config
 
@@ -115,7 +115,7 @@ class AmmoQuantizer(HfQuantizer):
 
             atq.quantize(model, config=qconfig.as_ammo_config(), forward_loop=_loop)
 
-    def _process_model_before_weight_loading(self, model, **kwargs):
+    def _process_model_after_weight_loading(self, model, **kwargs):
         assert isinstance(self.quantization_config, AmmoQuantizationConfig)
 
         with torch.inference_mode():
