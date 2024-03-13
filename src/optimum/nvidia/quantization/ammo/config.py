@@ -152,6 +152,7 @@ class AutoQuantizationConfig:
         dataset: Optional[Union[str, Dataset]] = None,
         split: Optional[str] = "train",
         num_samples: int = 512,
+        max_sequence_length: int = 1024,
         seed: int = 2016
     ):
         random.seed(seed)
@@ -165,7 +166,14 @@ class AutoQuantizationConfig:
             activation = DataType(activation).to_torch()
 
         if isinstance(dataset, str):
-            dataset = get_dataset(dataset, tokenizer, num_samples, seed=seed, split=split)
+            dataset = get_dataset(
+                dataset,
+                tokenizer,
+                num_samples,
+                seqlen=max_sequence_length,
+                split=split,
+                seed=seed
+            )
         else:
             raise ValueError("Providing custom dataset is not yet supported")
 

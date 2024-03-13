@@ -68,7 +68,9 @@ if __name__ == "__main__":
         weight="float8",
         activation="float8",
         tokenizer=tokenizer,
-        dataset="c4"
+        dataset="c4",
+        max_sequence_length=args.max_prompt_length,
+        num_samples=1024
     )
 
     # Create the model
@@ -90,7 +92,7 @@ if __name__ == "__main__":
         repetition_penalty=10,
         pad_token_id=tokenizer.eos_token_id,
         eos_token_id=tokenizer.eos_token_id,
-        max_new_tokens=args.max_new_tokens,
+        max_new_tokens=256,
     )
 
     generated_text = tokenizer.batch_decode(
