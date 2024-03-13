@@ -21,8 +21,10 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Protocol, Tuple, Type, Union, runtime_checkable
 
 import numpy as np
+import torch
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
+from psutil import virtual_memory
 from safetensors.torch import save_file as to_safetensors
 from tensorrt_llm._utils import numpy_to_torch
 from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
@@ -34,8 +36,8 @@ from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.builder import LocalEngineBuilder
 from optimum.nvidia.builder.config import EngineConfigBuilder
 from optimum.nvidia.quantization.ammo import AmmoQuantizer
-from optimum.nvidia.utils import get_user_agent
-
+from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
+from optimum.nvidia.utils.nvml import get_device_memory, get_device_count
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
 FOLDER_TRTLLM_ENGINES = "engines"
@@ -138,40 +140,43 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         LOGGER.debug(
             f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
         )
+
+        # Retrieve device total memory
+        fraction_device_map = {
+            device_id: get_device_memory(device_id) * 0.7
+            for device_id in range(get_device_count())
+        }
+
+        cpu_device_map = {"cpu": virtual_memory().available * 0.8}
+
+        # Allocate required components for quantization
         hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
-            local_path, local_files_only=True
-        )
+            local_path,
+            device_map="auto",
+            max_memory=fraction_device_map | cpu_device_map,
+            local_files_only=True,
+        ).eval()
+
+        hf_model = maybe_offload_weights_to_cpu(hf_model)
 
         # Retrieve potential quantization config (If provided) - follow the transformers parameter's name
         if (qconfig := model_kwargs.pop("quantization_config", None)) is not None:
             LOGGER.debug("Found quantization config")
 
-            calibration_path = local_path / "calibration"
-            calibration_path.mkdir(exist_ok=True)
-
-            LOGGER.debug(f"Saving calibration artifacts at {calibration_path}")
-
             hf_quantizer = AmmoQuantizer(
                 quantization_config=qconfig,
-                artifact_path=calibration_path,
+                artifact_path=engines_folder,
                 tensor_parallel_degree=engine_config.sharding_profile.tensor_parallelism,
                 pipeline_parallel_degree=engine_config.sharding_profile.pipeline_parallelism
             )
 
             hf_quantizer.preprocess_model(hf_model)
-            hf_quantizer.postprocess_model(hf_model)
+            hf_quantizer.postprocess_model(hf_model, batch_size=1)
 
-        # Apply the conversion from Hugging Face weights to TRTLLM
-        for rank in range(model_config.mapping.world_size):
-            LOGGER.debug(
-                f"Converting weights from Hugging Face checkpoint for rank {rank}"
-            )
-            model_config.set_rank(rank)
-            converted_weights = cls.convert_weights(model, hf_model, model_config)
-            converted_weights = {
-                name: numpy_to_torch(tensor)
-                for name, tensor in converted_weights.items()
-            }
+            # We are freeing memory used by the HF Model to let the engine build goes forward
+            del hf_model
+            torch.cuda.empty_cache()
+
         else:
             # Apply the conversion from Hugging Face weights to TRTLLM
             for rank in range(model_config.mapping.world_size):
