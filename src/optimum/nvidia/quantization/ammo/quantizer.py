@@ -92,7 +92,7 @@ class AmmoQuantizer(HfQuantizer):
     def is_trainable(self):
         return False
 
-    def _process_model_after_weight_loading(self, model, **kwargs):
+    def _process_model_after_weight_loading(self, model, batch_size: int = 1, **kwargs):
         assert isinstance(self.quantization_config, AmmoQuantizationConfig)
         qconfig = self.quantization_config
 
@@ -101,7 +101,6 @@ class AmmoQuantizer(HfQuantizer):
                 raise ValueError("Float8 quantization requires a calibration dataset")
 
             def _loop():
-                batch_size = kwargs.pop("batch_size", 4)
                 with torch.inference_mode():
                     data = DataLoader(
                         qconfig.calibration_dataset,
@@ -111,10 +110,9 @@ class AmmoQuantizer(HfQuantizer):
                     )
 
                     for sample in tqdm(data):
-                        inputs = {name: tensor[1].to("cuda") for name, tensor in sample.items()}
+                        inputs = {name: tensor[:, 0].to("cuda") for name, tensor in sample.items()}
                         model(**inputs)
 
-            model.to("cuda:0")
             atq.quantize(model, config=qconfig.as_ammo_config(), forward_loop=_loop)
 
     def _process_model_before_weight_loading(self, model, **kwargs):
@@ -130,4 +128,5 @@ class AmmoQuantizer(HfQuantizer):
                 inference_tensor_parallel=self._tp_degree,
                 inference_pipeline_parallel=self._pp_degree,
                 export_tensorrt_llm_config=self._export_tensorrt_llm_config,
+                export_npz=False
             )
