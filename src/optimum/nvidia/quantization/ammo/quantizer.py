@@ -100,20 +100,20 @@ class AmmoQuantizer(HfQuantizer):
             if not qconfig.has_calibration_dataset:
                 raise ValueError("Float8 quantization requires a calibration dataset")
 
-            def _loop():
-                with torch.inference_mode():
-                    data = DataLoader(
-                        qconfig.calibration_dataset,
-                        batch_size=batch_size,
-                        pin_memory=True,
-                        pin_memory_device="cuda:0",
-                    )
+            with torch.inference_mode():
+                def _loop():
+                        data = DataLoader(
+                            qconfig.calibration_dataset,
+                            batch_size=batch_size,
+                            pin_memory=True,
+                            pin_memory_device="cuda:0",
+                        )
 
-                    for sample in tqdm(data):
-                        inputs = {name: tensor[:, 0].to("cuda") for name, tensor in sample.items()}
-                        model(**inputs)
+                        for sample in tqdm(data):
+                            inputs = {name: tensor[:, 0].to("cuda") for name, tensor in sample.items()}
+                            model(**inputs)
 
-            atq.quantize(model, config=qconfig.as_ammo_config(), forward_loop=_loop)
+                atq.quantize(model, config=qconfig.as_ammo_config(), forward_loop=_loop)
 
     def _process_model_after_weight_loading(self, model, **kwargs):
         assert isinstance(self.quantization_config, AmmoQuantizationConfig)
