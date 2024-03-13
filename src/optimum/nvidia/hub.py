@@ -172,19 +172,31 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 name: numpy_to_torch(tensor)
                 for name, tensor in converted_weights.items()
             }
+        else:
+            # Apply the conversion from Hugging Face weights to TRTLLM
+            for rank in range(model_config.mapping.world_size):
+                LOGGER.debug(
+                    f"Converting weights from Hugging Face checkpoint for rank {rank}"
+                )
+                model_config.set_rank(rank)
+                converted_weights = cls.convert_weights(model, hf_model, model_config)
+                converted_weights = {
+                    name: numpy_to_torch(tensor)
+                    for name, tensor in converted_weights.items()
+                }
 
-            # Bind the converted weights against the TRTLLM model
-            model.load(converted_weights)
+                # Bind the converted weights against the TRTLLM model
+                model.load(converted_weights)
 
-            # Write ranked-checkpoints
-            to_safetensors(
-                converted_weights,
-                engines_folder / f"rank{model_config.mapping.rank}.safetensors",
-            )
+                # Write ranked-checkpoints
+                to_safetensors(
+                    converted_weights,
+                    engines_folder / f"rank{model_config.mapping.rank}.safetensors",
+                )
 
-        # Write global config
-        with open(engines_folder / "config.json", "w") as config_f:
-            json.dump(model_config.to_dict(), config_f)
+            # Write global config
+            with open(engines_folder / "config.json", "w") as config_f:
+                json.dump(model_config.to_dict(), config_f)
 
         # Build
         engine_builder = LocalEngineBuilder(model_config, engines_folder)
