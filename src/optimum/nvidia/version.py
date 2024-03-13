@@ -16,5 +16,5 @@
 from distutils.version import StrictVersion
 
 
-__version__ = "0.1.0b3"
+__version__ = "0.1.0b4"
 VERSION = StrictVersion(__version__)
