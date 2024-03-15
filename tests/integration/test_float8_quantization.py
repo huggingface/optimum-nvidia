@@ -45,7 +45,7 @@ def test_float8_causallm_custom_qconfig_predefined_dataset(
     config.intermediate_size /= 2
 
     # Create the flow and convert
-    with tempfile.gettempdir() as tmp_f:
+    with tempfile.TemporaryDirectory() as tmp_f:
         _ = HfAutoModelForCausalLM(config).save_pretrained(tmp_f)
         tokenizer = AutoTokenizer.from_pretrained(model_id)
 
