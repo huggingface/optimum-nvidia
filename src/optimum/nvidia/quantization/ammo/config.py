@@ -140,7 +140,7 @@ class AutoQuantizationConfig:
         num_samples: int = 512,
         max_sequence_length: int = 1024,
         seed: int = 2016,
-        device: Union[str, torch.device] = "cpu"
+        device: Union[str, torch.device] = "cpu",
     ):
         random.seed(seed)
         np.random.seed(seed)
@@ -160,7 +160,7 @@ class AutoQuantizationConfig:
                 seqlen=max_sequence_length,
                 split=split,
                 seed=seed,
-                device=device
+                device=device,
             )
         else:
             raise ValueError("Providing custom dataset is not yet supported")

@@ -216,12 +216,13 @@ def get_c4_new(
         data[indexes]["text"],
         truncation=True,
         max_length=seqlen,
-        return_attention_mask=False
+        return_attention_mask=False,
     )
 
-    dataset = [{
-        "input_ids": torch.tensor(tokens.ids, dtype=torch.long, device=device)
-    } for tokens in encodings.encodings]
+    dataset = [
+        {"input_ids": torch.tensor(tokens.ids, dtype=torch.long, device=device)}
+        for tokens in encodings.encodings
+    ]
 
     return dataset
 
