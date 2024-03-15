@@ -197,11 +197,10 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 )
 
                 warn(
-                    "About to automatically convert model to support float8 inference.\n"
-                    "This process requires collecting calibration data from the model which will be done using: "
-                    f"dataset='c4', split='train' over {len(qconfig.calibration_dataset)} samples.\n"
-                    "If the generation performances of the model doesn't meet your expectation we recommend "
-                    "to leverage the complete API through "
+                    "Converting model to support float8 inference.\n"
+                    f"Calibrating model with dataset='c4', split='train', samples={len(qconfig.calibration_dataset)}.\n"
+                    "Note: if text generation doesn't meet your expectations, "
+                    "you can control the quantization process manually with this API: "
                     "qconfig = AutoQuantizationConfig.from_description(weight='float8', activation='float8', ...) "
                     "forwarding the configuration to .from_pretrained(..., quantization_config=qconfig)"
                 )
