@@ -17,6 +17,8 @@ def test_float8_causallm_use_fp8(model_id: str):
     # Use a tiner model
     config = AutoConfig.from_pretrained(model_id)
     config.num_hidden_layers = 1
+    config.hidden_size //= 2
+    config.intermediate_size //= 2
 
     # Create the flow and convert
     with tempfile.TemporaryDirectory() as tmp_f:
@@ -39,8 +41,8 @@ def test_float8_causallm_custom_qconfig_predefined_dataset(
     # Use a tiner model
     config = AutoConfig.from_pretrained(model_id)
     config.num_hidden_layers = 1
-    config.hidden_size /= 2
-    config.intermediate_size /= 2
+    config.hidden_size //= 2
+    config.intermediate_size //= 2
 
     # Create the flow and convert
     with tempfile.TemporaryDirectory() as tmp_f:
