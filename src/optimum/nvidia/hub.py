@@ -94,7 +94,14 @@ class SupportsTensorrtConversion(Protocol):
     ) -> Dict[str, np.ndarray]: ...
 
 
-class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
+class HuggingFaceHubModel(
+    ModelHubMixin,
+    SupportsTensorrtConversion,
+    config_inject_mode="as_config",
+    tags=["nvidia", "tensorrt-llm"],
+    library_name="optimum-nvidia",
+    docs_url="https://huggingface.co/docs/optimum/index#nvidia",
+):
     @classmethod
     def convert_and_build(
         cls, local_path: Path, hf_model_config: Dict, **model_kwargs
