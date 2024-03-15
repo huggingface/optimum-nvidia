@@ -68,7 +68,7 @@ if __name__ == "__main__":
         weight="float8",
         activation="float8",
         tokenizer=tokenizer,
-        dataset="c4",
+        dataset="c4-new",
         max_sequence_length=args.max_prompt_length,
         num_samples=1024
     )
