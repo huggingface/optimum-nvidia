@@ -95,8 +95,8 @@ class SupportsTensorrtConversion(Protocol):
 
 
 class HuggingFaceHubModel(
-    ModelHubMixin,
     SupportsTensorrtConversion,
+    ModelHubMixin,
     config_inject_mode="as_config",
     tags=["nvidia", "tensorrt-llm"],
     library_name="optimum-nvidia",
