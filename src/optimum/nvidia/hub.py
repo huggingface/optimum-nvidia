@@ -19,7 +19,7 @@ from glob import glob, iglob
 from logging import getLogger
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol, Tuple, Type, Union, runtime_checkable
-from  warnings import warn
+from warnings import warn
 
 import numpy as np
 import torch
@@ -173,7 +173,11 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             if has_qconfig:
                 qconfig = model_kwargs.pop("quantization_config")
             elif has_use_fp8:
-                if (candidate_tokenizer_path := engines_folder.parent.joinpath("tokenizer.json")).exists():
+                if (
+                    candidate_tokenizer_path := engines_folder.parent.joinpath(
+                        "tokenizer.json"
+                    )
+                ).exists():
                     tokenizer_path = candidate_tokenizer_path.parent
                 elif "_model_id" in hf_model_config:
                     tokenizer_path = hf_model_config["_model_id"]
