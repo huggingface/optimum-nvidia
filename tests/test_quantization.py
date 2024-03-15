@@ -29,7 +29,7 @@ def test_float8_ammo_configuration(kv_cache, lm_head):
     quant_cfg = qconfig["quant_cfg"]
 
     for pattern in {"*weight_quantizer", "*input_quantizer", "default"}:
-        assert pattern in "quant_cfg"
+        assert pattern in quant_cfg
         assert quant_cfg[pattern]["num_bits"] == (4, 3)
         assert quant_cfg[pattern]["axis"] is None
 
