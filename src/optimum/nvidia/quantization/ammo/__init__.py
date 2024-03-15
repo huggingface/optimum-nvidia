@@ -1,2 +1,7 @@
-from .config import AutoQuantizationConfig, AmmoQuantizationConfig, Float8QuantizationConfig, QuantizationMethod
+from .config import (
+    AmmoQuantizationConfig,
+    AutoQuantizationConfig,
+    Float8QuantizationConfig,
+    QuantizationMethod,
+)
 from .quantizer import AmmoQuantizer

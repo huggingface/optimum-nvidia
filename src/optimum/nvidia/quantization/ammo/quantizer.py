@@ -30,12 +30,13 @@ from transformers.utils.quantization_config import QuantizationConfigMixin
 
 from optimum.nvidia.quantization.ammo import AmmoQuantizationConfig
 
+
 LOGGER = getLogger(__name__)
 
 _SUPPORTED_MODEL_ARCHITECTURES = {
     "llama": "llama",
     "mistral": "llama",
-    "gemma": "gemma"
+    "gemma": "gemma",
 }
 
 
@@ -59,20 +60,23 @@ def infer_decoder_type(model: PreTrainedModel) -> str:
 
 
 class AmmoQuantizer(HfQuantizer):
-
     def __init__(
-            self,
-            quantization_config: QuantizationConfigMixin,
-            artifact_path: Union[str, PathLike, Path],
-            tensor_parallel_degree: int = 1,
-            pipeline_parallel_degree: int = 1,
-            export_tensorrt_llm_config: bool = True,
+        self,
+        quantization_config: QuantizationConfigMixin,
+        artifact_path: Union[str, PathLike, Path],
+        tensor_parallel_degree: int = 1,
+        pipeline_parallel_degree: int = 1,
+        export_tensorrt_llm_config: bool = True,
     ):
         if tensor_parallel_degree < 1:
-            raise ValueError(f"tensor_parallel_degree should be >= 1 (got {tensor_parallel_degree})")
+            raise ValueError(
+                f"tensor_parallel_degree should be >= 1 (got {tensor_parallel_degree})"
+            )
 
         if pipeline_parallel_degree < 1:
-            raise ValueError(f"pipeline_parallel_degree should be >= 1 (got {pipeline_parallel_degree})")
+            raise ValueError(
+                f"pipeline_parallel_degree should be >= 1 (got {pipeline_parallel_degree})"
+            )
 
         super().__init__(quantization_config=quantization_config)
 
@@ -92,7 +96,9 @@ class AmmoQuantizer(HfQuantizer):
     def is_trainable(self):
         return False
 
-    def _process_model_before_weight_loading(self, model, batch_size: int = 1, **kwargs):
+    def _process_model_before_weight_loading(
+        self, model, batch_size: int = 1, **kwargs
+    ):
         assert isinstance(self.quantization_config, AmmoQuantizationConfig)
         qconfig = self.quantization_config
 
@@ -101,17 +107,21 @@ class AmmoQuantizer(HfQuantizer):
                 raise ValueError("Float8 quantization requires a calibration dataset")
 
             with torch.inference_mode():
-                def _loop():
-                        data = DataLoader(
-                            qconfig.calibration_dataset,
-                            batch_size=batch_size,
-                            pin_memory=True,
-                            pin_memory_device="cuda:0",
-                        )
 
-                        for sample in tqdm(data):
-                            inputs = {name: tensor[:, 0].to("cuda") for name, tensor in sample.items()}
-                            model(**inputs)
+                def _loop():
+                    data = DataLoader(
+                        qconfig.calibration_dataset,
+                        batch_size=batch_size,
+                        pin_memory=True,
+                        pin_memory_device="cuda:0",
+                    )
+
+                    for sample in tqdm(data):
+                        inputs = {
+                            name: tensor[:, 0].to("cuda")
+                            for name, tensor in sample.items()
+                        }
+                        model(**inputs)
 
                 atq.quantize(model, config=qconfig.as_ammo_config(), forward_loop=_loop)
 
@@ -128,5 +138,5 @@ class AmmoQuantizer(HfQuantizer):
                 inference_tensor_parallel=self._tp_degree,
                 inference_pipeline_parallel=self._pp_degree,
                 export_tensorrt_llm_config=self._export_tensorrt_llm_config,
-                export_npz=False
+                export_npz=False,
             )

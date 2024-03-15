@@ -22,6 +22,7 @@ from transformers import AutoTokenizer
 from optimum.nvidia import AutoModelForCausalLM, setup_logging
 from optimum.nvidia.quantization import AutoQuantizationConfig
 
+
 # Setup logging needs to happen before importing TRT ...
 setup_logging(True)
 
@@ -70,7 +71,7 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         dataset="c4-new",
         max_sequence_length=args.max_prompt_length,
-        num_samples=1024
+        num_samples=1024,
     )
 
     # Create the model
@@ -79,7 +80,7 @@ if __name__ == "__main__":
         max_batch_size=args.max_batch_size,
         max_prompt_length=args.max_prompt_length,
         num_beams=args.max_beam_width,
-        quantization_config=qconfig
+        quantization_config=qconfig,
     )
     model.save_pretrained(args.output)
 

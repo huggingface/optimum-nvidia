@@ -8,7 +8,9 @@ from optimum.nvidia.quantization.ammo.config import KV_CACHE_CFG
 @pytest.mark.parametrize("kv_cache", (False, True))
 @pytest.mark.parametrize("lm_head", (False, True))
 def test_float8_ammo_configuration(kv_cache, lm_head):
-    config = Float8QuantizationConfig(with_quantized_kv_cache=kv_cache, with_quantized_lm_head=lm_head)
+    config = Float8QuantizationConfig(
+        with_quantized_kv_cache=kv_cache, with_quantized_lm_head=lm_head
+    )
 
     assert config.requires_calibration
     assert not config.has_calibration_dataset
@@ -34,6 +36,4 @@ def test_float8_ammo_configuration(kv_cache, lm_head):
         for kv_pattern in KV_CACHE_CFG.keys():
             assert quant_cfg[kv_pattern]["enable"]
             assert quant_cfg[kv_pattern]["axis"] is None
-            assert quant_cfg[kv_pattern]["num_bits"] == (4, 3) 
-            
-
+            assert quant_cfg[kv_pattern]["num_bits"] == (4, 3)

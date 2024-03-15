@@ -54,7 +54,6 @@ class DataType(Enum):
         else:
             raise ValueError(f"Unknown torch.dtype {dtype}")
 
-
     def to_trt(self) -> "DataType":
         """
         Convert textual dtype representation to their TensorRT counterpart

@@ -57,9 +57,11 @@ class TextGenerationPipeline(Pipeline):
         self._pad_token_id = tokenizer.pad_token_id
 
     def __call__(self, inputs: Union[str, List[str]], **kwargs):
-        preprocess_params, forward_params, postprocess_params = (
-            self._sanitize_parameters(**kwargs)
-        )
+        (
+            preprocess_params,
+            forward_params,
+            postprocess_params,
+        ) = self._sanitize_parameters(**kwargs)
         model_inputs = self.preprocess(inputs, **preprocess_params)
         model_outputs = self._forward(model_inputs, **forward_params)
         outputs = self.postprocess(model_outputs, **postprocess_params)
@@ -123,9 +125,9 @@ class TextGenerationPipeline(Pipeline):
         if return_type is not None:
             postprocess_params["return_type"] = return_type
         if clean_up_tokenization_spaces is not None:
-            postprocess_params["clean_up_tokenization_spaces"] = (
-                clean_up_tokenization_spaces
-            )
+            postprocess_params[
+                "clean_up_tokenization_spaces"
+            ] = clean_up_tokenization_spaces
 
         if stop_sequence is not None:
             stop_sequence_ids = self.tokenizer.encode(

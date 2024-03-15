@@ -14,14 +14,14 @@
 #  limitations under the License.
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, asdict
-from typing import Optional, Union, List, Any, Dict
+from dataclasses import asdict, dataclass
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 from tensorrt_llm import Mapping
-from tensorrt_llm.quantization import QuantMode
 from tensorrt_llm.models import PretrainedConfig as TensorRTPretrainedConfig
 from tensorrt_llm.plugin import PluginConfig
+from tensorrt_llm.quantization import QuantMode
 from transformers import AutoConfig, PretrainedConfig
 
 from optimum.nvidia.quantization import AmmoQuantizationConfig
@@ -48,7 +48,7 @@ def dtype_to_str(dtype: torch.dtype) -> str:
 
 
 def convert_quant_method_to_trt(
-        method: str, weight_num_bits: int, activation_num_bits: Optional[int] = None
+    method: str, weight_num_bits: int, activation_num_bits: Optional[int] = None
 ) -> (QuantMode, str):
     if method == "awq":
         if not activation_num_bits:
@@ -131,7 +131,9 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
                 exclude_modules=exclude_modules,
             )
         else:
-            return QuantMode.from_description(), TensorRTQuantizationConfig(None, None, None, False, None)
+            return QuantMode.from_description(), TensorRTQuantizationConfig(
+                None, None, None, False, None
+            )
 
     @staticmethod
     @abstractmethod

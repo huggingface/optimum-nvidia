@@ -13,4 +13,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from .ammo import AmmoQuantizationConfig, AutoQuantizationConfig, Float8QuantizationConfig, QuantizationMethod
+from .ammo import (
+    AmmoQuantizationConfig,
+    AutoQuantizationConfig,
+    Float8QuantizationConfig,
+    QuantizationMethod,
+)

@@ -1,9 +1,9 @@
-from abc import abstractmethod, ABC
+import random
+from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Union, Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
-import random
 import torch
 from ammo.torch import quantization as atq
 from datasets import Dataset
@@ -13,41 +13,18 @@ from transformers.utils.quantization_config import QuantizationConfigMixin
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.quantization.datasets import get_dataset
 
+
 dtype = Union[str, torch.dtype]
 TORCH_FLOAT8 = {torch.float8_e4m3fn, torch.float8_e5m2}
 
 
 KV_CACHE_CFG = {
-    "*.query_key_value.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
-    "*.Wqkv.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
-    "*.W_pack.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
-    "*.c_attn.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
-    "*.k_proj.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
-    "*.v_proj.output_quantizer": {
-        "num_bits": 8,
-        "axis": None,
-        "enable": True
-    },
+    "*.query_key_value.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
+    "*.Wqkv.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
+    "*.W_pack.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
+    "*.c_attn.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
+    "*.k_proj.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
+    "*.v_proj.output_quantizer": {"num_bits": 8, "axis": None, "enable": True},
 }
 
 
@@ -56,13 +33,12 @@ class QuantizationMethod(str, Enum):
 
 
 class AmmoQuantizationConfig(ABC, QuantizationConfigMixin):
-
     def __init__(
         self,
         quant_method: QuantizationMethod,
         with_quantized_kv_cache: bool = False,
         with_quantized_lm_head: bool = False,
-        calibration_data: Optional[Dataset] = None
+        calibration_data: Optional[Dataset] = None,
     ):
         super().__init__(quant_method)
 
@@ -78,7 +54,9 @@ class AmmoQuantizationConfig(ABC, QuantizationConfigMixin):
     @property
     @abstractmethod
     def has_quantized_kv_cache(self) -> bool:
-        raise NotImplementedError("AmmoQuantizationConfig::has_quantized_kv_cache is abstract.")
+        raise NotImplementedError(
+            "AmmoQuantizationConfig::has_quantized_kv_cache is abstract."
+        )
 
     @property
     def has_calibration_dataset(self) -> bool:
@@ -87,7 +65,9 @@ class AmmoQuantizationConfig(ABC, QuantizationConfigMixin):
     @property
     @abstractmethod
     def requires_calibration(self) -> bool:
-        raise NotImplementedError("AmmoQuantizationConfig::requires_calibration is abstract.")
+        raise NotImplementedError(
+            "AmmoQuantizationConfig::requires_calibration is abstract."
+        )
 
     @property
     def calibration_dataset(self) -> Optional[Dataset]:
@@ -99,10 +79,18 @@ class AmmoQuantizationConfig(ABC, QuantizationConfigMixin):
 
 
 class Float8QuantizationConfig(AmmoQuantizationConfig):
-
-    def __init__(self, with_quantized_kv_cache: bool = False,
-                 with_quantized_lm_head: bool = False, calibration_data: Optional[Dataset] = None):
-        super().__init__(QuantizationMethod.FLOAT8, with_quantized_kv_cache, with_quantized_lm_head, calibration_data)
+    def __init__(
+        self,
+        with_quantized_kv_cache: bool = False,
+        with_quantized_lm_head: bool = False,
+        calibration_data: Optional[Dataset] = None,
+    ):
+        super().__init__(
+            QuantizationMethod.FLOAT8,
+            with_quantized_kv_cache,
+            with_quantized_lm_head,
+            calibration_data,
+        )
 
     @property
     def weight_dtype(self) -> torch.dtype:
@@ -137,7 +125,6 @@ class Float8QuantizationConfig(AmmoQuantizationConfig):
 
 
 class AutoQuantizationConfig:
-
     @classmethod
     def from_dict(cls, kwargs):
         return cls.from_description(**kwargs)
@@ -152,7 +139,7 @@ class AutoQuantizationConfig:
         split: Optional[str] = "train",
         num_samples: int = 512,
         max_sequence_length: int = 1024,
-        seed: int = 2016
+        seed: int = 2016,
     ):
         random.seed(seed)
         np.random.seed(seed)
@@ -171,7 +158,7 @@ class AutoQuantizationConfig:
                 num_samples,
                 seqlen=max_sequence_length,
                 split=split,
-                seed=seed
+                seed=seed,
             )
         else:
             raise ValueError("Providing custom dataset is not yet supported")
@@ -181,7 +168,9 @@ class AutoQuantizationConfig:
             return Float8QuantizationConfig(
                 with_quantized_kv_cache=activation in TORCH_FLOAT8,
                 with_quantized_lm_head=False,
-                calibration_data=dataset
+                calibration_data=dataset,
             )
         else:
-            raise NotImplementedError(f"Quantization(weight= {weight}, activation={activation}) is not supported yet.")
+            raise NotImplementedError(
+                f"Quantization(weight= {weight}, activation={activation}) is not supported yet."
+            )
