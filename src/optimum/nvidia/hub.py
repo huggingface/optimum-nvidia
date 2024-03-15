@@ -271,9 +271,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                     prebuilt_engines_only=False,
                 )
 
-            engines_folder = cls.convert_and_build(
-                local_path, model_config, **model_kwargs
-            )
+            engines_folder = cls.convert_and_build(local_path, config, **model_kwargs)
 
         model = cls(
             engines_folder,
