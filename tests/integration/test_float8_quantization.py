@@ -21,8 +21,8 @@ def test_float8_causallm_use_fp8(model_id: str):
     config.intermediate_size /= 2
 
     # Create the flow and convert
-    with tempfile.tempdir() as tmp_f:
-        _ = HfAutoModelForCausalLM(config).save_pretrained(tmp_f)
+    with tempfile.TemporaryDirectory() as tmp_f:
+        _ = HfAutoModelForCausalLM.from_config(config).save_pretrained(tmp_f)
         model = AutoModelForCausalLM.from_pretrained(tmp_f, use_fp8=True)
 
         assert model is not None
@@ -46,7 +46,7 @@ def test_float8_causallm_custom_qconfig_predefined_dataset(
 
     # Create the flow and convert
     with tempfile.TemporaryDirectory() as tmp_f:
-        _ = HfAutoModelForCausalLM(config).save_pretrained(tmp_f)
+        _ = HfAutoModelForCausalLM.from_config(config).save_pretrained(tmp_f)
         tokenizer = AutoTokenizer.from_pretrained(model_id)
 
         qconfig = AutoQuantizationConfig.from_description(
