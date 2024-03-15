@@ -94,14 +94,7 @@ class SupportsTensorrtConversion(Protocol):
     ) -> Dict[str, np.ndarray]: ...
 
 
-class HuggingFaceHubModel(
-    SupportsTensorrtConversion,
-    ModelHubMixin,
-    config_inject_mode="as_config",
-    tags=["nvidia", "tensorrt-llm"],
-    library_name="optimum-nvidia",
-    docs_url="https://huggingface.co/docs/optimum/index#nvidia",
-):
+class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
     @classmethod
     def convert_and_build(
         cls, local_path: Path, hf_model_config: Dict, **model_kwargs
@@ -221,20 +214,13 @@ class HuggingFaceHubModel(
         resume_download: bool,
         local_files_only: bool,
         token: Optional[Union[str, bool]],
+        config: Dict[str, Any],
         **model_kwargs,
     ) -> T:
         if not isinstance(cls, SupportsTensorrtConversion):
             raise ValueError(
                 f"{cls} doesn't support converting from Hugging Face Hub model."
                 " Please open up an issue at https://github.com/huggingface/optimum-nvidia/issues"
-            )
-
-        # Let's make sure we have the config
-        model_config = model_kwargs.get("config", None)
-        if not model_config:
-            raise ValueError(
-                "Original model configuration (config.json) was not found."
-                "The model configuration is required to build TensorRT-LLM engines."
             )
 
         # Check if we are using a local path
