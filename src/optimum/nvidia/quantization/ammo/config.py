@@ -6,7 +6,7 @@ import numpy as np
 import random
 import torch
 from ammo.torch import quantization as atq
-from datasets import Dataset, load_dataset
+from datasets import Dataset
 from transformers import PreTrainedTokenizer
 from transformers.utils.quantization_config import QuantizationConfigMixin
 
@@ -131,8 +131,7 @@ class Float8QuantizationConfig(AmmoQuantizationConfig):
 
             quant_config.update(quant_kv_cache_config)
 
-        if self.has_quantized_lm_head:
-            quant_config["*lm_head*"] = {"enable": False}
+        quant_config["*lm_head*"] = {"enable": self.has_quantized_lm_head}
 
         return cfg
 
