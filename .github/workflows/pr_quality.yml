@@ -23,7 +23,7 @@ jobs:
           python-version: "3.9"
       - name: Install dependencies
         run: |
-          python -m pip .[quality]
+          python -m pip install .[quality]
       - name: Check quality
         run: |
           make quality
