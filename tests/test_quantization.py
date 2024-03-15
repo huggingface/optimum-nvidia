@@ -5,13 +5,8 @@ from optimum.nvidia.quantization import Float8QuantizationConfig
 from optimum.nvidia.quantization.ammo.config import KV_CACHE_CFG
 
 
-@pytest.mark.parametrize(
-    "kv_cache,lm_head",
-    [
-        (False, True),
-        (False, True),
-    ]
-)
+@pytest.mark.parametrize("kv_cache", (False, True))
+@pytest.mark.parametrize("lm_head", (False, True))
 def test_float8_ammo_configuration(kv_cache, lm_head):
     config = Float8QuantizationConfig(with_quantized_kv_cache=kv_cache, with_quantized_lm_head=lm_head)
 
