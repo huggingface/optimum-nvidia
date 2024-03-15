@@ -22,6 +22,7 @@ def test_float8_causallm_use_fp8(model_id: str):
 
     # Create the flow and convert
     with tempfile.TemporaryDirectory() as tmp_f:
+        _ = AutoTokenizer.from_pretrained(model_id).save_pretrained(tmp_f)
         _ = HfAutoModelForCausalLM.from_config(config).save_pretrained(tmp_f)
         model = AutoModelForCausalLM.from_pretrained(tmp_f, use_fp8=True)
 
