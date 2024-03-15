@@ -120,9 +120,9 @@ def load_from_hf_gemma(
             w2 = split(w2, mapping.tp_size, mapping.tp_rank, dim=2)
             w1 = split(w1, mapping.tp_size, mapping.tp_rank, dim=1)
         # concat w3 and w1 for gated expert
-        model_params[
-            f"model.layers.{layer}.block_sparse_moe.experts.w3w1.weight"
-        ] = torch.concat([w3, w1], dim=-2)
+        model_params[f"model.layers.{layer}.block_sparse_moe.experts.w3w1.weight"] = (
+            torch.concat([w3, w1], dim=-2)
+        )
         model_params[f"model.layers.{layer}.block_sparse_moe.experts.w2.weight"] = w2
 
     torch_dtype = str_dtype_to_torch(dtype)
@@ -202,13 +202,13 @@ def load_from_hf_gemma(
                 continue
             idx = int(layer_idx) - layers_range[0]
             if "input_layernorm.weight" in k:
-                weights[
-                    "transformer.layers.{}.input_layernorm.weight".format(idx)
-                ] = torch_to_numpy(numpy_to_torch(v) + 1.0)
+                weights["transformer.layers.{}.input_layernorm.weight".format(idx)] = (
+                    torch_to_numpy(numpy_to_torch(v) + 1.0)
+                )
             elif "post_attention_layernorm.weight" in k:
-                weights[
-                    "transformer.layers.{}.post_layernorm.weight".format(idx)
-                ] = torch_to_numpy(numpy_to_torch(v) + 1.0)
+                weights["transformer.layers.{}.post_layernorm.weight".format(idx)] = (
+                    torch_to_numpy(numpy_to_torch(v) + 1.0)
+                )
 
             elif "self_attn.qkv_proj.weight" in k:
                 if not mha_mode:
@@ -295,17 +295,17 @@ def load_from_hf_gemma(
                     if not use_gemm_woq_plugin:
                         weights["transformer.layers.{}.mlp.gate.weight".format(idx)] = v
                     else:
-                        weights[
-                            "transformer.layers.{}.mlp.gate.weight".format(idx)
-                        ] = processed_torch_weights
+                        weights["transformer.layers.{}.mlp.gate.weight".format(idx)] = (
+                            processed_torch_weights
+                        )
 
                     weights[
                         "transformer.layers.{}.mlp.gate.per_channel_scale".format(idx)
                     ] = torch_weight_scales
                 else:
-                    weights[
-                        "transformer.layers.{}.mlp.gate.weight".format(idx)
-                    ] = split_v
+                    weights["transformer.layers.{}.mlp.gate.weight".format(idx)] = (
+                        split_v
+                    )
 
             elif "mlp.down_proj.weight" in k:
                 # dst = tensorrt_llm_llama.layers[idx].mlp.proj.weight
@@ -321,17 +321,17 @@ def load_from_hf_gemma(
                     if not use_gemm_woq_plugin:
                         weights["transformer.layers.{}.mlp.proj.weight".format(idx)] = v
                     else:
-                        weights[
-                            "transformer.layers.{}.mlp.proj.weight".format(idx)
-                        ] = processed_torch_weights
+                        weights["transformer.layers.{}.mlp.proj.weight".format(idx)] = (
+                            processed_torch_weights
+                        )
 
                     weights[
                         "transformer.layers.{}.mlp.proj.per_channel_scale".format(idx)
                     ] = torch_weight_scales
                 else:
-                    weights[
-                        "transformer.layers.{}.mlp.proj.weight".format(idx)
-                    ] = split_v
+                    weights["transformer.layers.{}.mlp.proj.weight".format(idx)] = (
+                        split_v
+                    )
             elif "mlp.gate_proj.weight" in k:
                 # dst = tensorrt_llm_llama.layers[idx].mlp.fc.weight
                 split_v = split(v, mapping.tp_size, mapping.tp_rank, dim=0)
@@ -347,9 +347,9 @@ def load_from_hf_gemma(
                     if not use_gemm_woq_plugin:
                         weights["transformer.layers.{}.mlp.fc.weight".format(idx)] = v
                     else:
-                        weights[
-                            "transformer.layers.{}.mlp.fc.weight".format(idx)
-                        ] = processed_torch_weights
+                        weights["transformer.layers.{}.mlp.fc.weight".format(idx)] = (
+                            processed_torch_weights
+                        )
 
                     weights[
                         "transformer.layers.{}.mlp.fc.per_channel_scale".format(idx)
@@ -371,9 +371,9 @@ def load_from_hf_gemma(
                     weights[
                         "transformer.layers.{}.mlp.experts_weight_2".format(idx)
                     ] = processed_torch_weights
-                    weights[
-                        "transformer.layers.{}.mlp.experts_scale_2".format(idx)
-                    ] = torch_weight_scales
+                    weights["transformer.layers.{}.mlp.experts_scale_2".format(idx)] = (
+                        torch_weight_scales
+                    )
 
                 else:
                     weights[
@@ -393,9 +393,9 @@ def load_from_hf_gemma(
                     weights[
                         "transformer.layers.{}.mlp.experts_weight_1".format(idx)
                     ] = processed_torch_weights
-                    weights[
-                        "transformer.layers.{}.mlp.experts_scale_1".format(idx)
-                    ] = torch_weight_scales
+                    weights["transformer.layers.{}.mlp.experts_scale_1".format(idx)] = (
+                        torch_weight_scales
+                    )
 
                 else:
                     weights[

@@ -125,9 +125,9 @@ class TextGenerationPipeline(Pipeline):
         if return_type is not None:
             postprocess_params["return_type"] = return_type
         if clean_up_tokenization_spaces is not None:
-            postprocess_params[
-                "clean_up_tokenization_spaces"
-            ] = clean_up_tokenization_spaces
+            postprocess_params["clean_up_tokenization_spaces"] = (
+                clean_up_tokenization_spaces
+            )
 
         if stop_sequence is not None:
             stop_sequence_ids = self.tokenizer.encode(

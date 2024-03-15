@@ -71,9 +71,9 @@ class LocalEngineBuilder:
         }
 
         if build_config.generation_profile.max_draft_length >= 1:
-            generation_params[
-                "--max_draft_len"
-            ] = build_config.generation_profile.max_draft_length
+            generation_params["--max_draft_len"] = (
+                build_config.generation_profile.max_draft_length
+            )
 
         plugins_params = {
             f"--{name}": process_plugin_flag(name, value)
