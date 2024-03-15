@@ -14,7 +14,7 @@
 
 
 import random
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
 import torch
@@ -27,7 +27,9 @@ Set of utilities for loading most used datasets (original dataset from GPTQ pape
 
 
 def prepare_dataset(
-        examples: List[Dict[str, torch.LongTensor]], batch_size: int = 1, pad_token_id: Optional[int] = None
+    examples: List[Dict[str, torch.LongTensor]],
+    batch_size: int = 1,
+    pad_token_id: Optional[int] = None,
 ):
     """
     Prepare the dataset by making sure that we have the right format and `batch_size`
@@ -46,23 +48,30 @@ def prepare_dataset(
         input_ids = example["input_ids"]
         attention_mask = example["attention_mask"]
         new_examples.append(
-            {"input_ids": torch.LongTensor(input_ids), "attention_mask": torch.LongTensor(attention_mask)}
+            {
+                "input_ids": torch.LongTensor(input_ids),
+                "attention_mask": torch.LongTensor(attention_mask),
+            }
         )
     if batch_size > 1 and pad_token_id is None:
         raise ValueError(
             "You need to pass a `pad_token_id` in `quantize_model` if you want to have examples with batch size > 1"
         )
     new_examples = [
-        collate_data(new_examples[start : start + batch_size], contain_labels=False, pad_token_id=pad_token_id)
+        collate_data(
+            new_examples[start : start + batch_size],
+            contain_labels=False,
+            pad_token_id=pad_token_id,
+        )
         for start in range(0, len(new_examples), batch_size)
     ]
     return new_examples
 
 
 def collate_data(
-        blocks: List[Dict[str, torch.LongTensor]],
-        contain_labels: bool = False,
-        pad_token_id: Optional[int] = None,
+    blocks: List[Dict[str, torch.LongTensor]],
+    contain_labels: bool = False,
+    pad_token_id: Optional[int] = None,
 ) -> Dict[str, torch.LongTensor]:
     """
         Collate data in `blocks`
@@ -94,13 +103,19 @@ def collate_data(
         block_bsz, block_inp_len = input_ids_blocks[i].shape
         pad_num = inp_max_len - block_inp_len
         if pad_num > 0:
-            input_ids_blocks[i] = pad_block(input_ids_blocks[i], torch.ones((block_bsz, pad_num)) * pad_token_id)
-            attention_mask_blocks[i] = pad_block(attention_mask_blocks[i], torch.zeros((block_bsz, pad_num)))
+            input_ids_blocks[i] = pad_block(
+                input_ids_blocks[i], torch.ones((block_bsz, pad_num)) * pad_token_id
+            )
+            attention_mask_blocks[i] = pad_block(
+                attention_mask_blocks[i], torch.zeros((block_bsz, pad_num))
+            )
         if contain_labels:
             block_label_len = label_blocks[i].shape[-1]
             label_pad_num = label_max_len - block_label_len
             if label_pad_num > 0:
-                label_blocks[i] = pad_block(label_blocks[i], torch.ones((block_bsz, label_pad_num)) * -100)
+                label_blocks[i] = pad_block(
+                    label_blocks[i], torch.ones((block_bsz, label_pad_num)) * -100
+                )
 
     data = {
         "input_ids": torch.cat(input_ids_blocks, dim=0).long(),
@@ -112,11 +127,21 @@ def collate_data(
     return data
 
 
-def get_wikitext2(tokenizer: Any, seqlen: int, nsamples: int, split: str = "train"):
+def get_wikitext2(
+    tokenizer: Any,
+    seqlen: int,
+    nsamples: int,
+    device: torch.device,
+    split: str = "train",
+):
     if split == "train":
-        data = load_dataset("wikitext", "wikitext-2-raw-v1", split="train", streaming=True)
+        data = load_dataset(
+            "wikitext", "wikitext-2-raw-v1", split="train", streaming=True
+        )
     elif split == "validation":
-        data = load_dataset("wikitext", "wikitext-2-raw-v1", split="test", streaming=True)
+        data = load_dataset(
+            "wikitext", "wikitext-2-raw-v1", split="test", streaming=True
+        )
     # length of 288059 should be enough
     text = "".join([" \n" if s == "" else s for s in data["text"][:1000]])
 
@@ -125,22 +150,31 @@ def get_wikitext2(tokenizer: Any, seqlen: int, nsamples: int, split: str = "trai
     for _ in range(nsamples):
         i = random.randint(0, enc.input_ids.shape[1] - seqlen - 1)
         j = i + seqlen
-        inp = enc.input_ids[:, i:j]
-        attention_mask = torch.ones_like(inp)
+        inp = enc.input_ids[:, i:j].to(device)
+        attention_mask = torch.ones_like(inp, device=device)
         dataset.append({"input_ids": inp, "attention_mask": attention_mask})
     return dataset
 
 
-def get_c4(tokenizer: Any, seqlen: int, nsamples: int, split: str = "train"):
+def get_c4(
+    tokenizer: Any,
+    seqlen: int,
+    nsamples: int,
+    device: torch.device,
+    split: str = "train",
+):
     if split == "train":
-        data = load_dataset("allenai/c4", split="train", data_files={"train": "en/c4-train.00000-of-01024.json.gz"})
+        data = load_dataset(
+            "allenai/c4",
+            split="train",
+            data_files={"train": "en/c4-train.00000-of-01024.json.gz"},
+        )
     elif split == "validation":
         data = load_dataset(
             "allenai/c4",
             split="validation",
             data_files={"validation": "en/c4-validation.00000-of-00008.json.gz"},
-
-            streaming=True
+            streaming=True,
         )
     dataset = []
     for _ in range(nsamples):
@@ -153,42 +187,52 @@ def get_c4(tokenizer: Any, seqlen: int, nsamples: int, split: str = "train"):
         if seqlen < enc.input_ids.shape[1]:
             i = random.randint(0, enc.input_ids.shape[1] - seqlen - 1)
             j = i + seqlen
-            inp = enc.input_ids[:, i:j]
+            inp = enc.input_ids[:, i:j].to(device)
         else:
             inp = enc.input_ids
-        attention_mask = torch.ones_like(inp)
+        attention_mask = torch.ones_like(inp, device=device)
         dataset.append({"input_ids": inp, "attention_mask": attention_mask})
 
     return dataset
 
 
-def get_c4_new(tokenizer: Any, seqlen: int, nsamples: int, split: str = "train"):
+def get_c4_new(
+    tokenizer: Any,
+    seqlen: int,
+    nsamples: int,
+    device: torch.device,
+    split: str = "train",
+):
     if split == "train":
-        data = load_dataset("allenai/c4", split="train", data_files={"train": "en/c4-train.00000-of-01024.json.gz"})
+        data_files = {"train": "en/c4-train.00000-of-01024.json.gz"}
     elif split == "validation":
-        data = load_dataset(
-            "allenai/c4",
-            split="validation",
-            data_files={"validation": "en/c4-validation.00000-of-00008.json.gz"},
-            streaming=True
-        )
-    dataset = []
-    for _ in range(nsamples):
-        while True:
-            i = random.randint(0, len(data) - 1)
-            enc = tokenizer(data[i]["text"], return_tensors="pt")
-            if enc.input_ids.shape[1] >= seqlen:
-                break
-        i = random.randint(0, enc.input_ids.shape[1] - seqlen - 1)
-        j = i + seqlen
-        inp = enc.input_ids[:, i:j]
-        attention_mask = torch.ones_like(inp)
-        dataset.append({"input_ids": inp, "attention_mask": attention_mask})
+        data_files = {"validation": "en/c4-validation.00000-of-00008.json.gz"}
+    else:
+        raise ValueError(f"Unknown split {split}, please use 'train' or 'validation'")
+
+    data = load_dataset("allenai/c4", split=split, data_files=data_files)
+    indexes = random.choices(range(data.num_rows), k=nsamples)
+    encodings = tokenizer(
+        data[indexes]["text"],
+        truncation=True,
+        max_length=seqlen,
+        return_attention_mask=False
+    )
+
+    dataset = [{
+        "input_ids": torch.tensor(tokens.ids, dtype=torch.long, device=device)
+    } for tokens in encodings.encodings]
 
     return dataset
 
 
-def get_ptb(tokenizer: Any, seqlen: int, nsamples: int, split: str = "train"):
+def get_ptb(
+    tokenizer: Any,
+    seqlen: int,
+    nsamples: int,
+    device: torch.device,
+    split: str = "train",
+):
     if split == "train":
         data = load_dataset("ptb_text_only", "penn_treebank", split="train")
     elif split == "validation":
@@ -200,14 +244,20 @@ def get_ptb(tokenizer: Any, seqlen: int, nsamples: int, split: str = "train"):
     for _ in range(nsamples):
         i = random.randint(0, enc.input_ids.shape[1] - seqlen - 1)
         j = i + seqlen
-        inp = enc.input_ids[:, i:j]
-        attention_mask = torch.ones_like(inp)
+        inp = enc.input_ids[:, i:j].to(device)
+        attention_mask = torch.ones_like(inp, device=device)
         dataset.append({"input_ids": inp, "attention_mask": attention_mask})
 
     return dataset
 
 
-def get_ptb_new(tokenizer: Any, seqlen: int, nsamples: int, split: str = "train"):
+def get_ptb_new(
+    tokenizer: Any,
+    seqlen: int,
+    nsamples: int,
+    device: torch.device,
+    split: str = "train",
+):
     if split == "train":
         data = load_dataset("ptb_text_only", "penn_treebank", split="train")
     elif split == "validation":
@@ -219,14 +269,20 @@ def get_ptb_new(tokenizer: Any, seqlen: int, nsamples: int, split: str = "train"
     for _ in range(nsamples):
         i = random.randint(0, enc.input_ids.shape[1] - seqlen - 1)
         j = i + seqlen
-        inp = enc.input_ids[:, i:j]
-        attention_mask = torch.ones_like(inp)
+        inp = enc.input_ids[:, i:j].to(device)
+        attention_mask = torch.ones_like(inp, device=device)
         dataset.append({"input_ids": inp, "attention_mask": attention_mask})
     return dataset
 
 
 def get_dataset(
-    dataset_name: str, tokenizer: Any, nsamples: int = 128, seqlen: int = 2048, seed: int = 0, split: str = "train"
+    dataset_name: str,
+    tokenizer: Any,
+    nsamples: int = 128,
+    seqlen: int = 2048,
+    seed: int = 0,
+    split: str = "train",
+    device: Union[str, torch.device] = "cpu",
 ):
     """
     Get the dataset from the original paper of GPTQ
@@ -244,6 +300,8 @@ def get_dataset(
             Seed
         split (`str`, defaults to `train`):
             Split of the dataset. Can be either "train" or "validation"
+        device (`str` or `torch.device`, defaults to `cpu`):
+           The device on which to put the samples
     Returns:
         `List[Dict[str,torch.LongTensor]]`: The tokenized dataset.
     """
@@ -258,8 +316,20 @@ def get_dataset(
         "ptb-new": get_ptb_new,
     }
     if split not in ["train", "validation"]:
-        raise ValueError(f"The split need to be 'train' or 'validation' but found {split}")
+        raise ValueError(
+            f"The split need to be 'train' or 'validation' but found {split}"
+        )
     if dataset_name not in get_dataset_map:
-        raise ValueError(f"Expected a value in {list(get_dataset_map.keys())} but found {dataset_name}")
+        raise ValueError(
+            f"Expected a value in {list(get_dataset_map.keys())} but found {dataset_name}"
+        )
+    if isinstance(device, str):
+        device = torch.device(device)
     get_dataset_fn = get_dataset_map[dataset_name]
-    return get_dataset_fn(tokenizer=tokenizer, nsamples=nsamples, seqlen=seqlen, split=split)
+    return get_dataset_fn(
+        tokenizer=tokenizer,
+        nsamples=nsamples,
+        seqlen=seqlen,
+        split=split,
+        device=device,
+    )

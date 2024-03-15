@@ -118,7 +118,7 @@ class AmmoQuantizer(HfQuantizer):
 
                     for sample in tqdm(data):
                         inputs = {
-                            name: tensor[:, 0].to("cuda")
+                            name: tensor.to("cuda:0")
                             for name, tensor in sample.items()
                         }
                         model(**inputs)
