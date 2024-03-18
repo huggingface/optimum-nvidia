@@ -49,6 +49,10 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Uninstall optimum-nvidia before doing anything
+        run: |
+          python -m pip uninstall optimum-nvidia
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade -e .[quality,tests]
