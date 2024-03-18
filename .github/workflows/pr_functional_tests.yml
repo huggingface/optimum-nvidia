@@ -50,7 +50,7 @@ jobs:
 
       - name: Uninstall optimum-nvidia before doing anything
         run: |
-          python -m pip uninstall optimum-nvidia
+          python -m pip uninstall -y optimum-nvidia
 
       - name: Install dependencies
         run: |
