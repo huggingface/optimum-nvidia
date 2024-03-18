@@ -58,4 +58,4 @@ jobs:
 
       - name: Run optimum-nvidia functional test-suite
         run: |
-          python -m pytest -n 1 -s -v -p no:warnings --ignore=integration tests
+          python -m pytest -n 1 -s -v -p no:warnings --ignore=integration/ tests/
