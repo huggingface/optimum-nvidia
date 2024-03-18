@@ -77,6 +77,13 @@ class AmmoQuantizationConfig(ABC, QuantizationConfigMixin):
     def as_ammo_config(self) -> Dict[str, Any]:
         raise NotImplementedError("AmmoQuantizationConfig::as_ammo_config is abstract.")
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "quant_method": self.quant_method,
+            "with_kv_cache": self._with_quantized_kv_cache,
+            "with_lm_head": self._with_quantized_lm_head
+        }
+
     def to_diff_dict(self) -> Dict[str, Any]:
         return self.to_dict()
 
