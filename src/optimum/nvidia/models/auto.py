@@ -14,7 +14,7 @@
 #  limitations under the License.
 
 from pathlib import Path
-from typing import Dict, Optional, Type, Union
+from typing import Dict, Optional, Type, Union, Any
 
 from huggingface_hub import ModelHubMixin
 
@@ -41,6 +41,7 @@ class AutoModelForCausalLM(ModelHubMixin):
         cls: Type,
         *,
         model_id: str,
+        config: Dict[str, Any],
         revision: Optional[str],
         cache_dir: Optional[Union[str, Path]],
         force_download: bool,
@@ -50,10 +51,6 @@ class AutoModelForCausalLM(ModelHubMixin):
         token: Optional[Union[str, bool]],
         **model_kwargs,
     ):
-        config = model_kwargs.pop("config", None)
-        if not config:
-            raise ValueError("Unable to determine the model type without config")
-
         model_type, _ = extract_model_type(config)
         if model_type is None:
             raise ValueError(
@@ -67,6 +64,7 @@ class AutoModelForCausalLM(ModelHubMixin):
         model_clazz = _SUPPORTED_MODEL_CLASS[model_type]
         model = model_clazz.from_pretrained(
             pretrained_model_name_or_path=model_id,
+            config=config,
             revision=revision,
             cache_dir=cache_dir,
             force_download=force_download,

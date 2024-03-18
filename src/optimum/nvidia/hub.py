@@ -256,6 +256,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         cls: Type[T],
         *,
         model_id: str,
+        config: Dict[str, Any],
         revision: Optional[str],
         cache_dir: Optional[Union[str, Path]],
         force_download: bool,
@@ -263,7 +264,6 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         resume_download: bool,
         local_files_only: bool,
         token: Optional[Union[str, bool]],
-        config: Dict[str, Any],
         **model_kwargs,
     ) -> T:
         if not isinstance(cls, SupportsTensorrtConversion):
