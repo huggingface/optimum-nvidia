@@ -77,6 +77,9 @@ class AmmoQuantizationConfig(ABC, QuantizationConfigMixin):
     def as_ammo_config(self) -> Dict[str, Any]:
         raise NotImplementedError("AmmoQuantizationConfig::as_ammo_config is abstract.")
 
+    def to_diff_dict(self) -> Dict[str, Any]:
+        return self.to_dict()
+
 
 class Float8QuantizationConfig(AmmoQuantizationConfig):
     def __init__(
