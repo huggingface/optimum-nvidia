@@ -21,9 +21,9 @@ from typing import Union
 import torch
 from ammo.torch import export as ate
 from ammo.torch import quantization as atq
-from tqdm import tqdm
 from tensorrt_llm.quantization import QuantMode
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 from transformers import PreTrainedModel
 from transformers.quantizers import HfQuantizer
 from transformers.utils.quantization_config import QuantizationConfigMixin

@@ -14,7 +14,7 @@
 #  limitations under the License.
 
 from pathlib import Path
-from typing import Dict, Optional, Type, Union, Any
+from typing import Any, Dict, Optional, Type, Union
 
 from huggingface_hub import ModelHubMixin
 

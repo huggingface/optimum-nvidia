@@ -81,7 +81,7 @@ class AmmoQuantizationConfig(ABC, QuantizationConfigMixin):
         return {
             "quant_method": self.quant_method,
             "with_kv_cache": self._with_quantized_kv_cache,
-            "with_lm_head": self._with_quantized_lm_head
+            "with_lm_head": self._with_quantized_lm_head,
         }
 
     def to_diff_dict(self) -> Dict[str, Any]:
