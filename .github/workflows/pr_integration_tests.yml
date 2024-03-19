@@ -35,7 +35,7 @@ jobs:
 
     container:
       image: ${{ matrix.config.image }}
-      options: --shm-size "64gb" --gpus all --ipc host -v /mnt/hf_cache:/mnt/cache/
+      options: --gpus all --ipc host -v /mnt/hf_cache:/mnt/cache/
       env:
         HF_TOKEN: ${{ secrets.OPTIMUM_NVIDIA_HUB_READ_TOKEN }}
 
@@ -59,4 +59,4 @@ jobs:
 
       - name: Run optimum-nvidia integration test-suite
         run: |
-          python -m pytest -s -vvv -p no:warnings tests/integration/
+          python -m pytest -s -vvv -n 1 -p no:warnings tests/integration/
