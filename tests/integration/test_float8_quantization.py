@@ -53,7 +53,7 @@ def test_float8_causallm_custom_qconfig_predefined_dataset(
             activation=activation,
             tokenizer=tokenizer,
             dataset=dataset,
-            num_samples=4,
+            num_samples=32,
             max_sequence_length=128,
         )
         model = AutoModelForCausalLM.from_pretrained(
