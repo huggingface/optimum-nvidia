@@ -116,11 +116,6 @@ class LocalEngineBuilder:
 
         # Run the build
         result = run([LocalEngineBuilder.TRTLLM_BUILD_EXEC] + cli_params_list)
-
-        print(f"trtllm-build: exit-code: {result.returncode}")
-        print(f"\t - stdout: {result.stdout}")
-        print(f"\t - stderr: {result.stderr}")
-
         if result.returncode != 0:
             raise ValueError(
                 f"Compilation failed ({result.returncode}), "
