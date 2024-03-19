@@ -210,6 +210,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 artifact_path=engines_folder,
                 tensor_parallel_degree=engine_config.sharding_profile.tensor_parallelism,
                 pipeline_parallel_degree=engine_config.sharding_profile.pipeline_parallelism,
+                export_tensorrt_llm_config=True
             )
 
             hf_quantizer.preprocess_model(hf_model, batch_size=1)
