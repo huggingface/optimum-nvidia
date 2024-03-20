@@ -41,7 +41,6 @@ class AutoModelForCausalLM(ModelHubMixin):
         cls: Type,
         *,
         model_id: str,
-        config: Dict[str, Any],
         revision: Optional[str],
         cache_dir: Optional[Union[str, Path]],
         force_download: bool,
@@ -49,6 +48,7 @@ class AutoModelForCausalLM(ModelHubMixin):
         resume_download: bool,
         local_files_only: bool,
         token: Optional[Union[str, bool]],
+        config: Optional[Dict[str, Any]] = None,
         **model_kwargs,
     ):
         model_type, _ = extract_model_type(config)
