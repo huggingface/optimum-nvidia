@@ -26,7 +26,7 @@ Pip installation flow has been validated on Ubuntu only at this stage.
 
 ```shell
 apt-get update && apt-get -y install python3.10 python3-pip openmpi-bin libopenmpi-dev
-python -m pip install --pre --extra-index-url https://pypi.nvidia.comoptimum-nvidia
+python -m pip install --pre --extra-index-url https://pypi.nvidia.com optimum-nvidia
 ``` 
 
 For developers who want to target the best performances, please look at the installation methods below.
