@@ -27,15 +27,14 @@ jobs:
         config:
           - name: GPU-enabled Optimum-Nvidia Integration Test Suite
             image: huggingface/optimum-nvidia:ci
-#        cuda_arch: [sm_86, sm_89]
-        cuda_arch: [sm_89]
+        cuda_arch: [sm_86, sm_89]
 
     name: ${{ matrix.config.name }}
     runs-on: [ci, nvidia-gpu, multi-gpu, "${{ matrix.cuda_arch }}"]
 
     container:
       image: ${{ matrix.config.image }}
-      options: --gpus all --ipc host -v /mnt/hf_cache:/mnt/cache/
+      options: --tmpfs --shm-size "64gb" --gpus all --ipc host -v /mnt/hf_cache:/mnt/cache/
       env:
         HF_TOKEN: ${{ secrets.OPTIMUM_NVIDIA_HUB_READ_TOKEN }}
 

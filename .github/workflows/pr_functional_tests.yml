@@ -34,7 +34,7 @@ jobs:
 
     container:
       image: ${{ matrix.config.image }}
-      options: --shm-size "64gb" --gpus all --ipc host -v /mnt/hf_cache:/mnt/cache/
+      options: --tmpfs --shm-size "64gb" --gpus all --ipc host -v /mnt/hf_cache:/mnt/cache/
       env:
         HF_TOKEN: ${{ secrets.OPTIMUM_NVIDIA_HUB_READ_TOKEN }}
 
