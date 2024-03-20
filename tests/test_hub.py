@@ -23,7 +23,7 @@ def test_load_engine_from_huggingface_hub():
             assert (
                 optimum.nvidia.hub.HuggingFaceHubModel.convert_and_build.call_count == 0
             )
-        except RevisionNotFoundError:
+        except ValueError:
             pytest.skip(
                 f"No revision found for optimum-nvidia/llama-ci on GPU: {device[-1].lower()}"
             )

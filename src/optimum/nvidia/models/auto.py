@@ -51,6 +51,9 @@ class AutoModelForCausalLM(ModelHubMixin):
         config: Optional[Dict[str, Any]] = None,
         **model_kwargs,
     ):
+        if config is None:
+            raise ValueError("Unable to determine the model type with config = None")
+
         model_type, _ = extract_model_type(config)
         if model_type is None:
             raise ValueError(
