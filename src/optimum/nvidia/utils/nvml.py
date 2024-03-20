@@ -21,6 +21,7 @@ from pynvml import (
     nvmlDeviceGetCudaComputeCapability,
     nvmlDeviceGetHandleByIndex,
     nvmlDeviceGetMemoryInfo,
+    nvmlDeviceGetName,
     nvmlInit,
 )
 
@@ -77,6 +78,12 @@ def get_device_count() -> int:
     import torch
 
     return torch.cuda.device_count()
+
+@functools.cache
+@nvml_guard
+def get_device_name(device: int) -> Optional[str]:
+    nvml_device_handle = nvmlDeviceGetHandleByIndex(device)
+    return nvmlDeviceGetName(nvml_device_handle)
 
 
 @functools.cache
