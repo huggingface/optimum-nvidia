@@ -15,7 +15,7 @@
 from itertools import chain
 from logging import getLogger
 from pathlib import Path
-from subprocess import run, PIPE, STDOUT
+from subprocess import PIPE, STDOUT, run
 from typing import Any, Dict
 
 from optimum.nvidia import TensorRTConfig
@@ -115,7 +115,11 @@ class LocalEngineBuilder:
                 )
 
         # Run the build
-        result = run([LocalEngineBuilder.TRTLLM_BUILD_EXEC] + cli_params_list, stdout=PIPE, stderr=STDOUT)
+        result = run(
+            [LocalEngineBuilder.TRTLLM_BUILD_EXEC] + cli_params_list,
+            stdout=PIPE,
+            stderr=STDOUT,
+        )
         if result.returncode != 0:
             print(f"trtllm-build stdout: {result.stdout}")
             print(f"trtllm-build stderr: {result.stderr}")
