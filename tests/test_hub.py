@@ -3,7 +3,6 @@ from tempfile import TemporaryDirectory
 
 import mock
 import pytest
-from huggingface_hub.utils import RevisionNotFoundError
 
 import optimum.nvidia.hub
 from optimum.nvidia import AutoModelForCausalLM
