@@ -13,11 +13,11 @@ from optimum.nvidia.utils.nvml import get_device_name
 
 def test_load_engine_from_huggingface_hub():
     with mock.patch("optimum.nvidia.hub.HuggingFaceHubModel.convert_and_build"):
-        device_id = get_device_name(0).lower()
+        device = get_device_name(0)
 
         try:
             model = AutoModelForCausalLM.from_pretrained(
-                "optimum-nvidia/llama-ci", revision=device_id
+                "optimum-nvidia/llama-ci", revision=device[-1].lower()
             )
             assert model is not None
             assert (
@@ -25,7 +25,7 @@ def test_load_engine_from_huggingface_hub():
             )
         except RevisionNotFoundError:
             pytest.skip(
-                f"No revision found for optimum-nvidia/llama-ci on GPU: {device_id}"
+                f"No revision found for optimum-nvidia/llama-ci on GPU: {device[-1].lower()}"
             )
 
 

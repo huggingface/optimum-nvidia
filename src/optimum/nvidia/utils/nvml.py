@@ -22,7 +22,7 @@ from pynvml import (
     nvmlDeviceGetHandleByIndex,
     nvmlDeviceGetMemoryInfo,
     nvmlDeviceGetName,
-    nvmlInit,
+    nvmlInit, NVMLError,
 )
 
 
@@ -76,15 +76,18 @@ def get_device_memory(device: int) -> Optional[int]:
 @nvml_guard
 def get_device_count() -> int:
     import torch
-
     return torch.cuda.device_count()
 
 
 @functools.cache
 @nvml_guard
-def get_device_name(device: int) -> Optional[str]:
-    nvml_device_handle = nvmlDeviceGetHandleByIndex(device)
-    return nvmlDeviceGetName(nvml_device_handle)
+def get_device_name(device: int) -> Optional[Tuple[str, ...]]:
+    try:
+        nvml_device_handle = nvmlDeviceGetHandleByIndex(device)
+        device_full_name = nvmlDeviceGetName(nvml_device_handle)
+        return device_full_name.split()
+    except NVMLError:
+        return None
 
 
 @functools.cache
