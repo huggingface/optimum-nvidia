@@ -79,6 +79,7 @@ def get_device_count() -> int:
 
     return torch.cuda.device_count()
 
+
 @functools.cache
 @nvml_guard
 def get_device_name(device: int) -> Optional[str]:
