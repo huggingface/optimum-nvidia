@@ -13,5 +13,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from .base import Calibration, HfDatasetCalibration
-from .receipes import get_default_calibration_dataset
+from .ammo import (
+    AmmoQuantizationConfig,
+    AutoQuantizationConfig,
+    Float8QuantizationConfig,
+    QuantizationMethod,
+)

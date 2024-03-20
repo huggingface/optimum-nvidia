@@ -19,21 +19,27 @@ from glob import glob, iglob
 from logging import getLogger
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol, Tuple, Type, Union, runtime_checkable
+from warnings import warn
 
 import numpy as np
+import torch
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
+from psutil import virtual_memory
 from safetensors.torch import save_file as to_safetensors
 from tensorrt_llm._utils import numpy_to_torch
 from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
-from transformers import AutoConfig
+from transformers import AutoConfig, AutoTokenizer
 from transformers import PreTrainedModel as TransformersPretrainedModel
 from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
 
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.builder import LocalEngineBuilder
 from optimum.nvidia.builder.config import EngineConfigBuilder
-from optimum.nvidia.utils import get_user_agent
+from optimum.nvidia.quantization import AutoQuantizationConfig
+from optimum.nvidia.quantization.ammo import AmmoQuantizer
+from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
+from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
 
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
@@ -112,92 +118,136 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         engines_folder.mkdir(exist_ok=True)
 
         # Retrieve configuration
-        model_config = AutoConfig.for_model(**hf_model_config)
-        config = HuggingFaceHubModel.convert_config_to_trtllm(cls, model_config)
+        config = AutoConfig.for_model(**hf_model_config)
+
+        # Convert the original config to a model config TRTLLM understands
+        model_config = HuggingFaceHubModel.convert_config_to_trtllm(
+            cls, config, **model_kwargs
+        )
 
         # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
         LOGGER.debug("Allocating TRTLLM model to build the checkpoint")
-        model = cls.TRT_LLM_TARGET_MODEL_CLASS.from_config(config)
-
-        # Load the weights
-        LOGGER.debug(
-            f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
-        )
-        hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
-            local_path, local_files_only=True
-        )
-
-        # Apply the conversion from Hugging Face weights to TRTLLM
-        for rank in range(config.mapping.world_size):
-            LOGGER.debug(
-                f"Converting weights from Hugging Face checkpoint for rank {rank}"
-            )
-            config.set_rank(rank)
-            converted_weights = cls.convert_weights(model, hf_model, config)
-            converted_weights = {
-                name: numpy_to_torch(tensor)
-                for name, tensor in converted_weights.items()
-            }
-
-            # Bind the converted weights against the TRTLLM model
-            model.load(converted_weights)
-
-            # Write ranked-checkpoints
-            to_safetensors(
-                converted_weights,
-                engines_folder / f"rank{config.mapping.rank}.safetensors",
-            )
-
-        # Write global config
-        with open(engines_folder / "config.json", "w") as config_f:
-            json.dump(config.to_dict(), config_f)
+        model = cls.TRT_LLM_TARGET_MODEL_CLASS.from_config(model_config)
 
         # Retrieve the parameters for building the engine
         if "engine_config" in model_kwargs:
             engine_config = model_kwargs.pop("engine_config")
         else:
-            max_prompt_length = model_kwargs.pop("max_prompt_length", 128)
-            max_new_tokens = (
-                model_kwargs.pop(
-                    "max_output_length", model_config.max_position_embeddings
-                )
-                - max_prompt_length
-            )
-
-            if max_new_tokens < 1:
-                raise ValueError(
-                    "Unable to build the engine because the generation would lead to max_num_tokens < 1. ("
-                    f"max_prompt_length = {max_prompt_length}, "
-                    f"max_position_embeddings={model_config.max_position_embeddings}, "
-                    f"max_new_tokens={max_new_tokens}"
-                    ")"
-                )
-
-            builder = (
-                EngineConfigBuilder(model_config)
-                .with_plugins_config(config.get_plugins_config())
-                .with_inference_profile(
-                    model_kwargs.pop("max_batch_size", 1),
-                    max_prompt_length,
-                    max_new_tokens,
-                )
-                .with_generation_profile(
-                    model_kwargs.pop("num_beams", 1),
-                )
-                .logits_as(model_kwargs.pop("logits_dtype", "float32"))
-            )
-
-            if model_kwargs.pop("strongly_typed", False):
-                builder.strongly_typed()
-
-            if "max_speculated_draft_length" in model_kwargs:
-                builder.with_speculated_decoding(
-                    model_kwargs.pop("max_speculated_draft_length")
-                )
-
+            builder = EngineConfigBuilder.from_dict(config, **model_kwargs)
+            builder.with_plugins_config(model_config.get_plugins_config())
             engine_config = builder.build()
 
-        engine_builder = LocalEngineBuilder(config, engines_folder)
+        if engine_config.plugins_config is None:
+            engine_config.plugins_config = model_config.get_plugins_config()
+
+        # Load the weights
+        LOGGER.debug(
+            f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
+        )
+
+        # Retrieve device total memory
+        fraction_device_map = {
+            device_id: get_device_memory(device_id) * 0.7
+            for device_id in range(get_device_count())
+        }
+
+        cpu_device_map = {"cpu": virtual_memory().available * 0.8}
+
+        # Allocate required components for quantization
+        hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
+            local_path,
+            device_map="auto",
+            max_memory=fraction_device_map | cpu_device_map,
+            local_files_only=True,
+        ).eval()
+
+        hf_model = maybe_offload_weights_to_cpu(hf_model)
+
+        # Retrieve potential quantization config (If provided) - follow the transformers parameter's name
+        has_qconfig = "quantization_config" in model_kwargs
+        has_use_fp8 = "use_fp8" in model_kwargs
+
+        if has_qconfig or has_use_fp8:
+            LOGGER.debug("About to quantize Hugging Face model")
+
+            if has_qconfig:
+                qconfig = model_kwargs.pop("quantization_config")
+            elif has_use_fp8:
+                if (
+                    candidate_tokenizer_path := engines_folder.parent.joinpath(
+                        "tokenizer.json"
+                    )
+                ).exists():
+                    tokenizer_path = candidate_tokenizer_path.parent
+                elif "_model_id" in hf_model_config:
+                    tokenizer_path = hf_model_config["_model_id"]
+                else:
+                    raise ValueError(
+                        "Unable to determine the tokenizer to use to quantize this model. "
+                        "Please provide a complete QuantizationConfig using "
+                        "from_pretrained(..., quantization_config=AutoQuantizationConfig.from_description())"
+                    )
+
+                tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+                qconfig = AutoQuantizationConfig.from_description(
+                    weight="float8",
+                    activation="float8",
+                    tokenizer=tokenizer,
+                    dataset="c4-new",
+                )
+
+                warn(
+                    "Converting model to support float8 inference.\n"
+                    f"Calibrating model with dataset='c4', split='train', samples={len(qconfig.calibration_dataset)}.\n"
+                    "Note: if text generation doesn't meet your expectations, "
+                    "you can control the quantization process manually with this API: "
+                    "qconfig = AutoQuantizationConfig.from_description(weight='float8', activation='float8', ...) "
+                    "forwarding the configuration to .from_pretrained(..., quantization_config=qconfig)"
+                )
+
+            hf_quantizer = AmmoQuantizer(
+                quantization_config=qconfig,
+                artifact_path=engines_folder,
+                tensor_parallel_degree=engine_config.sharding_profile.tensor_parallelism,
+                pipeline_parallel_degree=engine_config.sharding_profile.pipeline_parallelism,
+                export_tensorrt_llm_config=True,
+            )
+
+            hf_quantizer.preprocess_model(hf_model, batch_size=1)
+            hf_quantizer.postprocess_model(hf_model)
+
+        else:
+            # Apply the conversion from Hugging Face weights to TRTLLM
+            for rank in range(model_config.mapping.world_size):
+                LOGGER.debug(
+                    f"Converting weights from Hugging Face checkpoint for rank {rank}"
+                )
+                model_config.set_rank(rank)
+                converted_weights = cls.convert_weights(model, hf_model, model_config)
+                converted_weights = {
+                    name: numpy_to_torch(tensor)
+                    for name, tensor in converted_weights.items()
+                }
+
+                # Bind the converted weights against the TRTLLM model
+                model.load(converted_weights)
+
+                # Write ranked-checkpoints
+                to_safetensors(
+                    converted_weights,
+                    engines_folder / f"rank{model_config.mapping.rank}.safetensors",
+                )
+
+            # Write global config
+            with open(engines_folder / "config.json", "w") as config_f:
+                json.dump(model_config.to_dict(), config_f)
+
+        # We are freeing memory used by the HF Model to let the engine build goes forward
+        del hf_model
+        torch.cuda.empty_cache()
+
+        # Build
+        engine_builder = LocalEngineBuilder(model_config, engines_folder)
         engine_builder.build(engine_config)
 
         return engines_folder
@@ -207,6 +257,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         cls: Type[T],
         *,
         model_id: str,
+        config: Dict[str, Any],
         revision: Optional[str],
         cache_dir: Optional[Union[str, Path]],
         force_download: bool,
@@ -214,7 +265,6 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         resume_download: bool,
         local_files_only: bool,
         token: Optional[Union[str, bool]],
-        config: Dict[str, Any],
         **model_kwargs,
     ) -> T:
         if not isinstance(cls, SupportsTensorrtConversion):
@@ -271,6 +321,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                     prebuilt_engines_only=False,
                 )
 
+            config["_model_id"] = model_id
             engines_folder = cls.convert_and_build(local_path, config, **model_kwargs)
 
         model = cls(
@@ -320,12 +371,14 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
     def convert_config_to_trtllm(
         cls: Type[SupportsTensorrtConversion],
         config: Union[PretrainedConfig, Dict[str, Any]],
+        **additional_params,
     ) -> TensorRTConfig:
         """
         Convert a configuration initially generated by various Hugging Face libraries like transformers, diffusers, etc.
         to TensorRT-LLM `tensorrt_llm.modeling_utils.PretrainedConfig`.
         :param cls: The target class to allocate the model
         :param config: The original library configuration file
+        :param additional_params:
         :return: `tensorrt_llm.modeling_utils.PretrainedConfig`
         """
         trt_config = cls.MODEL_CONFIG.from_config(config)

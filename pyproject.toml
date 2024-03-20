@@ -25,10 +25,10 @@ classifiers = [
 # List dependencies
 dependencies = [
     "accelerate",
-    "dataset",
-    "huggingface_hub > 0.17.0, < 0.21.0",
+    "datasets >= 2.14.0",
+    "huggingface-hub @ git+https://github.com/huggingface/huggingface_hub@45147c518ad3c1f70ecb462de4bf23cd553ba54b",
     "hf-transfer",
-    "numpy >= 1.22.0",
+    "numpy >= 1.26.0",
     "onnx >= 1.12.0",
     "optimum >= 1.13.0",
     "setuptools",

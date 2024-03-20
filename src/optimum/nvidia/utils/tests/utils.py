@@ -16,7 +16,8 @@
 import pytest
 
 from optimum.nvidia.utils import parse_flag_from_env
-from optimum.nvidia.utils.nvml import get_device_count
+from optimum.nvidia.utils.constants import SM_ADA_LOVELACE
+from optimum.nvidia.utils.nvml import get_device_compute_capabilities, get_device_count
 
 
 # Environment variable controlling test set
@@ -37,3 +38,15 @@ requires_gpu = pytest.mark.skipif(
     reason=f"RUN_CPU_ONLY={parse_flag_from_env(ENVVAR_NAME_RUN_CPU_ONLY, False)} or "
     f"no GPU detected (num_gpus={get_device_count()})",
 )
+
+
+def requires_gpu_compute_capabilities_ge(min_capabilities: int, device: int = 0):
+    (major, minor) = get_device_compute_capabilities(device)
+    compute_capabilities = major * 10 + minor
+    return pytest.mark.skipif(
+        compute_capabilities < min_capabilities,
+        reason=f"Require compute capabilities >= sm_{min_capabilities} but current GPU is sm_{compute_capabilities}",
+    )
+
+
+requires_float8 = requires_gpu_compute_capabilities_ge(SM_ADA_LOVELACE)

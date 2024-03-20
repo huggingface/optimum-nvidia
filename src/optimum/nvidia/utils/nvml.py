@@ -18,9 +18,11 @@ from logging import getLogger
 from typing import NamedTuple, Optional, Tuple
 
 from pynvml import (
+    NVMLError,
     nvmlDeviceGetCudaComputeCapability,
     nvmlDeviceGetHandleByIndex,
     nvmlDeviceGetMemoryInfo,
+    nvmlDeviceGetName,
     nvmlInit,
 )
 
@@ -77,6 +79,17 @@ def get_device_count() -> int:
     import torch
 
     return torch.cuda.device_count()
+
+
+@functools.cache
+@nvml_guard
+def get_device_name(device: int) -> Optional[Tuple[str, ...]]:
+    try:
+        nvml_device_handle = nvmlDeviceGetHandleByIndex(device)
+        device_full_name = nvmlDeviceGetName(nvml_device_handle)
+        return device_full_name.split()
+    except NVMLError:
+        return None
 
 
 @functools.cache

@@ -29,7 +29,7 @@ except Exception as error:
 INSTALL_REQUIRES = [
     "accelerate",
     "datasets >= 2.14",
-    "huggingface_hub >= 0.21.0",
+    "huggingface-hub @ git+https://github.com/huggingface/huggingface_hub@45147c518ad3c1f70ecb462de4bf23cd553ba54b",
     "hf-transfer",
     "numpy >= 1.26.0",
     "onnx >= 1.12.0",
@@ -38,6 +38,7 @@ INSTALL_REQUIRES = [
     "transformers >= 4.38.1",
     # "tensorrt-llm == 0.9.0dev2024022000",
     # "nvidia-ammo >= 0.7.0",
+    "torch < 2.2.0",
     "pynvml"
 ]
 

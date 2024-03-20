@@ -8,9 +8,8 @@ FROM tensorrt_llm/devel:latest
 #ARG TARGET_CUDA_ARCHS="75-real;80-real;86-real;89-real;90-real"
 
 COPY . /opt/optimum-nvidia
+WORKDIR /opt/optimum-nvidia
 
-# Install dependencies
-RUN python -m pip install /opt/optimum-nvidia
-
-# Let's put our users in the examples folder
-WORKDIR /opt/optimum-nvidia/examples
+RUN pip install -e '.[quality, tests]' && \
+    pip uninstall -y optimum-nvidia && \
+    rm -rf /opt/optimum-nvidia
