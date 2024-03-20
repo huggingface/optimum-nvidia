@@ -20,13 +20,23 @@ Optimum-NVIDIA delivers the best inference performance on the NVIDIA platform th
 
 # Installation
 
+## Pip
+
+Pip installation flow has been validated on Ubuntu only at this stage.
+
+```shell
+apt-get update && apt-get -y install python3.10 python3-pip openmpi-bin libopenmpi-dev
+python -m pip install --pre --extra-index-url https://pypi.nvidia.comoptimum-nvidia
+``` 
+
+For developers who want to target the best performances, please look at the installation methods below.
+
+## Docker container
 You can use a Docker container to try Optimum-NVIDIA today. Images are available on the Hugging Face Docker Hub.
 
 ```bash
 docker pull huggingface/optimum-nvidia
 ```
-
-An Optimum-NVIDIA package that can be installed with `pip` will be made available soon. 
 
 ## Building from source
 <!---
