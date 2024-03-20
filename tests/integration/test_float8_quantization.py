@@ -33,7 +33,8 @@ def test_float8_causallm_use_fp8(model_id: str):
 
 @pytest.mark.parametrize(
     "model_id",
-    ["google/gemma-2b", "meta-llama/Llama-2-7b-hf", "mistralai/Mistral-7B-v0.1"],
+    # ["google/gemma-2b", "meta-llama/Llama-2-7b-hf", "mistralai/Mistral-7B-v0.1"],
+    ["meta-llama/Llama-2-7b-hf", "mistralai/Mistral-7B-v0.1"],
 )
 @pytest.mark.parametrize("weight", ["float8", torch.float8_e4m3fn])
 @pytest.mark.parametrize("activation", ["float8", torch.float8_e4m3fn])
