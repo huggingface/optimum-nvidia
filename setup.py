@@ -44,6 +44,7 @@ INSTALL_REQUIRES = [
 
 TESTS_REQUIRES = [
     "pytest",
+    "pytest-xdist",
     "psutil",
     "parameterized",
     "datasets",
