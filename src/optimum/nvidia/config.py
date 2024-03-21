@@ -14,12 +14,14 @@
 #  limitations under the License.
 
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional, Union
+from typing import Optional, Union
 
 import torch
 from tensorrt_llm import Mapping
 from tensorrt_llm.models import PretrainedConfig as TensorRTPretrainedConfig
+from tensorrt_llm.models.modeling_utils import (
+    QuantizationConfig as TensorRTQuantizationConfig,
+)
 from tensorrt_llm.plugin import PluginConfig
 from tensorrt_llm.quantization import QuantMode
 from transformers import AutoConfig, PretrainedConfig
@@ -94,18 +96,6 @@ def convert_quant_method_to_trt(
         return mode, f"W{weight_num_bits}A16_GPTQ"
     else:
         raise ValueError(f"Unsupported quantization method: {method}")
-
-
-@dataclass
-class TensorRTQuantizationConfig:
-    quantization_algo: Optional[str]
-    kv_cache_quant_algo: Optional[str]
-    group_size: Optional[int]
-    has_zero_point: bool
-    exclude_modules: Optional[List[str]]
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
 
 
 class TensorRTConfig(ABC, TensorRTPretrainedConfig):
