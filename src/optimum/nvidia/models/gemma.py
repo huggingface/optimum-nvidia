@@ -28,7 +28,7 @@ from tensorrt_llm.models.gemma.model import GemmaForCausalLM as TrtGemmaForCausa
 from tensorrt_llm.models.gemma.weight import dup_kv_weight, extract_layer_idx, split
 from tensorrt_llm.plugin import PluginConfig
 from tensorrt_llm.quantization import QuantMode
-from tensorrt_llm.runtime.lora_manager import LoraConfig
+from tensorrt_llm.lora_manager import LoraConfig
 from transformers import GemmaForCausalLM as TransformersGemmaForCausalLM
 from transformers import PretrainedConfig as TransformersPretrainedConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
