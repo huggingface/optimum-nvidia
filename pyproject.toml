@@ -33,6 +33,7 @@ dependencies = [
     "optimum >= 1.13.0",
     "setuptools",
     "tensorrt-llm == 0.9.0.dev2024031900",
+    "torch <= 2.2.9",
     "transformers >= 4.38.1",
     "pynvml"
 ]
