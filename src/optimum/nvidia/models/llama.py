@@ -17,6 +17,7 @@ from typing import Dict
 
 import numpy as np
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
+from tensorrt_llm.models.modeling_utils import QuantizationConfig
 from tensorrt_llm.models.llama.model import LLaMAForCausalLM
 from tensorrt_llm.models.llama.weight import load_from_hf_llama
 from tensorrt_llm.plugin import PluginConfig
@@ -46,7 +47,7 @@ class LlamaConfig(TensorRTConfig):
     @staticmethod
     def from_config(config: TransformersPretrainedConfig) -> "TensorRTConfig":
         # Retrieve the quantization from the transformers config (if provided)
-        qmode, qconfig = TensorRTConfig.get_quantization_config(config)
+        _, qconfig = TensorRTConfig.get_quantization_config(config)
 
         trt_config = LlamaConfig(
             architecture=config.architectures[0],
@@ -67,14 +68,13 @@ class LlamaConfig(TensorRTConfig):
             world_size=1,
             tp_size=1,
             pp_size=1,
-            quant_mode=qmode,
-            quant_kwargs=qconfig.to_dict(),
             use_prompt_tuning=False,
             use_parallel_embedding=False,
             embedding_sharding_dim=0,
             share_embedding_table=False,
             max_lora_rank=64,
             head_size=config.hidden_size / config.num_attention_heads,
+            quantization=qconfig
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)

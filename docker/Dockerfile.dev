@@ -1,15 +1,16 @@
-FROM tensorrt_llm/devel:latest
+FROM nvidia/cuda:12.1.0-devel-ubuntu22.04
 
-# 75 = T4/RTX Quadro
-# 80 = A100/A30
-# 86 = A10/A40/RTX Axxx
-# 89 = L4/L40/L40s/RTX Ada/4090
-# 90 = H100/H200
-#ARG TARGET_CUDA_ARCHS="75-real;80-real;86-real;89-real;90-real"
+RUN apt-get update && \
+    apt-get -y install \
+      git \
+    python3.10 \
+    python3-pip \
+    openmpi-bin \
+    libopenmpi-dev
 
 COPY . /opt/optimum-nvidia
 WORKDIR /opt/optimum-nvidia
 
-RUN pip install -e '.[quality, tests]' && \
+RUN pip install --pre --extra-index-url https://pypi.nvidia.com -e '.[quality, tests]' && \
     pip uninstall -y optimum-nvidia && \
     rm -rf /opt/optimum-nvidia

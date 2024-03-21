@@ -36,9 +36,8 @@ INSTALL_REQUIRES = [
     "optimum >= 1.13.0",
     "setuptools",
     "transformers >= 4.38.1",
-    # "tensorrt-llm == 0.9.0dev2024022000",
-    # "nvidia-ammo >= 0.7.0",
-    "torch < 2.2.0",
+    "tensorrt-llm == 0.9.0.dev2024031900",
+    "torch <= 2.2.9",
     "pynvml"
 ]
 

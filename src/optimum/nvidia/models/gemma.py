@@ -425,7 +425,7 @@ class GemmaConfig(TensorRTConfig):
     @staticmethod
     def from_config(config: TransformersPretrainedConfig) -> "TensorRTConfig":
         # Retrieve the quantization from the transformers config (if provided)
-        qmode, qconfig = TensorRTConfig.get_quantization_config(config)
+        _, qconfig = TensorRTConfig.get_quantization_config(config)
 
         trt_config = GemmaConfig(
             architecture=config.architectures[0],
@@ -447,13 +447,12 @@ class GemmaConfig(TensorRTConfig):
             world_size=1,
             tp_size=1,
             pp_size=1,
-            quant_mode=qmode,
-            quant_kwargs=qconfig.to_dict(),
             use_prompt_tuning=False,
             use_parallel_embedding=False,
             embedding_sharding_dim=0,
             share_embedding_table=False,
             max_lora_rank=64,
+            quantization=qconfig
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
