@@ -19,7 +19,7 @@ from typing import Dict
 import torch
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
 from tensorrt_llm.models.gemma.model import GemmaForCausalLM as TrtGemmaForCausalLM
-from tensorrt_llm.models.llama.weight import load_from_hf_gemma
+from tensorrt_llm.models.gemma.weight import load_from_hf_gemma
 from tensorrt_llm.plugin import PluginConfig
 from transformers import GemmaForCausalLM as TransformersGemmaForCausalLM
 from transformers import PretrainedConfig as TransformersPretrainedConfig
