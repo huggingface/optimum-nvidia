@@ -89,6 +89,11 @@ class LocalEngineBuilder:
             "--logits_dtype": build_config.logits_dtype,
         }
 
+        if hasattr(model_config, "TRT_CLASS"):
+            build_params["--model_cls_file"] = model_config.TRT_FILE
+            build_params["--model_cls_name"] = model_config.TRT_CLASS
+        print("build_params", build_params)
+        
         if model_config.supports_strong_typing():
             build_params["--strongly_typed"] = None
 

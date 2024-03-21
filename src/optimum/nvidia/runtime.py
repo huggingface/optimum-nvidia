@@ -34,8 +34,10 @@ DEFAULT_BEAM_WIDTH: int = 1
 
 
 class CompiledModel:
-    def __init__(self, engines_folder_path: Union[Path, PathLike]):
-        self._engines_folder_path = Path(engines_folder_path)
+    def __init__(self, engines_folders_path: List[Union[Path, PathLike]]):
+        # A compiled model may have several subfolders (e.g. encoder-decoder model).
+        print("engines_folders_path", engines_folders_path)
+        self._engines_folders_path = [Path(engines_folder_path) for engines_folder_path in engines_folders_path]
 
     @property
     def engine_path(self) -> Path:
@@ -43,12 +45,11 @@ class CompiledModel:
         Return the local path where the engine(s) is/are located
         :return: Path to the folder holding the engine(s) definition(s)
         """
-        return self._engines_folder_path
+        return self._engines_folders_path
 
 
 class CausalLM(CompiledModel):
     __slots__ = (
-        "_engines_folder",
         "_device",
         "_config",
         "_mapping",
@@ -63,11 +64,15 @@ class CausalLM(CompiledModel):
 
     def __init__(
         self,
-        engines_folder: Path,
+        engines_folders: List[Path],
         *,
         gpus_per_node: int,
         use_cuda_graph: bool = False,
     ):
+        if engines_folders != 1:
+            raise ValueError(f"For CausalLM, expecting a single engine folder, got: {engines_folders}")
+        engines_folder = engines_folders[0]
+        
         super().__init__(engines_folder)
 
         self._device = torch.device("cuda")
@@ -200,5 +205,13 @@ class CausalLM(CompiledModel):
 
 
 class TensorRTForSpeechSeq2Seq(CompiledModel):
-    # TODO: implement
-    pass
+    def __init__(
+        self,
+        engines_folders: List[Path],
+        *,
+        gpus_per_node: int,
+        use_cuda_graph: bool = False,
+    ):
+        super().__init__(engines_folders)
+
+        # TODO: implement this.
