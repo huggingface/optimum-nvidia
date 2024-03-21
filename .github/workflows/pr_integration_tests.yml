@@ -50,12 +50,12 @@ jobs:
 
       - name: Uninstall optimum-nvidia before doing anything
         run: |
-          python -m pip uninstall -y optimum-nvidia
+          python3 -m pip uninstall -y optimum-nvidia
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade -e .[quality,tests]
+          python3 -m pip install --upgrade -e .[quality,tests]
 
       - name: Run optimum-nvidia integration test-suite
         run: |
-          python -m pytest -s -v -n 1 -p no:warnings tests/integration/
+          python3 -m pytest -s -v -n 1 -p no:warnings tests/integration/
