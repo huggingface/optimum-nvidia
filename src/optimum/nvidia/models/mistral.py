@@ -73,7 +73,7 @@ class MistralConfig(TensorRTConfig):
             share_embedding_table=False,
             max_lora_rank=64,
             head_size=config.hidden_size / config.num_attention_heads,
-            quantization=qconfig
+            quantization=qconfig,
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)

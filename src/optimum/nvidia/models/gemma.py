@@ -17,7 +17,6 @@ from logging import getLogger
 from typing import Dict
 
 import torch
-
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
 from tensorrt_llm.models.gemma.model import GemmaForCausalLM as TrtGemmaForCausalLM
 from tensorrt_llm.models.llama.weight import load_from_hf_gemma
@@ -75,7 +74,7 @@ class GemmaConfig(TensorRTConfig):
             embedding_sharding_dim=0,
             share_embedding_table=False,
             max_lora_rank=64,
-            quantization=qconfig
+            quantization=qconfig,
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)

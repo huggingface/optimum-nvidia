@@ -17,7 +17,6 @@ from typing import Dict
 
 import numpy as np
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
-from tensorrt_llm.models.modeling_utils import QuantizationConfig
 from tensorrt_llm.models.llama.model import LLaMAForCausalLM
 from tensorrt_llm.models.llama.weight import load_from_hf_llama
 from tensorrt_llm.plugin import PluginConfig
@@ -74,7 +73,7 @@ class LlamaConfig(TensorRTConfig):
             share_embedding_table=False,
             max_lora_rank=64,
             head_size=config.hidden_size / config.num_attention_heads,
-            quantization=qconfig
+            quantization=qconfig,
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
