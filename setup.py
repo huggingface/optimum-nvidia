@@ -31,6 +31,7 @@ INSTALL_REQUIRES = [
     "datasets >= 2.14",
     "huggingface-hub @ git+https://github.com/huggingface/huggingface_hub@45147c518ad3c1f70ecb462de4bf23cd553ba54b",
     "hf-transfer",
+    "mpmath == 1.3.0",
     "numpy >= 1.26.0",
     "onnx >= 1.12.0",
     "optimum >= 1.13.0",
