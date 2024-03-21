@@ -43,6 +43,7 @@ INSTALL_REQUIRES = [
 ]
 
 TESTS_REQUIRES = [
+    "mock",
     "pytest",
     "pytest-xdist",
     "psutil",
