@@ -97,8 +97,7 @@ class SupportsTensorrtConversion(Protocol):
         target: PretrainedModel,
         source: TransformersPretrainedModel,
         config: PretrainedConfig,
-    ) -> Dict[str, np.ndarray]:
-        ...
+    ) -> Dict[str, np.ndarray]: ...
 
 
 class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
