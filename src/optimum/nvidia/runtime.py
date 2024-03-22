@@ -70,7 +70,7 @@ class CausalLM(CompiledModel):
         gpus_per_node: int,
         use_cuda_graph: bool = False,
     ):
-        if engines_folders != 1:
+        if len(engines_folders) != 1:
             raise ValueError(
                 f"For CausalLM, expecting a single engine folder, got: {engines_folders}"
             )

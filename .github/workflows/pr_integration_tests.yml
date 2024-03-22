@@ -58,4 +58,4 @@ jobs:
 
       - name: Run optimum-nvidia integration test-suite
         run: |
-          pytest -s -v -n 1 -p no:warnings tests/integration/
+          pytest -s -vvvvv -n 1 -p no:warnings -o log_cli=true tests/integration/
