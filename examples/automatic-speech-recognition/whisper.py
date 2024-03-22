@@ -23,6 +23,7 @@ from optimum.nvidia import setup_logging
 
 # Setup logging needs to happen before importing TRT ...
 setup_logging(False)
+LOGGER = getLogger(__name__)
 
 from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
 from optimum.nvidia.utils.cli import (
@@ -31,8 +32,6 @@ from optimum.nvidia.utils.cli import (
     register_quantization_args,
 )
 
-
-LOGGER = getLogger(__name__)
 
 if __name__ == "__main__":
     parser = ArgumentParser("🤗 TensorRT-LLM Whisper implementation")
