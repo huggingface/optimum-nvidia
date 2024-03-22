@@ -109,7 +109,7 @@ class LocalEngineBuilder:
         cli_params_list = [str(t) for t in chain.from_iterable(cli_params.items())]
         cli_params_list = [i for i in cli_params_list if i != "None"]
 
-        LOGGER.info(f"trtllm-build parameters: {cli_params_list}")
+        LOGGER.debug(f"trtllm-build parameters: {cli_params_list}")
 
         for rank in range(self._config.mapping.world_size):
             ranked_checkpoint = f"rank{rank}.safetensors"

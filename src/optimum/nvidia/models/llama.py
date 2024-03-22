@@ -53,7 +53,7 @@ class LlamaConfig(TensorRTConfig):
             dtype=dtype_to_str(config.torch_dtype),
             logits_dtype="float32",
             vocab_size=config.vocab_size,
-            max_position_embeddings=None,
+            max_position_embeddings=config.max_position_embeddings,
             hidden_size=config.hidden_size,
             num_hidden_layers=config.num_hidden_layers,
             num_attention_heads=config.num_attention_heads,

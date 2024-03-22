@@ -194,7 +194,7 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
             attention_qk_half_accumulation=None,
             multi_block_mode=None,
             use_custom_all_reduce=True,
-            remove_input_padding="disable",
+            remove_input_padding=True,
             context_fmha=None,
             context_fmha_fp32_acc=None,
         )
