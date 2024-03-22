@@ -236,7 +236,6 @@ def convert_from_hf_whisper_decoder(
     model_params = dict(hf_whisper_decoder.named_parameters())
 
     # Convert specific tensors
-    # TODO: do we need to remove is_first_pp_rank & is_last_pp_rank?
     if mapping.is_first_pp_rank():
         # embed_tokens
         weights["model.embedding.vocab_embedding.weight"] = torch_to_numpy(
@@ -355,7 +354,7 @@ class WhisperEncoderConfig(TensorRTConfig):
     @classmethod
     def from_config(cls, config: TransformersPretrainedConfig) -> "TensorRTConfig":
         # Retrieve the quantization from the transformers config (if provided)
-        qmode, qconfig = TensorRTConfig.get_quantization_config(config)
+        _, qconfig = TensorRTConfig.get_quantization_config(config)
 
         trt_config = cls(
             architecture=config.architectures[0],
@@ -374,8 +373,7 @@ class WhisperEncoderConfig(TensorRTConfig):
             world_size=1,
             tp_size=1,
             pp_size=1,
-            quant_mode=qmode,
-            quant_kwargs=qconfig.to_dict(),
+            quantization=qconfig,
             use_parallel_embedding=None,
             embedding_sharding_dim=None,
             share_embedding_table=None,
@@ -411,7 +409,7 @@ class WhisperDecoderConfig(TensorRTConfig):
     @classmethod
     def from_config(cls, config: TransformersPretrainedConfig) -> "TensorRTConfig":
         # Retrieve the quantization from the transformers config (if provided)
-        qmode, qconfig = TensorRTConfig.get_quantization_config(config)
+        _, qconfig = TensorRTConfig.get_quantization_config(config)
 
         trt_config = cls(
             architecture=config.architectures[0],
@@ -430,8 +428,7 @@ class WhisperDecoderConfig(TensorRTConfig):
             world_size=1,
             tp_size=1,
             pp_size=1,
-            quant_mode=qmode,
-            quant_kwargs=qconfig.to_dict(),
+            quantization=qconfig,
             use_parallel_embedding=None,
             embedding_sharding_dim=None,
             share_embedding_table=None,
@@ -542,7 +539,6 @@ class TrtWhisperDecoderPretrainedModel(PretrainedModel):
         if not use_cache:
             raise NotImplementedError("use_cache=False is not implemented for Whisper.")
 
-        # TODO: @felix: two new params (cross_kv_cache_gen, cross_qkv_reuse) in TRT-LLM March version!
         (
             input_ids,
             encoder_output,
@@ -556,6 +552,8 @@ class TrtWhisperDecoderPretrainedModel(PretrainedModel):
             attention_params,
             hidden_states,
             lora_params,
+            cross_kv_cache_gen,
+            cross_qkv_reuse,
         ) = self.model.prepare_inputs(
             max_batch_size=max_batch_size,
             max_beam_width=max_beam_width,
@@ -577,6 +575,8 @@ class TrtWhisperDecoderPretrainedModel(PretrainedModel):
             "attention_params": attention_params,
             "hidden_states": hidden_states,
             "lora_params": lora_params,
+            "cross_kv_cache_gen": cross_kv_cache_gen,
+            "cross_qkv_reuse": cross_qkv_reuse,
         }
 
 

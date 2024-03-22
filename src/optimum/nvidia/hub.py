@@ -57,6 +57,7 @@ FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]*.engine"
 HUB_TRTLLM_ENGINE_PATTERNS = ["**/config.json", f"**/{FILE_TRTLLM_ENGINE_PATTERN}"]
 HUB_SAFETENSORS_PATTERNS = ["config.json", "*.safetensors", SAFE_WEIGHTS_INDEX_NAME]
 LOGGER = getLogger()
+LOGGER.setLevel(level="INFO")
 
 
 def extract_model_type(config: Dict[str, Any]) -> Tuple[Optional[str], bool]:
