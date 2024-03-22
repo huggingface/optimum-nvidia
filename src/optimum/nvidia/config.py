@@ -14,9 +14,8 @@
 #  limitations under the License.
 import json
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Optional, Union
 
 import torch
 from tensorrt_llm import Mapping
