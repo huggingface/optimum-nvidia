@@ -89,10 +89,9 @@ class LocalEngineBuilder:
             "--logits_dtype": build_config.logits_dtype,
         }
 
-        if hasattr(model_config, "TRT_CLASS"):
-            build_params["--model_cls_file"] = model_config.TRT_FILE
-            build_params["--model_cls_name"] = model_config.TRT_CLASS
-        print("build_params", build_params)
+        if hasattr(model_config, "trt_model_class") and hasattr(model_config, "trt_model_file"):
+            build_params["--model_cls_file"] = model_config.trt_model_file
+            build_params["--model_cls_name"] = model_config.trt_model_class
         
         if model_config.supports_strong_typing():
             build_params["--strongly_typed"] = None
@@ -110,7 +109,7 @@ class LocalEngineBuilder:
         cli_params_list = [str(t) for t in chain.from_iterable(cli_params.items())]
         cli_params_list = [i for i in cli_params_list if i != "None"]
 
-        LOGGER.debug(f"trtllm-build parameters: {cli_params_list}")
+        LOGGER.info(f"trtllm-build parameters: {cli_params_list}")
 
         for rank in range(self._config.mapping.world_size):
             ranked_checkpoint = f"rank{rank}.safetensors"

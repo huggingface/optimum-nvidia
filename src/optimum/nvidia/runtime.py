@@ -36,7 +36,6 @@ DEFAULT_BEAM_WIDTH: int = 1
 class CompiledModel:
     def __init__(self, engines_folders_path: List[Union[Path, PathLike]]):
         # A compiled model may have several subfolders (e.g. encoder-decoder model).
-        print("engines_folders_path", engines_folders_path)
         self._engines_folders_path = [Path(engines_folder_path) for engines_folder_path in engines_folders_path]
 
     @property

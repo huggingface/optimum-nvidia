@@ -18,7 +18,6 @@ from typing import Optional, Union
 
 import torch
 from tensorrt_llm.plugin import PluginConfig
-from transformers import PretrainedConfig as TransformersPretrainedConfig
 from tensorrt_llm.models import PretrainedConfig
 from optimum.nvidia.lang import DataType
 
@@ -74,7 +73,6 @@ class EngineConfigBuilder:
         # Workload related
         max_batch_size = additional_params.pop("max_batch_size", 1)
         max_prompt_length = additional_params.pop("max_prompt_length", 128)
-        print("config here", type(config))
         max_new_tokens = (
             additional_params.pop("max_output_length", config.max_position_embeddings)
             - max_prompt_length
@@ -221,7 +219,6 @@ class EngineConfigBuilder:
 
     def with_plugins_config(self, plugin_config: PluginConfig) -> "EngineConfigBuilder":
         self._plugin_config = plugin_config
-        print("self._plugin_config", self._plugin_config)
         LOGGER.info(f"Defined plugins config: {plugin_config}")
         return self
 

@@ -13,10 +13,10 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import json
 import shutil
 from glob import glob, iglob
 from logging import getLogger
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol, Tuple, Type, Union, runtime_checkable, List
 from warnings import warn
@@ -25,7 +25,6 @@ import numpy as np
 import torch
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
-from psutil import virtual_memory
 from safetensors.torch import save_file as to_safetensors
 from tensorrt_llm._utils import numpy_to_torch
 from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
@@ -39,8 +38,7 @@ from optimum.nvidia.builder.config import EngineConfigBuilder
 from optimum.nvidia.quantization import AutoQuantizationConfig
 from optimum.nvidia.quantization.ammo import AmmoQuantizer
 from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
-from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
-
+from optimum.nvidia.utils.nvml import get_max_memory
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
 FOLDER_TRTLLM_ENGINES = "engines"
@@ -117,10 +115,15 @@ class SupportsTensorrtConversion(Protocol):
 class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
     @classmethod
     def convert_and_build(
-        cls, local_path: Path, hf_model_config: Dict, engine_save_path: Optional[Path] = None, **model_kwargs
-    ) -> Path:
+        cls,
+        local_path: Path,
+        hf_model_config: Dict,
+        engine_save_path: Optional[Path] = None,
+        hf_model: Optional[TransformersPretrainedModel] = None,
+        config_class: Optional[TensorRTConfig] = None,
+        **model_kwargs,
+    ) -> Tuple[List[Path], List[Path]]:
         """
-
         :param local_path:
         :param hf_model_config:
         :param model_kwargs:
@@ -141,7 +144,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
         # Convert the original config to a model config TRTLLM understands
         model_config = HuggingFaceHubModel.convert_config_to_trtllm(
-            cls, config, **model_kwargs
+            cls, config, config_class=config_class, **model_kwargs
         )
 
         # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
@@ -159,27 +162,24 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         if engine_config.plugins_config is None:
             engine_config.plugins_config = model_config.get_plugins_config()
 
-        # Load the weights
-        LOGGER.debug(
-            f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
-        )
+        max_memory = get_max_memory()
 
-        # Retrieve device total memory
-        fraction_device_map = {
-            device_id: get_device_memory(device_id) * 0.7
-            for device_id in range(get_device_count())
-        }
+        if hf_model is None:
+            LOGGER.debug(
+                f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
+            )
 
-        cpu_device_map = {"cpu": virtual_memory().available * 0.8}
+            hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
+                local_path,
+                device_map="auto",
+                max_memory=max_memory,
+                local_files_only=True,
+            )
+        else:
+            if not isinstance(hf_model, cls.HF_LIBRARY_TARGET_MODEL_CLASS):
+                raise ValueError(f"Expected a {cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__} model to be provided, but the argument `hf_model` is a {hf_model.__class__.__name__}.")
 
-        # Allocate required components for quantization
-        hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
-            local_path,
-            device_map="auto",
-            max_memory=fraction_device_map | cpu_device_map,
-            local_files_only=True,
-        ).eval()
-
+        hf_model = hf_model.eval()
         hf_model = maybe_offload_weights_to_cpu(hf_model)
 
         # Retrieve potential quantization config (If provided) - follow the transformers parameter's name
@@ -258,8 +258,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 )
 
             # Write global config
-            with open(engines_folder / "config.json", "w") as config_f:
-                json.dump(model_config.to_dict(), config_f)
+            model_config.save_pretrained(engines_folder)
 
         # We are freeing memory used by the HF Model to let the engine build goes forward
         del hf_model
@@ -269,7 +268,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         engine_builder = LocalEngineBuilder(model_config, engines_folder)
         engine_builder.build(engine_config)
 
-        return engines_folder, engines_folder.relative_to(local_path)
+        return [engines_folder], [engines_folder.relative_to(local_path)]
 
     @classmethod
     def _from_pretrained(
@@ -341,12 +340,10 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                     prebuilt_engines_only=False,
                 )
 
-            config["_model_id"] = model_id
             engines_folders, relative_paths_engines_folders = cls.convert_and_build(local_path, config, **model_kwargs)
         else:
-            print(f"Found pre-built engines at: {engines_folders}")
+            LOGGER.info(f"Found pre-built engines at: {engines_folders}")
         
-        print("cls", cls)
         model = cls(
             engines_folders,
             gpus_per_node=model_kwargs.pop("gpus_per_node", 1),
@@ -397,6 +394,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
     def convert_config_to_trtllm(
         cls: Type[SupportsTensorrtConversion],
         config: Union[PretrainedConfig, Dict[str, Any]],
+        config_class: Optional[TensorRTConfig] = None,
         **additional_params,
     ) -> TensorRTConfig:
         """
@@ -404,10 +402,14 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         to TensorRT-LLM `tensorrt_llm.modeling_utils.PretrainedConfig`.
         :param cls: The target class to allocate the model
         :param config: The original library configuration file
+        :param config_class: An optional custom TensorRTConfig subclass to load into.
         :param additional_params:
         :return: `tensorrt_llm.modeling_utils.PretrainedConfig`
         """
-        trt_config = cls.MODEL_CONFIG.from_config(config)
+        if config_class is None:
+            config_class = cls.MODEL_CONFIG
+        
+        trt_config = config_class.from_config(config)
         if hasattr(trt_config, "check_config"):
             trt_config.check_config()
 

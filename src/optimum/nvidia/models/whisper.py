@@ -12,10 +12,9 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-from collections import OrderedDict
-import tensorrt as trt
+import logging
 from logging import getLogger
-from typing import Dict, List
+from typing import Dict, List, Optional
 from tensorrt_llm.plugin import PluginConfig
 import torch
 import numpy as np
@@ -37,9 +36,9 @@ from optimum.nvidia import TensorRTConfig
 from pathlib import Path
 from tensorrt_llm.models.modeling_utils import PretrainedModel  # TODO: replace by from tensorrt_llm.modeling_utils import PretrainedModel after @morgan update TRT-LLM
 import pathlib
+from optimum.nvidia.utils.nvml import get_max_memory
 
 LOGGER = getLogger(__name__)
-
 
 def split(v, tp_size, idx, dim=0):
     if tp_size == 1:
@@ -266,7 +265,7 @@ def convert_from_hf_whisper_decoder(
     return weights
 
 
-class WhisperConfig(TensorRTConfig):
+class WhisperEncoderConfig(TensorRTConfig):
     @classmethod
     def from_config(cls, config: TransformersPretrainedConfig) -> "TensorRTConfig":
         # Retrieve the quantization from the transformers config (if provided)
@@ -279,9 +278,9 @@ class WhisperConfig(TensorRTConfig):
             vocab_size=config.vocab_size,
             max_position_embeddings=config.max_target_positions,
             hidden_size=config.d_model,
-            num_hidden_layers=config.encoder_layers,  # TODO: split this class in two
-            num_attention_heads=None,
-            num_key_value_heads=config.encoder_attention_heads,  # TODO: split this class in two
+            num_hidden_layers=config.encoder_layers,
+            num_attention_heads=config.encoder_attention_heads,
+            num_key_value_heads=config.encoder_attention_heads,
             hidden_act=config.activation_function,
             intermediate_size=None,
             norm_epsilon=None,
@@ -297,12 +296,65 @@ class WhisperConfig(TensorRTConfig):
             head_size=-1,  # We need to set it otherwise TRT-LLM tries to compute `hidden_size // num_attention_heads`
             max_source_positions=config.max_source_positions,
             num_mel_bins=config.num_mel_bins,
-            num_encoder_attention_heads=config.encoder_attention_heads,
-            num_decoder_attention_heads=config.decoder_attention_heads,
-            num_encoder_hidden_layers=config.encoder_layers,
-            num_decoder_hidden_layers=config.decoder_layers,
+            trt_model_class="TrtWhisperEncoderPretrainedModel",
+            trt_model_file=pathlib.Path(__file__),
+        )
+
+        trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
+
+        return trt_config
+
+    def get_plugins_config(self) -> PluginConfig:
+        config = super().get_plugins_config()
+        config.bert_attention_plugin = self.dtype
+        config.gpt_attention_plugin = "disable"
+        config.remove_input_padding = False  # This one is bugged with Whisper.
+        config.paged_kv_cache = "disable"  # TODO: getting AssertionError: Paged kv cache is enabled, the kv_cache_block_pointers tensor shall not be None
+        
+        config.moe_plugin = "disable"
+        config.gemm_plugin = self.dtype
+
+        return config
+
+    @staticmethod
+    def supports_strong_typing() -> bool:
+        return False
+
+
+class WhisperDecoderConfig(TensorRTConfig):
+    @classmethod
+    def from_config(cls, config: TransformersPretrainedConfig) -> "TensorRTConfig":
+        # Retrieve the quantization from the transformers config (if provided)
+        qmode, qconfig = TensorRTConfig.get_quantization_config(config)
+
+        trt_config = cls(
+            architecture=config.architectures[0],
+            dtype=dtype_to_str(config.torch_dtype),  # TODO: always float32?
+            logits_dtype="float32",
+            vocab_size=config.vocab_size,
+            max_position_embeddings=config.max_target_positions,
+            hidden_size=config.d_model,
+            num_hidden_layers=config.decoder_layers,
+            num_attention_heads=config.decoder_attention_heads,
+            num_key_value_heads=config.decoder_attention_heads,
+            hidden_act=config.activation_function,
+            intermediate_size=None,
+            norm_epsilon=None,
+            position_embedding_type="learned_absolute",
+            world_size=1,
+            tp_size=1,
+            pp_size=1,
+            quant_mode=qmode,
+            quant_kwargs=qconfig.to_dict(),
+            use_parallel_embedding=None,
+            embedding_sharding_dim=None,
+            share_embedding_table=None,
+            head_size=-1,  # We need to set it otherwise TRT-LLM tries to compute `hidden_size // num_attention_heads`
+            max_source_positions=config.max_source_positions,
             decoder_ffn_dim=config.decoder_ffn_dim,
-            model_cls_file="",
+            trt_model_class="TrtWhisperDecoderPretrainedModel",
+            trt_model_file=pathlib.Path(__file__),
+            num_encoder_attention_heads=config.encoder_attention_heads,
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
@@ -325,26 +377,6 @@ class WhisperConfig(TensorRTConfig):
         return False
 
 
-class WhisperEncoderConfig(WhisperConfig):
-    TRT_CLASS = "TrtWhisperEncoderPretrainedModel"
-    TRT_FILE = pathlib.Path(__file__)
-
-    def get_plugins_config(self) -> PluginConfig:
-        config = super().get_plugins_config()
-        config.bert_attention_plugin = "float32" # TODO: fix with correct dtype
-        config.gpt_attention_plugin = "disable"  # TODO: fix with correct dtype
-        config.remove_input_padding = False  # This one is bugged with Whisper.
-        config.paged_kv_cache = "disable"  # TODO: getting AssertionError: Paged kv cache is enabled, the kv_cache_block_pointers tensor shall not be None
-        
-        config.moe_plugin = "disable"
-        config.gemm_plugin = self.dtype
-
-        return config
-
-class WhisperDecoderConfig(WhisperConfig):
-    TRT_CLASS = "TrtWhisperDecoderPretrainedModel"
-    TRT_FILE = pathlib.Path(__file__)
-
 class TrtWhisperEncoderPretrainedModel(PretrainedModel):
     def __init__(self, config):
         super().__init__(config)
@@ -352,8 +384,8 @@ class TrtWhisperEncoderPretrainedModel(PretrainedModel):
             n_mels=config.num_mel_bins,
             n_ctx=config.max_source_positions,
             n_state=config.hidden_size,
-            n_head=config.num_encoder_attention_heads,
-            n_layer=config.num_encoder_hidden_layers,
+            n_head=config.num_attention_heads,
+            n_layer=config.num_hidden_layers,
             dtype=str_dtype_to_trt(config.dtype)
         )
 
@@ -361,7 +393,7 @@ class TrtWhisperEncoderPretrainedModel(PretrainedModel):
         return self.model(**kwargs)
 
     def prepare_inputs(self, max_batch_size=16, **kwargs):
-        (x, input_lengths) = self.model.prepare_inputs(max_batch_size=16)
+        (x, input_lengths) = self.model.prepare_inputs(max_batch_size=max_batch_size)
 
         return {"x": x, "input_lengths": input_lengths}
 
@@ -369,10 +401,10 @@ class TrtWhisperDecoderPretrainedModel(PretrainedModel):
     def __init__(self, config):
         super().__init__(config)
         self.model = TrtDecoderModel(
-            num_layers=config.num_decoder_hidden_layers,
-            num_heads=config.num_decoder_attention_heads,
+            num_layers=config.num_hidden_layers,
+            num_heads=config.num_attention_heads,
             hidden_size=config.hidden_size,
-            ffn_hidden_size=config.decoder_ffn_dim,  # CUSTOM
+            ffn_hidden_size=config.decoder_ffn_dim,
             encoder_num_heads=config.num_encoder_attention_heads,
             encoder_hidden_size=config.hidden_size,
             vocab_size=config.vocab_size,
@@ -481,15 +513,43 @@ class OptimumWhisperDecoder(TensorRTForSpeechSeq2Seq, HuggingFaceHubModel):
         return convert_from_hf_whisper_decoder(source, config.mapping, config.dtype)
 
 class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubModel):
-    MODEL_CONFIG = WhisperConfig
+    MODEL_CONFIG = None
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersWhisperForConditionalGeneration
     TRT_LLM_TARGET_MODEL_CLASS = None  # Whisper is split in two in TRT-LLM.
 
     @classmethod
     def convert_and_build(
-        cls, local_path: Path, hf_model_config: Dict, **model_kwargs
+        cls, local_path: Path, hf_model_config: Dict, engine_save_path: Optional[Path] = None, hf_model: Optional[TransformersPretrainedModel] = None, **model_kwargs
     ) -> Path:
-        encoder_engines_folder = OptimumWhisperEncoder.convert_and_build(local_path, hf_model_config, engine_save_path=Path(local_path, "encoder"), **model_kwargs)
-        decoder_engines_folder = OptimumWhisperDecoder.convert_and_build(local_path, hf_model_config, engine_save_path=Path(local_path, "decoder"), **model_kwargs)
+        max_memory = get_max_memory()
 
-        return [encoder_engines_folder, decoder_engines_folder]
+        if hf_model is None:
+            # Allocate required components for quantization
+            hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
+                local_path,
+                device_map="auto",
+                max_memory=max_memory,
+                local_files_only=True,
+            )
+
+        if engine_save_path is None:
+            engine_save_path = local_path
+
+        encoder_engines_folder, encoder_engines_relative_folder = OptimumWhisperEncoder.convert_and_build(
+            local_path,
+            hf_model_config,
+            engine_save_path=Path(engine_save_path, "encoder"),
+            hf_model=hf_model.model.encoder,
+            config_class=WhisperEncoderConfig,
+            **model_kwargs
+        )
+        decoder_engines_folder, decoder_engines_relative_folder = OptimumWhisperDecoder.convert_and_build(
+            local_path,
+            hf_model_config,
+            engine_save_path=Path(engine_save_path, "decoder"),
+            hf_model=hf_model.model.decoder,
+            config_class=WhisperDecoderConfig,
+            **model_kwargs
+        )
+
+        return [encoder_engines_folder[0], decoder_engines_folder[0]], [encoder_engines_relative_folder[0], decoder_engines_relative_folder[0]]
