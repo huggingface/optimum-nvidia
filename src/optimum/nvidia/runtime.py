@@ -74,9 +74,8 @@ class CausalLM(CompiledModel):
             raise ValueError(
                 f"For CausalLM, expecting a single engine folder, got: {engines_folders}"
             )
+        super().__init__(engines_folders)
         engines_folder = engines_folders[0]
-
-        super().__init__(engines_folder)
 
         self._device = torch.device("cuda")
         self._config = ctrrt.GptJsonConfig.parse_file(engines_folder / "config.json")
