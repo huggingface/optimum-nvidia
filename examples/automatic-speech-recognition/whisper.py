@@ -24,13 +24,13 @@ from optimum.nvidia import setup_logging
 # Setup logging needs to happen before importing TRT ...
 setup_logging(False)
 
+from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
 from optimum.nvidia.utils.cli import (
     register_common_model_topology_args,
     register_optimization_profiles_args,
     register_quantization_args,
 )
 
-from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
 
 LOGGER = getLogger(__name__)
 
@@ -46,7 +46,9 @@ if __name__ == "__main__":
     register_quantization_args(parser)  # Inject params.quantization_config
 
     parser.add_argument("model", type=str, help="The model's id or path to use.")
-    parser.add_argument("output", type=Path, help="Path to store generated TensorRT engine.")
+    parser.add_argument(
+        "output", type=Path, help="Path to store generated TensorRT engine."
+    )
     args = parser.parse_args()
 
     if args.hub_token is not None:

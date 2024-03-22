@@ -15,8 +15,9 @@
 import json
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, List, Optional, Union
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Union
+
 import torch
 from tensorrt_llm import Mapping
 from tensorrt_llm.models import PretrainedConfig as TensorRTPretrainedConfig

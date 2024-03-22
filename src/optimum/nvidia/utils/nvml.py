@@ -16,6 +16,7 @@
 import functools
 from logging import getLogger
 from typing import NamedTuple, Optional, Tuple
+
 from psutil import virtual_memory
 from pynvml import (
     NVMLError,
@@ -105,6 +106,7 @@ def has_float8_support() -> bool:
             "Failed to retrieve the proper compute capabilities on the device"
         )
         return False
+
 
 def get_max_memory():
     fraction_device_map = {

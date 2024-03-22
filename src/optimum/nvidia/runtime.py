@@ -36,7 +36,9 @@ DEFAULT_BEAM_WIDTH: int = 1
 class CompiledModel:
     def __init__(self, engines_folders_path: List[Union[Path, PathLike]]):
         # A compiled model may have several subfolders (e.g. encoder-decoder model).
-        self._engines_folders_path = [Path(engines_folder_path) for engines_folder_path in engines_folders_path]
+        self._engines_folders_path = [
+            Path(engines_folder_path) for engines_folder_path in engines_folders_path
+        ]
 
     @property
     def engine_path(self) -> Path:
@@ -69,9 +71,11 @@ class CausalLM(CompiledModel):
         use_cuda_graph: bool = False,
     ):
         if engines_folders != 1:
-            raise ValueError(f"For CausalLM, expecting a single engine folder, got: {engines_folders}")
+            raise ValueError(
+                f"For CausalLM, expecting a single engine folder, got: {engines_folders}"
+            )
         engines_folder = engines_folders[0]
-        
+
         super().__init__(engines_folder)
 
         self._device = torch.device("cuda")

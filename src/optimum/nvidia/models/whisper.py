@@ -12,69 +12,98 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-import logging
+import pathlib
 from logging import getLogger
+from pathlib import Path
 from typing import Dict, List, Optional
-from tensorrt_llm.plugin import PluginConfig
-import torch
+
 import numpy as np
+import torch
 from tensorrt_llm import Mapping, str_dtype_to_torch
-from tensorrt_llm._utils import torch_to_numpy, str_dtype_to_trt
-from tensorrt_llm.functional import LayerNormPositionType, LayerNormType, Tensor
+from tensorrt_llm._utils import str_dtype_to_trt, torch_to_numpy
+from tensorrt_llm.functional import LayerNormPositionType, LayerNormType
 from tensorrt_llm.models import DecoderModel as TrtDecoderModel
-from tensorrt_llm.models import WhisperEncoder as TrtWhisperEncoder
-from optimum.nvidia.hub import HuggingFaceHubModel
-from optimum.nvidia.config import dtype_to_str
-from optimum.nvidia.runtime import TensorRTForSpeechSeq2Seq
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
-from transformers.models.whisper.modeling_whisper import WhisperEncoder as TransformersWhisperEncoder
-from transformers.models.whisper.modeling_whisper import WhisperDecoder as TransformersWhisperDecoder
-from transformers.models.whisper.modeling_whisper import WhisperForConditionalGeneration as TransformersWhisperForConditionalGeneration
+from tensorrt_llm.models import WhisperEncoder as TrtWhisperEncoder
+from tensorrt_llm.plugin import PluginConfig
 from transformers import PretrainedConfig as TransformersPretrainedConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
+from transformers.models.whisper.modeling_whisper import (
+    WhisperDecoder as TransformersWhisperDecoder,
+)
+from transformers.models.whisper.modeling_whisper import (
+    WhisperEncoder as TransformersWhisperEncoder,
+)
+from transformers.models.whisper.modeling_whisper import (
+    WhisperForConditionalGeneration as TransformersWhisperForConditionalGeneration,
+)
+
 from optimum.nvidia import TensorRTConfig
-from pathlib import Path
-from tensorrt_llm.models.modeling_utils import PretrainedModel  # TODO: replace by from tensorrt_llm.modeling_utils import PretrainedModel after @morgan update TRT-LLM
-import pathlib
+from optimum.nvidia.config import dtype_to_str
+from optimum.nvidia.hub import HuggingFaceHubModel
+from optimum.nvidia.runtime import TensorRTForSpeechSeq2Seq
 from optimum.nvidia.utils.nvml import get_max_memory
 
+
 LOGGER = getLogger(__name__)
+
 
 def split(v, tp_size, idx, dim=0):
     if tp_size == 1:
         return v
     return np.split(v, tp_size, axis=dim)[idx]
 
+
 def get_qkv(model_params, torch_dtype, attn_prefix: str):
-    q_weight = torch_to_numpy(model_params[f"{attn_prefix}.q_proj.weight"].to(torch_dtype))
-    k_weight = torch_to_numpy(model_params[f"{attn_prefix}.k_proj.weight"].to(torch_dtype))
-    v_weight = torch_to_numpy(model_params[f"{attn_prefix}.v_proj.weight"].to(torch_dtype))
+    q_weight = torch_to_numpy(
+        model_params[f"{attn_prefix}.q_proj.weight"].to(torch_dtype)
+    )
+    k_weight = torch_to_numpy(
+        model_params[f"{attn_prefix}.k_proj.weight"].to(torch_dtype)
+    )
+    v_weight = torch_to_numpy(
+        model_params[f"{attn_prefix}.v_proj.weight"].to(torch_dtype)
+    )
 
     qkv_weight = (q_weight, k_weight, v_weight)
-    
+
     # At least one of the query, key, value projection has bias.
-    if any(bias_name in model_params for bias_name in [f"{attn_prefix}.q_proj.bias", f"{attn_prefix}.k_proj.bias", f"{attn_prefix}.v_proj.bias"]):
+    if any(
+        bias_name in model_params
+        for bias_name in [
+            f"{attn_prefix}.q_proj.bias",
+            f"{attn_prefix}.k_proj.bias",
+            f"{attn_prefix}.v_proj.bias",
+        ]
+    ):
         # For example whisper encoder k_proj does not have bias, so we will just fill with zeros the fused bias if needed.
         numpy_precision = q_weight.dtype
         if f"{attn_prefix}.q_proj.bias" in model_params:
-            q_bias = torch_to_numpy(model_params[f"{attn_prefix}.q_proj.bias"].to(torch_dtype))
+            q_bias = torch_to_numpy(
+                model_params[f"{attn_prefix}.q_proj.bias"].to(torch_dtype)
+            )
         else:
             q_bias = np.zeros(q_weight.shape[0], dtype=numpy_precision)
 
         if f"{attn_prefix}.k_proj.bias" in model_params:
-            k_bias = torch_to_numpy(model_params[f"{attn_prefix}.k_proj.bias"].to(torch_dtype))
+            k_bias = torch_to_numpy(
+                model_params[f"{attn_prefix}.k_proj.bias"].to(torch_dtype)
+            )
         else:
             k_bias = np.zeros(k_weight.shape[0], dtype=numpy_precision)
 
         if f"{attn_prefix}.v_proj.bias" in model_params:
-            v_bias = torch_to_numpy(model_params[f"{attn_prefix}.v_proj.bias"].to(torch_dtype))
+            v_bias = torch_to_numpy(
+                model_params[f"{attn_prefix}.v_proj.bias"].to(torch_dtype)
+            )
         else:
             v_bias = np.zeros(v_weight.shape[0], dtype=numpy_precision)
         qkv_bias = (q_bias, k_bias, v_bias)
     else:
         qkv_bias = None
-    
+
     return qkv_weight, qkv_bias
+
 
 def convert_from_hf_whisper_encoder(
     hf_whisper_encoder,
@@ -93,54 +122,80 @@ def convert_from_hf_whisper_encoder(
         # TensorRT-LLM Conv1d weight is 4D while transformers checkpoint ones are 3D.
         conv1_weight = torch_to_numpy(model_params["conv1.weight"].to(torch_dtype))
         conv1_weight = conv1_weight[..., None]
-        
+
         weights["model.conv1.weight"] = conv1_weight
-        weights["model.conv1.bias"] = torch_to_numpy(model_params["conv1.bias"].to(torch_dtype))
+        weights["model.conv1.bias"] = torch_to_numpy(
+            model_params["conv1.bias"].to(torch_dtype)
+        )
 
         # conv2
         conv2_weight = torch_to_numpy(model_params["conv2.weight"].to(torch_dtype))
         conv2_weight = conv2_weight[..., None]
-        
+
         weights["model.conv2.weight"] = conv2_weight
-        weights["model.conv2.bias"] = torch_to_numpy(model_params["conv2.bias"].to(torch_dtype))
+        weights["model.conv2.bias"] = torch_to_numpy(
+            model_params["conv2.bias"].to(torch_dtype)
+        )
 
         # embed_positions
-        weights["model.positional_embedding"] = torch_to_numpy(model_params["embed_positions.weight"].to(torch_dtype))
+        weights["model.positional_embedding"] = torch_to_numpy(
+            model_params["embed_positions.weight"].to(torch_dtype)
+        )
 
     if mapping.is_last_pp_rank():
         # Final layer norm
-        weights["model.ln_post.weight"] = torch_to_numpy(model_params["layer_norm.weight"].to(torch_dtype))
-        weights["model.ln_post.bias"] = torch_to_numpy(model_params["layer_norm.bias"].to(torch_dtype))
+        weights["model.ln_post.weight"] = torch_to_numpy(
+            model_params["layer_norm.weight"].to(torch_dtype)
+        )
+        weights["model.ln_post.bias"] = torch_to_numpy(
+            model_params["layer_norm.bias"].to(torch_dtype)
+        )
 
     # Map all the hidden layers
     for layer_idx in range(num_layers):
         prefix = f"layers.{layer_idx}"
 
         # attention_layernorm
-        weights[f"model.encoder_layers.{layer_idx}.attention_layernorm.weight"] = torch_to_numpy(model_params[f"{prefix}.self_attn_layer_norm.weight"].to(torch_dtype))
-        weights[f"model.encoder_layers.{layer_idx}.attention_layernorm.bias"] = torch_to_numpy(model_params[f"{prefix}.self_attn_layer_norm.bias"].to(torch_dtype))
+        weights[f"model.encoder_layers.{layer_idx}.attention_layernorm.weight"] = (
+            torch_to_numpy(
+                model_params[f"{prefix}.self_attn_layer_norm.weight"].to(torch_dtype)
+            )
+        )
+        weights[f"model.encoder_layers.{layer_idx}.attention_layernorm.bias"] = (
+            torch_to_numpy(
+                model_params[f"{prefix}.self_attn_layer_norm.bias"].to(torch_dtype)
+            )
+        )
 
         # mlp_layernorm
-        weights[f"model.encoder_layers.{layer_idx}.mlp_layernorm.weight"] = torch_to_numpy(model_params[f"{prefix}.final_layer_norm.weight"].to(torch_dtype))
-        weights[f"model.encoder_layers.{layer_idx}.mlp_layernorm.bias"] = torch_to_numpy(model_params[f"{prefix}.final_layer_norm.bias"].to(torch_dtype))
+        weights[f"model.encoder_layers.{layer_idx}.mlp_layernorm.weight"] = (
+            torch_to_numpy(
+                model_params[f"{prefix}.final_layer_norm.weight"].to(torch_dtype)
+            )
+        )
+        weights[f"model.encoder_layers.{layer_idx}.mlp_layernorm.bias"] = (
+            torch_to_numpy(
+                model_params[f"{prefix}.final_layer_norm.bias"].to(torch_dtype)
+            )
+        )
 
         # Self attention layer
         # TensorRT-LLM model definition uses a single GEMM for query/key/value, while transformers does not.
-        qkv_weight, qkv_bias = get_qkv(model_params, attn_prefix=f"{prefix}.self_attn", torch_dtype=torch_dtype)
+        qkv_weight, qkv_bias = get_qkv(
+            model_params, attn_prefix=f"{prefix}.self_attn", torch_dtype=torch_dtype
+        )
         q_weight, k_weight, v_weight = qkv_weight
 
         qkv_weight = np.concatenate((q_weight, k_weight, v_weight), axis=0)
         weight = split(qkv_weight, mapping.tp_size, mapping.tp_rank, dim=1)
-        weights[
-            f"model.encoder_layers.{layer_idx}.attention.qkv.weight"
-        ] = weight
+        weights[f"model.encoder_layers.{layer_idx}.attention.qkv.weight"] = weight
 
         if qkv_bias is not None:
             q_bias, k_bias, v_bias = qkv_bias
             packed_qkv_bias = np.concatenate((q_bias, k_bias, v_bias), axis=0)
-            weights[
-                f"model.encoder_layers.{layer_idx}.attention.qkv.bias"
-            ] = np.ascontiguousarray(packed_qkv_bias)
+            weights[f"model.encoder_layers.{layer_idx}.attention.qkv.bias"] = (
+                np.ascontiguousarray(packed_qkv_bias)
+            )
 
         # Common projection logic
         # 0: column tensor parallel, 1: row tensor parallel.
@@ -151,9 +206,7 @@ def convert_from_hf_whisper_encoder(
         ]:
             weight = torch_to_numpy(model_params[f"{prefix}.{src}"].to(torch_dtype))
             weight = split(weight, mapping.tp_size, mapping.tp_rank, dim=shard_axis)
-            weights[
-                f"model.encoder_layers.{layer_idx}.{dst}"
-            ] = weight
+            weights[f"model.encoder_layers.{layer_idx}.{dst}"] = weight
 
         # Bias is never sharded.
         for src, dst in [
@@ -161,11 +214,14 @@ def convert_from_hf_whisper_encoder(
             ("fc1.bias", "mlp.fc.bias"),
             ("fc2.bias", "mlp.proj.bias"),
         ]:
-            weights[f"model.encoder_layers.{layer_idx}.{dst}"] = torch_to_numpy(model_params[f"{prefix}.{src}"].to(torch_dtype))
-    
+            weights[f"model.encoder_layers.{layer_idx}.{dst}"] = torch_to_numpy(
+                model_params[f"{prefix}.{src}"].to(torch_dtype)
+            )
+
     # weights["lm_head.weight"] = np.zeros((0))  # Just a hack for commands/build.py
-    
+
     return weights
+
 
 def convert_from_hf_whisper_decoder(
     hf_whisper_decoder,
@@ -183,15 +239,23 @@ def convert_from_hf_whisper_decoder(
     # TODO: do we need to remove is_first_pp_rank & is_last_pp_rank?
     if mapping.is_first_pp_rank():
         # embed_tokens
-        weights["model.embedding.vocab_embedding.weight"] = torch_to_numpy(model_params["embed_tokens.weight"].to(torch_dtype))
+        weights["model.embedding.vocab_embedding.weight"] = torch_to_numpy(
+            model_params["embed_tokens.weight"].to(torch_dtype)
+        )
 
         # embed_positions
-        weights["model.embedding.position_embedding.weight"] = torch_to_numpy(model_params["embed_positions.weight"].to(torch_dtype))
+        weights["model.embedding.position_embedding.weight"] = torch_to_numpy(
+            model_params["embed_positions.weight"].to(torch_dtype)
+        )
 
     if mapping.is_last_pp_rank():
         # Final layer norm
-        weights["model.final_layernorm.weight"] = torch_to_numpy(model_params["layer_norm.weight"].to(torch_dtype))
-        weights["model.final_layernorm.bias"] = torch_to_numpy(model_params["layer_norm.bias"].to(torch_dtype))
+        weights["model.final_layernorm.weight"] = torch_to_numpy(
+            model_params["layer_norm.weight"].to(torch_dtype)
+        )
+        weights["model.final_layernorm.bias"] = torch_to_numpy(
+            model_params["layer_norm.bias"].to(torch_dtype)
+        )
 
         # Final vocab projection
         lm_head = torch_to_numpy(model_params["embed_tokens.weight"].to(torch_dtype))
@@ -204,19 +268,33 @@ def convert_from_hf_whisper_decoder(
         trt_llm_prefix = f"model.decoder_layers.{layer_idx}"
 
         # self_attention_layernorm
-        weights[f"{trt_llm_prefix}.self_attention_layernorm.weight"] = torch_to_numpy(model_params[f"{prefix}.self_attn_layer_norm.weight"].to(torch_dtype))
-        weights[f"{trt_llm_prefix}.self_attention_layernorm.bias"] = torch_to_numpy(model_params[f"{prefix}.self_attn_layer_norm.bias"].to(torch_dtype))
+        weights[f"{trt_llm_prefix}.self_attention_layernorm.weight"] = torch_to_numpy(
+            model_params[f"{prefix}.self_attn_layer_norm.weight"].to(torch_dtype)
+        )
+        weights[f"{trt_llm_prefix}.self_attention_layernorm.bias"] = torch_to_numpy(
+            model_params[f"{prefix}.self_attn_layer_norm.bias"].to(torch_dtype)
+        )
 
         # cross_attention_layernorm
-        weights[f"{trt_llm_prefix}.cross_attention_layernorm.weight"] = torch_to_numpy(model_params[f"{prefix}.encoder_attn_layer_norm.weight"].to(torch_dtype))
-        weights[f"{trt_llm_prefix}.cross_attention_layernorm.bias"] = torch_to_numpy(model_params[f"{prefix}.encoder_attn_layer_norm.bias"].to(torch_dtype))
+        weights[f"{trt_llm_prefix}.cross_attention_layernorm.weight"] = torch_to_numpy(
+            model_params[f"{prefix}.encoder_attn_layer_norm.weight"].to(torch_dtype)
+        )
+        weights[f"{trt_llm_prefix}.cross_attention_layernorm.bias"] = torch_to_numpy(
+            model_params[f"{prefix}.encoder_attn_layer_norm.bias"].to(torch_dtype)
+        )
 
         # mlp_layernorm
-        weights[f"{trt_llm_prefix}.mlp_layernorm.weight"] = torch_to_numpy(model_params[f"{prefix}.final_layer_norm.weight"].to(torch_dtype))
-        weights[f"{trt_llm_prefix}.mlp_layernorm.bias"] = torch_to_numpy(model_params[f"{prefix}.final_layer_norm.bias"].to(torch_dtype))
+        weights[f"{trt_llm_prefix}.mlp_layernorm.weight"] = torch_to_numpy(
+            model_params[f"{prefix}.final_layer_norm.weight"].to(torch_dtype)
+        )
+        weights[f"{trt_llm_prefix}.mlp_layernorm.bias"] = torch_to_numpy(
+            model_params[f"{prefix}.final_layer_norm.bias"].to(torch_dtype)
+        )
 
         # Self attention layer
-        qkv_weight, qkv_bias = get_qkv(model_params, attn_prefix=f"{prefix}.self_attn", torch_dtype=torch_dtype)
+        qkv_weight, qkv_bias = get_qkv(
+            model_params, attn_prefix=f"{prefix}.self_attn", torch_dtype=torch_dtype
+        )
         q_weight, k_weight, v_weight = qkv_weight
 
         qkv_weight = np.concatenate((q_weight, k_weight, v_weight), axis=0)
@@ -226,10 +304,14 @@ def convert_from_hf_whisper_decoder(
         if qkv_bias is not None:
             q_bias, k_bias, v_bias = qkv_bias
             packed_qkv_bias = np.concatenate((q_bias, k_bias, v_bias), axis=0)
-            weights[f"{trt_llm_prefix}.self_attention.qkv.bias"] = np.ascontiguousarray(packed_qkv_bias)
+            weights[f"{trt_llm_prefix}.self_attention.qkv.bias"] = np.ascontiguousarray(
+                packed_qkv_bias
+            )
 
         # Cross attention layer
-        qkv_weight, qkv_bias = get_qkv(model_params, attn_prefix=f"{prefix}.encoder_attn", torch_dtype=torch_dtype)
+        qkv_weight, qkv_bias = get_qkv(
+            model_params, attn_prefix=f"{prefix}.encoder_attn", torch_dtype=torch_dtype
+        )
         q_weight, k_weight, v_weight = qkv_weight
 
         qkv_weight = np.concatenate((q_weight, k_weight, v_weight), axis=0)
@@ -239,7 +321,9 @@ def convert_from_hf_whisper_decoder(
         if qkv_bias is not None:
             q_bias, k_bias, v_bias = qkv_bias
             packed_qkv_bias = np.concatenate((q_bias, k_bias, v_bias), axis=0)
-            weights[f"{trt_llm_prefix}.cross_attention.qkv.bias"] = np.ascontiguousarray(packed_qkv_bias)
+            weights[f"{trt_llm_prefix}.cross_attention.qkv.bias"] = (
+                np.ascontiguousarray(packed_qkv_bias)
+            )
 
         # Common projection logic.
         # 0: column tensor parallel, 1: row tensor parallel.
@@ -260,8 +344,10 @@ def convert_from_hf_whisper_decoder(
             ("fc1.bias", "mlp.fc.bias"),
             ("fc2.bias", "mlp.proj.bias"),
         ]:
-            weights[f"{trt_llm_prefix}.{dst}"] = torch_to_numpy(model_params[f"{prefix}.{src}"].to(torch_dtype))
-    
+            weights[f"{trt_llm_prefix}.{dst}"] = torch_to_numpy(
+                model_params[f"{prefix}.{src}"].to(torch_dtype)
+            )
+
     return weights
 
 
@@ -310,7 +396,7 @@ class WhisperEncoderConfig(TensorRTConfig):
         config.gpt_attention_plugin = "disable"
         config.remove_input_padding = False  # This one is bugged with Whisper.
         config.paged_kv_cache = "disable"  # TODO: getting AssertionError: Paged kv cache is enabled, the kv_cache_block_pointers tensor shall not be None
-        
+
         config.moe_plugin = "disable"
         config.gemm_plugin = self.dtype
 
@@ -366,7 +452,7 @@ class WhisperDecoderConfig(TensorRTConfig):
         config.bert_attention_plugin = "disable"
         config.gpt_attention_plugin = self.dtype
         config.paged_kv_cache = "disable"  # TODO: getting AssertionError: Paged kv cache is enabled, the kv_cache_block_pointers tensor shall not be None
-        
+
         config.moe_plugin = "disable"
         config.gemm_plugin = self.dtype
 
@@ -386,7 +472,7 @@ class TrtWhisperEncoderPretrainedModel(PretrainedModel):
             n_state=config.hidden_size,
             n_head=config.num_attention_heads,
             n_layer=config.num_hidden_layers,
-            dtype=str_dtype_to_trt(config.dtype)
+            dtype=str_dtype_to_trt(config.dtype),
         )
 
     def forward(self, **kwargs):
@@ -396,6 +482,7 @@ class TrtWhisperEncoderPretrainedModel(PretrainedModel):
         (x, input_lengths) = self.model.prepare_inputs(max_batch_size=max_batch_size)
 
         return {"x": x, "input_lengths": input_lengths}
+
 
 class TrtWhisperDecoderPretrainedModel(PretrainedModel):
     def __init__(self, config):
@@ -433,31 +520,43 @@ class TrtWhisperDecoderPretrainedModel(PretrainedModel):
             rescale_before_lm_head=False,
             mapping=config.mapping,
         )
-        
+
     def forward(self, **kwargs):
         return self.model(**kwargs)
 
-
-    def prepare_inputs(self,
-                       max_batch_size,
-                       max_input_len,
-                       max_seq_len,
-                       use_cache,
-                       max_beam_width: int = 1,
-                       max_num_tokens: int = None,
-                       prompt_embedding_table_size: int = 0,
-                       position_encoding_2d: bool = False,
-                       max_draft_len: int = 0,
-                       gather_context_logits: bool = False,
-                       gather_generation_logits: bool = False,
-                       lora_target_modules: List[str] = None):
+    def prepare_inputs(
+        self,
+        max_batch_size,
+        max_input_len,
+        max_seq_len,
+        use_cache,
+        max_beam_width: int = 1,
+        max_num_tokens: int = None,
+        prompt_embedding_table_size: int = 0,
+        position_encoding_2d: bool = False,
+        max_draft_len: int = 0,
+        gather_context_logits: bool = False,
+        gather_generation_logits: bool = False,
+        lora_target_modules: List[str] = None,
+    ):
         if not use_cache:
             raise NotImplementedError("use_cache=False is not implemented for Whisper.")
-        
+
         # TODO: @felix: two new params (cross_kv_cache_gen, cross_qkv_reuse) in TRT-LLM March version!
-        (input_ids, encoder_output, position_ids, token_type_ids, use_cache,
-            attention_mask, cross_attention_mask, last_token_ids,
-            kv_cache_params, attention_params, hidden_states, lora_params) = self.model.prepare_inputs(
+        (
+            input_ids,
+            encoder_output,
+            position_ids,
+            token_type_ids,
+            use_cache,
+            attention_mask,
+            cross_attention_mask,
+            last_token_ids,
+            kv_cache_params,
+            attention_params,
+            hidden_states,
+            lora_params,
+        ) = self.model.prepare_inputs(
             max_batch_size=max_batch_size,
             max_beam_width=max_beam_width,
             max_decoder_input_len=max_input_len,
@@ -480,6 +579,7 @@ class TrtWhisperDecoderPretrainedModel(PretrainedModel):
             "lora_params": lora_params,
         }
 
+
 class OptimumWhisperEncoder(TensorRTForSpeechSeq2Seq, HuggingFaceHubModel):
     MODEL_CONFIG = WhisperEncoderConfig
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersWhisperEncoder
@@ -495,6 +595,7 @@ class OptimumWhisperEncoder(TensorRTForSpeechSeq2Seq, HuggingFaceHubModel):
             raise NotImplementedError("Quantization is not supported yet.")
 
         return convert_from_hf_whisper_encoder(source, config.mapping, config.dtype)
+
 
 class OptimumWhisperDecoder(TensorRTForSpeechSeq2Seq, HuggingFaceHubModel):
     MODEL_CONFIG = WhisperDecoderConfig
@@ -512,6 +613,7 @@ class OptimumWhisperDecoder(TensorRTForSpeechSeq2Seq, HuggingFaceHubModel):
 
         return convert_from_hf_whisper_decoder(source, config.mapping, config.dtype)
 
+
 class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubModel):
     MODEL_CONFIG = None
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersWhisperForConditionalGeneration
@@ -519,7 +621,12 @@ class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubMo
 
     @classmethod
     def convert_and_build(
-        cls, local_path: Path, hf_model_config: Dict, engine_save_path: Optional[Path] = None, hf_model: Optional[TransformersPretrainedModel] = None, **model_kwargs
+        cls,
+        local_path: Path,
+        hf_model_config: Dict,
+        engine_save_path: Optional[Path] = None,
+        hf_model: Optional[TransformersPretrainedModel] = None,
+        **model_kwargs,
     ) -> Path:
         max_memory = get_max_memory()
 
@@ -535,21 +642,28 @@ class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubMo
         if engine_save_path is None:
             engine_save_path = local_path
 
-        encoder_engines_folder, encoder_engines_relative_folder = OptimumWhisperEncoder.convert_and_build(
-            local_path,
-            hf_model_config,
-            engine_save_path=Path(engine_save_path, "encoder"),
-            hf_model=hf_model.model.encoder,
-            config_class=WhisperEncoderConfig,
-            **model_kwargs
+        encoder_engines_folder, encoder_engines_relative_folder = (
+            OptimumWhisperEncoder.convert_and_build(
+                local_path,
+                hf_model_config,
+                engine_save_path=Path(engine_save_path, "encoder"),
+                hf_model=hf_model.model.encoder,
+                config_class=WhisperEncoderConfig,
+                **model_kwargs,
+            )
         )
-        decoder_engines_folder, decoder_engines_relative_folder = OptimumWhisperDecoder.convert_and_build(
-            local_path,
-            hf_model_config,
-            engine_save_path=Path(engine_save_path, "decoder"),
-            hf_model=hf_model.model.decoder,
-            config_class=WhisperDecoderConfig,
-            **model_kwargs
+        decoder_engines_folder, decoder_engines_relative_folder = (
+            OptimumWhisperDecoder.convert_and_build(
+                local_path,
+                hf_model_config,
+                engine_save_path=Path(engine_save_path, "decoder"),
+                hf_model=hf_model.model.decoder,
+                config_class=WhisperDecoderConfig,
+                **model_kwargs,
+            )
         )
 
-        return [encoder_engines_folder[0], decoder_engines_folder[0]], [encoder_engines_relative_folder[0], decoder_engines_relative_folder[0]]
+        return [encoder_engines_folder[0], decoder_engines_folder[0]], [
+            encoder_engines_relative_folder[0],
+            decoder_engines_relative_folder[0],
+        ]

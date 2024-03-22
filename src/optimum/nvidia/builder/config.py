@@ -17,8 +17,9 @@ from logging import getLogger
 from typing import Optional, Union
 
 import torch
-from tensorrt_llm.plugin import PluginConfig
 from tensorrt_llm.models import PretrainedConfig
+from tensorrt_llm.plugin import PluginConfig
+
 from optimum.nvidia.lang import DataType
 
 

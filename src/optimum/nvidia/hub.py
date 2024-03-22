@@ -16,9 +16,18 @@
 import shutil
 from glob import glob, iglob
 from logging import getLogger
-import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Protocol, Tuple, Type, Union, runtime_checkable, List
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    Type,
+    Union,
+    runtime_checkable,
+)
 from warnings import warn
 
 import numpy as np
@@ -39,6 +48,7 @@ from optimum.nvidia.quantization import AutoQuantizationConfig
 from optimum.nvidia.quantization.ammo import AmmoQuantizer
 from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
 from optimum.nvidia.utils.nvml import get_max_memory
+
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
 FOLDER_TRTLLM_ENGINES = "engines"
@@ -98,6 +108,7 @@ def find_prebuilt_engines(root: Path) -> Tuple[List[Path], List[Path]]:
 
     return folders, relative_folders
 
+
 @runtime_checkable
 class SupportsTensorrtConversion(Protocol):
     MODEL_CONFIG: Type[TensorRTConfig]
@@ -138,7 +149,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         else:
             engines_folder = engine_save_path / FOLDER_TRTLLM_ENGINES
             engines_folder.mkdir(exist_ok=True, parents=True)
-                
+
         # Retrieve configuration
         config = AutoConfig.for_model(**hf_model_config)
 
@@ -177,7 +188,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             )
         else:
             if not isinstance(hf_model, cls.HF_LIBRARY_TARGET_MODEL_CLASS):
-                raise ValueError(f"Expected a {cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__} model to be provided, but the argument `hf_model` is a {hf_model.__class__.__name__}.")
+                raise ValueError(
+                    f"Expected a {cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__} model to be provided, but the argument `hf_model` is a {hf_model.__class__.__name__}."
+                )
 
         hf_model = hf_model.eval()
         hf_model = maybe_offload_weights_to_cpu(hf_model)
@@ -313,7 +326,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             )
 
         # Look for prebuilt engine files, if none found, we convert and build
-        engines_folders, relative_paths_engines_folders = find_prebuilt_engines(local_path)
+        engines_folders, relative_paths_engines_folders = find_prebuilt_engines(
+            local_path
+        )
         if len(engines_folders) == 0:
             LOGGER.info(
                 f"No engine file found in {local_path}, converting and building engines"
@@ -340,10 +355,12 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                     prebuilt_engines_only=False,
                 )
 
-            engines_folders, relative_paths_engines_folders = cls.convert_and_build(local_path, config, **model_kwargs)
+            engines_folders, relative_paths_engines_folders = cls.convert_and_build(
+                local_path, config, **model_kwargs
+            )
         else:
             LOGGER.info(f"Found pre-built engines at: {engines_folders}")
-        
+
         model = cls(
             engines_folders,
             gpus_per_node=model_kwargs.pop("gpus_per_node", 1),
@@ -408,7 +425,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         """
         if config_class is None:
             config_class = cls.MODEL_CONFIG
-        
+
         trt_config = config_class.from_config(config)
         if hasattr(trt_config, "check_config"):
             trt_config.check_config()
