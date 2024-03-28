@@ -13,19 +13,27 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import json
 import shutil
 from glob import glob, iglob
 from logging import getLogger
 from pathlib import Path
-from typing import Any, Dict, Optional, Protocol, Tuple, Type, Union, runtime_checkable
+from typing import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    Type,
+    Union,
+    runtime_checkable,
+)
 from warnings import warn
 
 import numpy as np
 import torch
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
-from psutil import virtual_memory
 from safetensors.torch import save_file as to_safetensors
 from tensorrt_llm._utils import numpy_to_torch
 from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
@@ -39,7 +47,7 @@ from optimum.nvidia.builder.config import EngineConfigBuilder
 from optimum.nvidia.quantization import AutoQuantizationConfig
 from optimum.nvidia.quantization.ammo import AmmoQuantizer
 from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
-from optimum.nvidia.utils.nvml import get_device_count, get_device_memory
+from optimum.nvidia.utils.nvml import get_max_memory
 
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
@@ -49,6 +57,7 @@ FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]*.engine"
 HUB_TRTLLM_ENGINE_PATTERNS = ["**/config.json", f"**/{FILE_TRTLLM_ENGINE_PATTERN}"]
 HUB_SAFETENSORS_PATTERNS = ["config.json", "*.safetensors", SAFE_WEIGHTS_INDEX_NAME]
 LOGGER = getLogger()
+LOGGER.setLevel(level="INFO")
 
 
 def extract_model_type(config: Dict[str, Any]) -> Tuple[Optional[str], bool]:
@@ -70,20 +79,35 @@ def extract_model_type(config: Dict[str, Any]) -> Tuple[Optional[str], bool]:
     return model_type, is_tensorrt_config
 
 
-def find_prebuilt_engines(root: Path) -> Optional[Path]:
+def find_prebuilt_engines(root: Path) -> Tuple[List[Path], List[Path]]:
     """
-    Attempt to locate any prebuilt TRT engines at the provided root path or root' subfolder FOLDER_TRTLLM_ENGINES.
+    Attempt to locate any prebuilt TRT engines at the provided root path or root' subfolders.
     :param root: The directory we should look into for the engine files.
-    :return: None if no engine was found, `Path` if engines were found in root or root / FOLDER_TRTLLM_ENGINES
+    :return: The list of `Path` where engines were found in root (or root/FOLDER_TRTLLM_ENGINES, or root/**/FOLDER_TRTLLM_ENGINES), and the corresponding relative path to root.
     """
+    folders = []
+    relative_folders = []
 
-    # Look for engine file
-    if len(glob(FILE_TRTLLM_ENGINE_PATTERN, root_dir=root)):
-        return root
-    elif len(glob(FILE_TRTLLM_ENGINE_PATTERN, root_dir=root / FOLDER_TRTLLM_ENGINES)):
-        return root / FOLDER_TRTLLM_ENGINES
+    files = glob(Path(root, f"**/{FOLDER_TRTLLM_ENGINES}/rank*.engine").as_posix())
+    for file in files:
+        file_directory = Path(Path(file).parents[0])
+        folders.append(file_directory)
+        relative_folders.append(file_directory.relative_to(root))
 
-    return None
+    files = glob(Path(root, "rank*.engine").as_posix())
+    if len(files) > 0:
+        folders.append(root)
+        relative_folders.append(".")
+
+    files = glob(Path(root, f"{FOLDER_TRTLLM_ENGINES}/rank*.engine").as_posix())
+    if len(files) > 0:
+        folders.append(Path(root, FOLDER_TRTLLM_ENGINES))
+        relative_folders.append(FOLDER_TRTLLM_ENGINES)
+
+    folders = list(dict.fromkeys(folders))
+    relative_folders = list(dict.fromkeys(relative_folders))
+
+    return folders, relative_folders
 
 
 @runtime_checkable
@@ -103,10 +127,15 @@ class SupportsTensorrtConversion(Protocol):
 class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
     @classmethod
     def convert_and_build(
-        cls, local_path: Path, hf_model_config: Dict, **model_kwargs
-    ) -> Path:
+        cls,
+        local_path: Path,
+        hf_model_config: Dict,
+        engine_save_path: Optional[Path] = None,
+        hf_model: Optional[TransformersPretrainedModel] = None,
+        config_class: Optional[TensorRTConfig] = None,
+        **model_kwargs,
+    ) -> Tuple[List[Path], List[Path]]:
         """
-
         :param local_path:
         :param hf_model_config:
         :param model_kwargs:
@@ -114,15 +143,20 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         """
 
         # Path where will be stored the engines
-        engines_folder = local_path / FOLDER_TRTLLM_ENGINES
-        engines_folder.mkdir(exist_ok=True)
+        if engine_save_path is None:
+            engine_save_path = local_path
+            engines_folder = local_path / FOLDER_TRTLLM_ENGINES
+            engines_folder.mkdir(exist_ok=True, parents=True)
+        else:
+            engines_folder = engine_save_path / FOLDER_TRTLLM_ENGINES
+            engines_folder.mkdir(exist_ok=True, parents=True)
 
         # Retrieve configuration
         config = AutoConfig.for_model(**hf_model_config)
 
         # Convert the original config to a model config TRTLLM understands
         model_config = HuggingFaceHubModel.convert_config_to_trtllm(
-            cls, config, **model_kwargs
+            cls, config, config_class=config_class, **model_kwargs
         )
 
         # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
@@ -133,34 +167,33 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         if "engine_config" in model_kwargs:
             engine_config = model_kwargs.pop("engine_config")
         else:
-            builder = EngineConfigBuilder.from_dict(config, **model_kwargs)
+            builder = EngineConfigBuilder.from_dict(model_config, **model_kwargs)
             builder.with_plugins_config(model_config.get_plugins_config())
             engine_config = builder.build()
 
         if engine_config.plugins_config is None:
             engine_config.plugins_config = model_config.get_plugins_config()
 
-        # Load the weights
-        LOGGER.debug(
-            f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
-        )
+        max_memory = get_max_memory()
 
-        # Retrieve device total memory
-        fraction_device_map = {
-            device_id: get_device_memory(device_id) * 0.7
-            for device_id in range(get_device_count())
-        }
+        if hf_model is None:
+            LOGGER.debug(
+                f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
+            )
 
-        cpu_device_map = {"cpu": virtual_memory().available * 0.8}
+            hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
+                local_path,
+                device_map="auto",
+                max_memory=max_memory,
+                local_files_only=True,
+            )
+        else:
+            if not isinstance(hf_model, cls.HF_LIBRARY_TARGET_MODEL_CLASS):
+                raise ValueError(
+                    f"Expected a {cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__} model to be provided, but the argument `hf_model` is a {hf_model.__class__.__name__}."
+                )
 
-        # Allocate required components for quantization
-        hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
-            local_path,
-            device_map="auto",
-            max_memory=fraction_device_map | cpu_device_map,
-            local_files_only=True,
-        ).eval()
-
+        hf_model = hf_model.eval()
         hf_model = maybe_offload_weights_to_cpu(hf_model)
 
         # Retrieve potential quantization config (If provided) - follow the transformers parameter's name
@@ -239,8 +272,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 )
 
             # Write global config
-            with open(engines_folder / "config.json", "w") as config_f:
-                json.dump(model_config.to_dict(), config_f)
+            model_config.save_pretrained(engines_folder)
 
         # We are freeing memory used by the HF Model to let the engine build goes forward
         del hf_model
@@ -250,7 +282,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         engine_builder = LocalEngineBuilder(model_config, engines_folder)
         engine_builder.build(engine_config)
 
-        return engines_folder
+        return [engines_folder], [engines_folder.relative_to(local_path)]
 
     @classmethod
     def _from_pretrained(
@@ -295,7 +327,10 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             )
 
         # Look for prebuilt engine files, if none found, we convert and build
-        if not (engines_folder := find_prebuilt_engines(local_path)):
+        engines_folders, relative_paths_engines_folders = find_prebuilt_engines(
+            local_path
+        )
+        if len(engines_folders) == 0:
             LOGGER.info(
                 f"No engine file found in {local_path}, converting and building engines"
             )
@@ -321,16 +356,20 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                     prebuilt_engines_only=False,
                 )
 
-            config["_model_id"] = model_id
-            engines_folder = cls.convert_and_build(local_path, config, **model_kwargs)
+            engines_folders, relative_paths_engines_folders = cls.convert_and_build(
+                local_path, config, **model_kwargs
+            )
+        else:
+            LOGGER.info(f"Found pre-built engines at: {engines_folders}")
 
         model = cls(
-            engines_folder,
+            engines_folders,
             gpus_per_node=model_kwargs.pop("gpus_per_node", 1),
             use_cuda_graph=model_kwargs.pop("use_cuda_graph", False),
         )
 
-        setattr(model, ATTR_TRTLLM_ENGINE_FOLDER, engines_folder)
+        setattr(model, ATTR_TRTLLM_ENGINE_FOLDER, engines_folders)
+        model._relative_path_engines_folders = relative_paths_engines_folders
         return model
 
     def _save_pretrained(self, save_directory: Path) -> None:
@@ -341,13 +380,15 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             )
 
         # Retrieve the folder
-        engine_folder = Path(getattr(self, ATTR_TRTLLM_ENGINE_FOLDER))
+        engines_folders = getattr(self, ATTR_TRTLLM_ENGINE_FOLDER)
+        for i in range(len(engines_folders)):
+            engine_folder = Path(engines_folders[i])
+            save_subfolder = self._relative_path_engines_folders[i]
 
-        if engine_folder != save_directory:
             LOGGER.debug(f"Saving engines at {save_directory}")
 
-            save_engine_directory = save_directory / FOLDER_TRTLLM_ENGINES
-            save_engine_directory.mkdir(exist_ok=True)
+            save_engine_directory = save_directory / save_subfolder
+            save_engine_directory.mkdir(exist_ok=True, parents=True)
 
             # Move the engine(s)
             for engine in iglob(FILE_TRTLLM_ENGINE_PATTERN, root_dir=engine_folder):
@@ -371,6 +412,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
     def convert_config_to_trtllm(
         cls: Type[SupportsTensorrtConversion],
         config: Union[PretrainedConfig, Dict[str, Any]],
+        config_class: Optional[TensorRTConfig] = None,
         **additional_params,
     ) -> TensorRTConfig:
         """
@@ -378,10 +420,14 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         to TensorRT-LLM `tensorrt_llm.modeling_utils.PretrainedConfig`.
         :param cls: The target class to allocate the model
         :param config: The original library configuration file
+        :param config_class: An optional custom TensorRTConfig subclass to load into.
         :param additional_params:
         :return: `tensorrt_llm.modeling_utils.PretrainedConfig`
         """
-        trt_config = cls.MODEL_CONFIG.from_config(config)
+        if config_class is None:
+            config_class = cls.MODEL_CONFIG
+
+        trt_config = config_class.from_config(config)
         if hasattr(trt_config, "check_config"):
             trt_config.check_config()
 

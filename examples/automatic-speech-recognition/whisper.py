@@ -25,9 +25,8 @@ from optimum.nvidia import setup_logging
 setup_logging(False)
 LOGGER = getLogger(__name__)
 
-from optimum.nvidia import TensorRTForSpeechSeq2SeqEngineBuilder
+from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
 from optimum.nvidia.utils.cli import (
-    postprocess_quantization_parameters,
     register_common_model_topology_args,
     register_optimization_profiles_args,
     register_quantization_args,
@@ -50,44 +49,10 @@ if __name__ == "__main__":
         "output", type=Path, help="Path to store generated TensorRT engine."
     )
     args = parser.parse_args()
-    args = postprocess_quantization_parameters(args)
 
-    # Ensure the output folder exists or create the folder
-    if args.output.exists():
-        if not args.output.is_dir():
-            raise ValueError(f"Output path {args.output} should be an empty folder")
-
-        if any(args.output.iterdir()):
-            raise ValueError(f"Output path {args.output} is not empty")
-    else:
-        LOGGER.info(f"Creating folder {args.output}")
-        args.output.mkdir()
-
-    LOGGER.info(f"Exporting {args.model} to TensorRT-LLM engine at {args.output}")
     if args.hub_token is not None:
-        login(
-            args.hub_token,
-        )
+        login(args.hub_token)
 
-    # Define the target engine details
-    builder = (
-        TensorRTForSpeechSeq2SeqEngineBuilder.from_pretrained(args.model)
-        .to(args.dtype)
-        .shard(
-            args.tensor_parallelism,
-            args.pipeline_parallelism,
-            args.world_size,
-            args.gpus_per_node,
-        )
-        .with_generation_profile(args.max_batch_size)
-        .with_sampling_strategy(args.max_beam_width)
-    )
-
-    # Check if we need to collect calibration samples
-    if args.has_quantization_step:
-        raise NotImplementedError("TODO")
-
-    # Build the engine
-    builder.build(args.output, args.optimization_level)
-
+    model = WhisperForConditionalGeneration.from_pretrained(args.model)
+    model.save_pretrained(args.output)
     print(f"TRTLLM engines have been saved at {args.output}.")

@@ -17,8 +17,8 @@ from logging import getLogger
 from typing import Optional, Union
 
 import torch
+from tensorrt_llm.models import PretrainedConfig
 from tensorrt_llm.plugin import PluginConfig
-from transformers import PretrainedConfig as TransformersPretrainedConfig
 
 from optimum.nvidia.lang import DataType
 
@@ -65,11 +65,11 @@ class EngineConfig:
 
 class EngineConfigBuilder:
     @staticmethod
-    def from_dict(config: TransformersPretrainedConfig, **additional_params):
+    def from_dict(config: PretrainedConfig, **additional_params):
         builder = EngineConfigBuilder(config)
 
         # Define the data type to export the logits
-        builder.logits_as(additional_params.pop("logits_dtype", config.torch_dtype))
+        builder.logits_as(additional_params.pop("logits_dtype", config.logits_dtype))
 
         # Workload related
         max_batch_size = additional_params.pop("max_batch_size", 1)
@@ -103,11 +103,11 @@ class EngineConfigBuilder:
 
         return builder
 
-    def __init__(self, config: TransformersPretrainedConfig):
+    def __init__(self, config: PretrainedConfig):
         self._config = config
 
         self._optimisation_level: int = 3
-        self._logits_dtype = config.torch_dtype
+        self._logits_dtype = config.logits_dtype
         self._strongly_typed: bool = False
         self._sharding_profile: ShardingProfile = ShardingProfile()
         self._workload_profile: Optional[InferenceProfile] = None

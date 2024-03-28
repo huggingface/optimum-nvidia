@@ -17,6 +17,7 @@ import functools
 from logging import getLogger
 from typing import NamedTuple, Optional, Tuple
 
+from psutil import virtual_memory
 from pynvml import (
     NVMLError,
     nvmlDeviceGetCudaComputeCapability,
@@ -105,3 +106,14 @@ def has_float8_support() -> bool:
             "Failed to retrieve the proper compute capabilities on the device"
         )
         return False
+
+
+def get_max_memory():
+    fraction_device_map = {
+        device_id: get_device_memory(device_id) * 0.7
+        for device_id in range(get_device_count())
+    }
+
+    cpu_device_map = {"cpu": virtual_memory().available * 0.8}
+
+    return fraction_device_map | cpu_device_map

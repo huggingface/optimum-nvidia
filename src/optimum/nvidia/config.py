@@ -12,8 +12,9 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
+import json
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Optional, Union
 
 import torch
@@ -188,3 +189,11 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
             context_fmha=None,
             context_fmha_fp32_acc=None,
         )
+
+    def save_pretrained(self, save_folder: Union[str, Path]):
+        config_dict = self.to_dict()
+        config_dict.pop("trt_model_class", None)
+        config_dict.pop("trt_model_file", None)
+
+        with open(Path(save_folder, "config.json"), "w") as config_f:
+            json.dump(config_dict, config_f)
