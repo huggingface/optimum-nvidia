@@ -27,7 +27,7 @@ except Exception as error:
     assert False, "Error: Could not open '%s' due %s\n" % (filepath, error)
 
 INSTALL_REQUIRES = [
-    "accelerate",
+    "accelerate == 0.25",
     "datasets >= 2.14",
     "huggingface-hub @ git+https://github.com/huggingface/huggingface_hub@45147c518ad3c1f70ecb462de4bf23cd553ba54b",
     "hf-transfer",
@@ -37,8 +37,8 @@ INSTALL_REQUIRES = [
     "optimum >= 1.13.0",
     "setuptools",
     "tensorrt-llm == 0.9.0.dev2024031900",
-    "torch <= 2.2.9",
-    "transformers >= 4.38.1",
+    "torch>=2.2.0a,<=2.3.0a",
+    "transformers >= 4.38.2",
     "pynvml"
 ]
 
