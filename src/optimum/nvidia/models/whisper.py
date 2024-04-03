@@ -880,7 +880,7 @@ class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubMo
 
         generation_config = generation_config or self.generation_config
         decoder_input_ids = (
-            torch.ones((batch_size, 1), device=self.device, dtype=torch.long)
+            torch.ones((batch_size, 1), device="cuda", dtype=torch.long)
             * generation_config.decoder_start_token_id
         )
 
