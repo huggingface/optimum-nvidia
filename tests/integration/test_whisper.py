@@ -133,7 +133,7 @@ def test_generation(model_id: str, max_new_tokens: Optional[int]):
 @pytest.mark.parametrize("max_new_tokens", [None, 10])
 def test_batched_generation(model_id: str, max_new_tokens: Optional[int]):
     # Make sure we remove the potentially already built engines.
-    # clean_cached_engines_for_model(model_id)
+    clean_cached_engines_for_model(model_id)
 
     torch_dtype = torch.float16  # TODO: test fp8, int4, int8, fp32
 
