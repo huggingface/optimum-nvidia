@@ -128,7 +128,6 @@ def convert_from_hf_whisper_encoder(
     weights = {}
 
     # Convert specific tensors
-    # if mapping.is_first_pp_rank():
     # conv1
     # TensorRT-LLM Conv1d weight is 4D while transformers checkpoint ones are 3D.
     conv1_weight = torch_to_numpy(model_params["conv1.weight"].to(torch_dtype))
@@ -403,7 +402,6 @@ class WhisperEncoderConfig(TensorRTConfig):
     def get_plugins_config(self) -> PluginConfig:
         config = super().get_plugins_config()
         config.bert_attention_plugin = self.dtype
-        # config.bert_attention_plugin = "disable"
         config.gpt_attention_plugin = "disable"
         config.remove_input_padding = False  # This one is bugged with Whisper.
         config.paged_kv_cache = "disable"  # TODO: getting AssertionError: Paged kv cache is enabled, the kv_cache_block_pointers tensor shall not be None
@@ -418,7 +416,6 @@ class WhisperEncoderConfig(TensorRTConfig):
         config.layernorm_quantization_plugin = None
         config.rmsnorm_quantization_plugin = None
         config.nccl_plugin = None
-        # config.paged_kv_cache = False
 
         return config
 
@@ -481,7 +478,6 @@ class WhisperDecoderConfig(TensorRTConfig):
         config.layernorm_quantization_plugin = None
         config.rmsnorm_quantization_plugin = None
         config.nccl_plugin = None
-        # config.paged_kv_cache = False
         config.use_custom_all_reduce = "disable"
 
         return config

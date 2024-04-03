@@ -68,46 +68,6 @@ def test_whisper(model_id: str):
 
         model = WhisperForConditionalGeneration.from_pretrained(tmp_f)
 
-def test_encoder():
-    model_id = "openai/whisper-tiny.en"
-
-    torch_dtype = torch.float32  # TODO: test fp8, fp16, int8
-
-    trt_model = WhisperForConditionalGeneration.from_pretrained(model_id, torch_dtype=torch_dtype)
-    with torch.device("cuda"):
-        torch_model = TransformersWhisperForConditionalGeneration.from_pretrained(model_id, torch_dtype=torch_dtype, attn_implementation="sdpa")
-
-    processor = AutoProcessor.from_pretrained(model_id)
-    data = datasets.load_dataset("hf-internal-testing/librispeech_asr_dummy", "clean", split="validation")
-
-    # Batch size = 1
-    inputs = processor(data[0]["audio"]["array"], return_tensors="pt").to("cuda")
-
-    input_features = inputs.input_features
-    input_features = input_features.to(torch_dtype)
-
-    # input_features = torch.ones_like(input_features)
-
-    torch.set_printoptions(threshold=10000)
-    
-    torch_model = torch_model.eval()
-    with torch.no_grad():
-        print("trt_model", trt_model)
-        trt_encoder_outputs = trt_model.encoder(input_features)
-        with torch.backends.cuda.sdp_kernel(enable_flash=False, enable_math=True, enable_mem_efficient=False):
-            torch_encoder_outputs = torch_model.model.encoder(input_features).last_hidden_state
-
-        print("trt_encoder_outputs", trt_encoder_outputs.shape)
-        print("trt_encoder_outputs", trt_encoder_outputs)
-
-        print("torch_encoder_outputs", torch_encoder_outputs.shape)
-        print("torch_encoder_outputs", torch_encoder_outputs)
-
-        reldiff = (trt_encoder_outputs.float() - torch_encoder_outputs.float()).abs() / (torch_encoder_outputs.float().abs() + 1e-12)
-        print("mean reldiff", reldiff.mean())
-        print("max reldiff", reldiff.max())
-
-    assert torch.allclose(trt_encoder_outputs, torch_encoder_outputs)
 
 @pytest.mark.parametrize("model_id", TEST_MODELS)
 @pytest.mark.parametrize("max_new_tokens", [None, 10])
