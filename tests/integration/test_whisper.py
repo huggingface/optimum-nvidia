@@ -99,6 +99,12 @@ def test_generation(model_id: str, max_new_tokens: Optional[int]):
     if max_new_tokens is not None:
         kwargs["max_new_tokens"] = max_new_tokens
 
+    if hasattr(torch_model.generation_config, "lang_to_id"):
+        torch_model.generation_config.language = "<|en|>"
+        torch_model.generation_config.task = "transcribe"
+        trt_model.generation_config.language = "<|en|>"
+        trt_model.generation_config.task = "transcribe"
+
     for i in range(20):
         if i == 4:
             continue  # Linnell sequence diverges at the very end - not a bug but just numerical difference
@@ -113,10 +119,6 @@ def test_generation(model_id: str, max_new_tokens: Optional[int]):
         input_features = input_features.to(torch_dtype)
 
         torch_model = torch_model.eval()
-
-        if hasattr(torch_model.generation_config, "lang_to_id"):
-            torch_model.generation_config.language = "<|en|>"
-            torch_model.generation_config.task = "transcribe"
 
         # Greedy search.
         trt_generated_ids = trt_model.generate(
@@ -149,6 +151,12 @@ def test_batched_generation(model_id: str, max_new_tokens: Optional[int]):
     data = datasets.load_dataset(
         "hf-internal-testing/librispeech_asr_dummy", "clean", split="validation"
     )
+
+    if hasattr(torch_model.generation_config, "lang_to_id"):
+        torch_model.generation_config.language = "<|en|>"
+        torch_model.generation_config.task = "transcribe"
+        trt_model.generation_config.language = "<|en|>"
+        trt_model.generation_config.task = "transcribe"
 
     kwargs = {}
     if max_new_tokens is not None:
