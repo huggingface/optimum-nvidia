@@ -30,6 +30,7 @@ from transformers import AutoConfig, PretrainedConfig
 from optimum.nvidia.quantization import AmmoQuantizationConfig
 from optimum.nvidia.utils import get_user_agent
 
+TENSORRT_CONFIG_FILENAME = "config.json"
 
 def dtype_to_str(dtype: torch.dtype) -> str:
     if dtype == torch.float32:
@@ -195,5 +196,5 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
         config_dict.pop("trt_model_class", None)
         config_dict.pop("trt_model_file", None)
 
-        with open(Path(save_folder, "config.json"), "w") as config_f:
+        with open(Path(save_folder, TENSORRT_CONFIG_FILENAME), "w") as config_f:
             json.dump(config_dict, config_f)

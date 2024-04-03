@@ -12,6 +12,17 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import json
+from typing import TYPE_CHECKING
+from tensorrt_llm.runtime.session import Session
+from tensorrt_llm.runtime import GenerationSession, ModelConfig
+from tensorrt_llm.builder import BuildConfig
+
+from transformers import GenerationConfig
+
+if TYPE_CHECKING:
+    from transformers import PretrainedConfig
+
 import pathlib
 from logging import getLogger
 from pathlib import Path
@@ -19,7 +30,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import torch
-from tensorrt_llm import Mapping, str_dtype_to_torch
+from tensorrt_llm import Mapping, str_dtype_to_torch, mpi_rank
 from tensorrt_llm._utils import str_dtype_to_trt, torch_to_numpy
 from tensorrt_llm.functional import LayerNormPositionType, LayerNormType
 from tensorrt_llm.models import DecoderModel as TrtDecoderModel
@@ -108,7 +119,7 @@ def get_qkv(model_params, torch_dtype, attn_prefix: str):
 def convert_from_hf_whisper_encoder(
     hf_whisper_encoder,
     mapping=Mapping(),
-    dtype="bfloat16",
+    dtype="float16",
 ):
     num_layers = hf_whisper_encoder.config.encoder_layers
     torch_dtype = str_dtype_to_torch(dtype)
@@ -117,39 +128,40 @@ def convert_from_hf_whisper_encoder(
     weights = {}
 
     # Convert specific tensors
-    if mapping.is_first_pp_rank():
-        # conv1
-        # TensorRT-LLM Conv1d weight is 4D while transformers checkpoint ones are 3D.
-        conv1_weight = torch_to_numpy(model_params["conv1.weight"].to(torch_dtype))
-        conv1_weight = conv1_weight[..., None]
+    # if mapping.is_first_pp_rank():
+    # conv1
+    # TensorRT-LLM Conv1d weight is 4D while transformers checkpoint ones are 3D.
+    conv1_weight = torch_to_numpy(model_params["conv1.weight"].to(torch_dtype))
+    conv1_weight = conv1_weight[..., None]
 
-        weights["model.conv1.weight"] = conv1_weight
-        weights["model.conv1.bias"] = torch_to_numpy(
-            model_params["conv1.bias"].to(torch_dtype)
-        )
+    weights["model.conv1.weight"] = conv1_weight
+    weights["model.conv1.bias"] = torch_to_numpy(
+        model_params["conv1.bias"].to(torch_dtype)
+    )
 
-        # conv2
-        conv2_weight = torch_to_numpy(model_params["conv2.weight"].to(torch_dtype))
-        conv2_weight = conv2_weight[..., None]
+    # conv2
+    conv2_weight = torch_to_numpy(model_params["conv2.weight"].to(torch_dtype))
+    conv2_weight = conv2_weight[..., None]
 
-        weights["model.conv2.weight"] = conv2_weight
-        weights["model.conv2.bias"] = torch_to_numpy(
-            model_params["conv2.bias"].to(torch_dtype)
-        )
+    weights["model.conv2.weight"] = conv2_weight
+    weights["model.conv2.bias"] = torch_to_numpy(
+        model_params["conv2.bias"].to(torch_dtype)
+    )
 
-        # embed_positions
-        weights["model.positional_embedding"] = torch_to_numpy(
-            model_params["embed_positions.weight"].to(torch_dtype)
-        )
+    # embed_positions
+    # NOTE: this one is kept as fp32 in Whisper, is this important?
+    weights["model.positional_embedding"] = torch_to_numpy(
+        model_params["embed_positions.weight"] #.to(torch_dtype)
+    )
 
-    if mapping.is_last_pp_rank():
-        # Final layer norm
-        weights["model.ln_post.weight"] = torch_to_numpy(
-            model_params["layer_norm.weight"].to(torch_dtype)
-        )
-        weights["model.ln_post.bias"] = torch_to_numpy(
-            model_params["layer_norm.bias"].to(torch_dtype)
-        )
+    # if mapping.is_last_pp_rank():
+    # Final layer norm
+    weights["model.ln_post.weight"] = torch_to_numpy(
+        model_params["layer_norm.weight"].to(torch_dtype)
+    )
+    weights["model.ln_post.bias"] = torch_to_numpy(
+        model_params["layer_norm.bias"].to(torch_dtype)
+    )
 
     # Map all the hidden layers
     for layer_idx in range(num_layers):
@@ -226,7 +238,7 @@ def convert_from_hf_whisper_encoder(
 def convert_from_hf_whisper_decoder(
     hf_whisper_decoder,
     mapping=Mapping(),
-    dtype="bfloat16",
+    dtype="float16",
 ):
     weights = {}
 
@@ -391,12 +403,22 @@ class WhisperEncoderConfig(TensorRTConfig):
     def get_plugins_config(self) -> PluginConfig:
         config = super().get_plugins_config()
         config.bert_attention_plugin = self.dtype
+        # config.bert_attention_plugin = "disable"
         config.gpt_attention_plugin = "disable"
         config.remove_input_padding = False  # This one is bugged with Whisper.
         config.paged_kv_cache = "disable"  # TODO: getting AssertionError: Paged kv cache is enabled, the kv_cache_block_pointers tensor shall not be None
 
         config.moe_plugin = "disable"
         config.gemm_plugin = self.dtype
+        config.context_fmha = True
+        config.enable_xqa = False
+        config.remove_input_padding = False
+        config.use_custom_all_reduce = "disable"
+
+        config.layernorm_quantization_plugin = None
+        config.rmsnorm_quantization_plugin = None
+        config.nccl_plugin = None
+        # config.paged_kv_cache = False
 
         return config
 
@@ -450,8 +472,17 @@ class WhisperDecoderConfig(TensorRTConfig):
         config.gpt_attention_plugin = self.dtype
         config.paged_kv_cache = "disable"  # TODO: getting AssertionError: Paged kv cache is enabled, the kv_cache_block_pointers tensor shall not be None
 
+        config.context_fmha = True
         config.moe_plugin = "disable"
         config.gemm_plugin = self.dtype
+        config.remove_input_padding = False
+        config.enable_xqa = False
+
+        config.layernorm_quantization_plugin = None
+        config.rmsnorm_quantization_plugin = None
+        config.nccl_plugin = None
+        # config.paged_kv_cache = False
+        config.use_custom_all_reduce = "disable"
 
         return config
 
@@ -517,6 +548,7 @@ class TrtWhisperDecoderPretrainedModel(PretrainedModel):
             rescale_before_lm_head=False,
             mapping=config.mapping,
         )
+        self.config.optimize_network = False  # See utils/patching.py. TODO: remove this once native to TensorRT-LLM.
 
     def forward(self, **kwargs):
         return self.model(**kwargs)
@@ -619,6 +651,73 @@ class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubMo
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersWhisperForConditionalGeneration
     TRT_LLM_TARGET_MODEL_CLASS = None  # Whisper is split in two in TRT-LLM.
 
+    def __init__(
+        self,
+        engines_folders: List[Path],
+        *,
+        gpus_per_node: int,
+        transformers_config: "PretrainedConfig",
+        use_cuda_graph: bool = False,
+        generation_config: Optional[GenerationConfig] = None,
+    ):
+        super().__init__(engines_folders, gpus_per_node=gpus_per_node, transformers_config=transformers_config, use_cuda_graph=use_cuda_graph, generation_config=generation_config)
+
+        if generation_config is None:
+            generation_config = GenerationConfig()
+        self.generation_config = generation_config
+
+        self.transformers_config = transformers_config
+
+        # Encoder.
+        serialize_path = engines_folders[0] / f'rank0.engine'
+        with open(serialize_path, 'rb') as f:
+            encoder_session = Session.from_serialized_engine(f.read())
+
+        self.encoder_session = encoder_session
+
+        # Decoder.
+        decoder_config_path = engines_folders[1] / 'config.json'
+        with open(decoder_config_path, 'r') as f:
+            decoder_config = json.load(f)
+
+        serialize_path = engines_folders[1] / f'rank0.engine'
+        with open(serialize_path, "rb") as f:
+            decoder_engine_buffer = f.read()
+
+        build_config = BuildConfig.from_dict(decoder_config["build_config"])
+        trt_config = WhisperDecoderConfig.from_dict(decoder_config["pretrained_config"])
+
+        self.dtype = trt_config.dtype
+
+        decoder_model_config = ModelConfig(
+            max_batch_size=build_config.max_batch_size,
+            max_beam_width=build_config.max_beam_width,
+            num_heads=trt_config.num_attention_heads,
+            num_kv_heads=trt_config.num_key_value_heads,
+            hidden_size=trt_config.hidden_size,
+            vocab_size=trt_config.vocab_size,
+            num_layers=trt_config.num_hidden_layers,
+            gpt_attention_plugin=build_config.plugin_config.gpt_attention_plugin,
+            remove_input_padding=build_config.plugin_config.remove_input_padding,
+            cross_attention=True,
+            has_position_embedding=True,
+            has_token_type_embedding=False,
+        )
+
+        # world_size > 1 is not supported.
+        world_size = 1
+        runtime_rank = mpi_rank()
+
+        runtime_mapping = Mapping(world_size, runtime_rank)
+
+        decoder_generation_session = GenerationSession(
+            decoder_model_config,
+            decoder_engine_buffer,
+            runtime_mapping,
+            debug_mode=False)
+
+        self.decoder_generation_session = decoder_generation_session
+    
     @classmethod
     def convert_and_build(
         cls,
@@ -642,6 +741,7 @@ class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubMo
         if engine_save_path is None:
             engine_save_path = local_path
 
+        LOGGER.info(f"Building Whisper encoder...")
         encoder_engines_folder, encoder_engines_relative_folder = (
             OptimumWhisperEncoder.convert_and_build(
                 local_path,
@@ -652,6 +752,8 @@ class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubMo
                 **model_kwargs,
             )
         )
+
+        LOGGER.info(f"Building Whisper decoder...")
         decoder_engines_folder, decoder_engines_relative_folder = (
             OptimumWhisperDecoder.convert_and_build(
                 local_path,

@@ -37,7 +37,7 @@ from huggingface_hub.hub_mixin import T
 from safetensors.torch import save_file as to_safetensors
 from tensorrt_llm._utils import numpy_to_torch
 from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
-from transformers import AutoConfig, AutoTokenizer
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
 from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
 
@@ -153,6 +153,8 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
         # Retrieve configuration
         config = AutoConfig.for_model(**hf_model_config)
+        if "torch_dtype" in model_kwargs:
+            config.torch_dtype = model_kwargs["torch_dtype"]
 
         # Convert the original config to a model config TRTLLM understands
         model_config = HuggingFaceHubModel.convert_config_to_trtllm(
@@ -198,14 +200,14 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
         # Retrieve potential quantization config (If provided) - follow the transformers parameter's name
         has_qconfig = "quantization_config" in model_kwargs
-        has_use_fp8 = "use_fp8" in model_kwargs
+        use_fp8 = model_kwargs.get("use_fp8", False)
 
-        if has_qconfig or has_use_fp8:
+        if has_qconfig or use_fp8:
             LOGGER.debug("About to quantize Hugging Face model")
 
             if has_qconfig:
                 qconfig = model_kwargs.pop("quantization_config")
-            elif has_use_fp8:
+            elif use_fp8:
                 if (
                     candidate_tokenizer_path := engines_folder.parent.joinpath(
                         "tokenizer.json"
@@ -362,10 +364,37 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         else:
             LOGGER.info(f"Found pre-built engines at: {engines_folders}")
 
+        try:
+            generation_config = GenerationConfig.from_pretrained(
+                model_id,
+                revision=revision,
+                cache_dir=cache_dir,
+                force_download=force_download,
+                proxies=proxies,
+                resume_download=resume_download,
+                local_files_only=local_files_only,
+                token=token,
+            )
+        except OSError:
+            generation_config = None
+        
+        transformers_config = AutoConfig.from_pretrained(
+            model_id,
+            revision=revision,
+            cache_dir=cache_dir,
+            force_download=force_download,
+            proxies=proxies,
+            resume_download=resume_download,
+            local_files_only=local_files_only,
+            token=token,
+        )
+
         model = cls(
             engines_folders,
             gpus_per_node=model_kwargs.pop("gpus_per_node", 1),
             use_cuda_graph=model_kwargs.pop("use_cuda_graph", False),
+            generation_config=generation_config,
+            transformers_config=transformers_config,
         )
 
         setattr(model, ATTR_TRTLLM_ENGINE_FOLDER, engines_folders)
@@ -378,6 +407,10 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 "Unable to determine the root folder containing TensorRT-LLM engines. "
                 "Please open-up an issue at https://github.com/huggingface/optimum-nvidia"
             )
+
+        self.transformers_config.save_pretrained(save_directory)
+        if self.generation_config is not None:
+            self.generation_config.save_pretrained(save_directory)
 
         # Retrieve the folder
         engines_folders = getattr(self, ATTR_TRTLLM_ENGINE_FOLDER)
