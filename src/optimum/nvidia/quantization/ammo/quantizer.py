@@ -24,11 +24,11 @@ from ammo.torch import quantization as atq
 from tensorrt_llm.quantization import QuantMode
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+from optimum.nvidia.quantization.ammo import AmmoQuantizationConfig
 from transformers import PreTrainedModel
 from transformers.quantizers import HfQuantizer
 from transformers.utils.quantization_config import QuantizationConfigMixin
-
-from optimum.nvidia.quantization.ammo import AmmoQuantizationConfig
 
 
 LOGGER = getLogger(__name__)

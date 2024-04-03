@@ -17,9 +17,8 @@ from argparse import ArgumentParser
 from logging import getLogger
 from pathlib import Path
 
-from transformers import AutoTokenizer
-
 from optimum.nvidia import AutoModelForCausalLM, setup_logging
+from transformers import AutoTokenizer
 
 
 # Setup logging needs to happen before importing TRT ...

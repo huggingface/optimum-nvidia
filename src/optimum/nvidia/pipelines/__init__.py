@@ -18,10 +18,10 @@ from typing import Dict, Optional, Tuple, Type, Union
 
 from huggingface_hub import model_info
 from tensorrt_llm import Module
-from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
 
 from optimum.nvidia import AutoModelForCausalLM
 from optimum.nvidia.pipelines.text_generation import TextGenerationPipeline
+from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
 
 from .base import Pipeline
 

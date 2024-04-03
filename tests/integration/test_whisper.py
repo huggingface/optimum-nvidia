@@ -17,22 +17,26 @@ import shutil
 import tempfile
 from glob import glob
 from pathlib import Path
-import torch
-import huggingface_hub
-import pytest
-
 from typing import Optional
-from transformers import WhisperForConditionalGeneration as TransformersWhisperForConditionalGeneration
-from transformers import AutoProcessor
-from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
 
 import datasets
+import huggingface_hub
+import pytest
+import torch
+
+from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
+from transformers import AutoProcessor
+from transformers import (
+    WhisperForConditionalGeneration as TransformersWhisperForConditionalGeneration,
+)
+
 
 TEST_MODELS = [
     "openai/whisper-tiny.en",
     "openai/whisper-large-v3",
-    "distil-whisper/distil-medium.en"
+    "distil-whisper/distil-medium.en",
 ]
+
 
 def clean_cached_engines_for_model(model_id: str):
     cache_dir = huggingface_hub.constants.HUGGINGFACE_HUB_CACHE
@@ -50,6 +54,7 @@ def clean_cached_engines_for_model(model_id: str):
         for path in [cached_path / "encoder", cached_path / "decoder"]:
             if path.exists() and path.is_dir():
                 shutil.rmtree(path)
+
 
 @pytest.mark.parametrize("model_id", TEST_MODELS)
 def test_whisper(model_id: str):
@@ -77,12 +82,18 @@ def test_generation(model_id: str, max_new_tokens: Optional[int]):
 
     torch_dtype = torch.float16  # TODO: test fp8, int4, int8, fp32
 
-    trt_model = WhisperForConditionalGeneration.from_pretrained(model_id, torch_dtype=torch_dtype)
+    trt_model = WhisperForConditionalGeneration.from_pretrained(
+        model_id, torch_dtype=torch_dtype
+    )
     with torch.device("cuda"):
-        torch_model = TransformersWhisperForConditionalGeneration.from_pretrained(model_id, torch_dtype=torch_dtype)
+        torch_model = TransformersWhisperForConditionalGeneration.from_pretrained(
+            model_id, torch_dtype=torch_dtype
+        )
 
     processor = AutoProcessor.from_pretrained(model_id)
-    data = datasets.load_dataset("hf-internal-testing/librispeech_asr_dummy", "clean", split="validation")
+    data = datasets.load_dataset(
+        "hf-internal-testing/librispeech_asr_dummy", "clean", split="validation"
+    )
 
     kwargs = {}
     if max_new_tokens is not None:
@@ -92,7 +103,11 @@ def test_generation(model_id: str, max_new_tokens: Optional[int]):
         if i == 4:
             continue  # Linnell sequence diverges at the very end - not a bug but just numerical difference
 
-        inputs = processor(data[i]["audio"]["array"], return_tensors="pt", sampling_rate=data[i]["audio"]["sampling_rate"]).to("cuda")
+        inputs = processor(
+            data[i]["audio"]["array"],
+            return_tensors="pt",
+            sampling_rate=data[i]["audio"]["sampling_rate"],
+        ).to("cuda")
 
         input_features = inputs.input_features
         input_features = input_features.to(torch_dtype)
@@ -104,10 +119,15 @@ def test_generation(model_id: str, max_new_tokens: Optional[int]):
             torch_model.generation_config.task = "transcribe"
 
         # Greedy search.
-        trt_generated_ids = trt_model.generate(inputs=input_features, num_beams=1, do_sample=False, top_k=None, **kwargs)
-        torch_generated_ids = torch_model.generate(inputs=input_features, num_beams=1, do_sample=False, top_k=None, **kwargs)
+        trt_generated_ids = trt_model.generate(
+            inputs=input_features, num_beams=1, do_sample=False, top_k=None, **kwargs
+        )
+        torch_generated_ids = torch_model.generate(
+            inputs=input_features, num_beams=1, do_sample=False, top_k=None, **kwargs
+        )
 
         assert torch.equal(trt_generated_ids, torch_generated_ids)
+
 
 @pytest.mark.parametrize("model_id", TEST_MODELS)
 @pytest.mark.parametrize("max_new_tokens", [None, 10])
@@ -117,12 +137,18 @@ def test_batched_generation(model_id: str, max_new_tokens: Optional[int]):
 
     torch_dtype = torch.float16  # TODO: test fp8, int4, int8, fp32
 
-    trt_model = WhisperForConditionalGeneration.from_pretrained(model_id, torch_dtype=torch_dtype, max_batch_size=5)
+    trt_model = WhisperForConditionalGeneration.from_pretrained(
+        model_id, torch_dtype=torch_dtype, max_batch_size=5
+    )
     with torch.device("cuda"):
-        torch_model = TransformersWhisperForConditionalGeneration.from_pretrained(model_id, torch_dtype=torch_dtype)
+        torch_model = TransformersWhisperForConditionalGeneration.from_pretrained(
+            model_id, torch_dtype=torch_dtype
+        )
 
     processor = AutoProcessor.from_pretrained(model_id)
-    data = datasets.load_dataset("hf-internal-testing/librispeech_asr_dummy", "clean", split="validation")
+    data = datasets.load_dataset(
+        "hf-internal-testing/librispeech_asr_dummy", "clean", split="validation"
+    )
 
     kwargs = {}
     if max_new_tokens is not None:
@@ -130,7 +156,9 @@ def test_batched_generation(model_id: str, max_new_tokens: Optional[int]):
 
     for batch_size in [2, 3, 4]:
         subdata = data.select(range(batch_size))
-        inputs = processor([dat["array"] for dat in subdata["audio"]], return_tensors="pt").to("cuda")
+        inputs = processor(
+            [dat["array"] for dat in subdata["audio"]], return_tensors="pt"
+        ).to("cuda")
 
         input_features = inputs.input_features
         input_features = input_features.to(torch_dtype)
@@ -138,8 +166,11 @@ def test_batched_generation(model_id: str, max_new_tokens: Optional[int]):
         assert input_features.shape[0] == batch_size
 
         # Greedy search.
-        trt_generated_ids = trt_model.generate(inputs=input_features, num_beams=1, do_sample=False, top_k=None, **kwargs)
-        torch_generated_ids = torch_model.generate(inputs=input_features, num_beams=1, do_sample=False, top_k=None, **kwargs)
+        trt_generated_ids = trt_model.generate(
+            inputs=input_features, num_beams=1, do_sample=False, top_k=None, **kwargs
+        )
+        torch_generated_ids = torch_model.generate(
+            inputs=input_features, num_beams=1, do_sample=False, top_k=None, **kwargs
+        )
 
         assert torch.equal(trt_generated_ids, torch_generated_ids)
-    

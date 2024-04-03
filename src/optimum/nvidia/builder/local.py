@@ -17,9 +17,10 @@ from logging import getLogger
 from pathlib import Path
 from subprocess import PIPE, STDOUT, run
 from typing import Any, Dict
-from optimum.nvidia.utils.patching import BuilderPatcher
+
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.builder.config import EngineConfig
+from optimum.nvidia.utils.patching import BuilderPatcher
 
 
 LOGGER = getLogger()
@@ -97,7 +98,7 @@ class LocalEngineBuilder:
 
         if model_config.supports_strong_typing():
             build_params["--strongly_typed"] = None
-        
+
         return build_params | generation_params | workload_params | plugins_params
 
     def __init__(self, config: TensorRTConfig, output_folder: Path):
@@ -128,8 +129,12 @@ class LocalEngineBuilder:
                 stdout=PIPE,
                 stderr=STDOUT,
             )
-        LOGGER.info(f"trtllm-build stdout: {result.stdout.decode('utf-8') if result.stdout is not None else None}" )
-        LOGGER.info(f"trtllm-build stderr: {result.stderr.decode('utf-8') if result.stderr is not None else None}")
+        LOGGER.info(
+            f"trtllm-build stdout: {result.stdout.decode('utf-8') if result.stdout is not None else None}"
+        )
+        LOGGER.info(
+            f"trtllm-build stderr: {result.stderr.decode('utf-8') if result.stderr is not None else None}"
+        )
 
         if result.returncode != 0:
             raise ValueError(

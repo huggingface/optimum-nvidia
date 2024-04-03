@@ -37,9 +37,6 @@ from huggingface_hub.hub_mixin import T
 from safetensors.torch import save_file as to_safetensors
 from tensorrt_llm._utils import numpy_to_torch
 from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
-from transformers import AutoConfig, AutoTokenizer, GenerationConfig
-from transformers import PreTrainedModel as TransformersPretrainedModel
-from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
 
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.builder import LocalEngineBuilder
@@ -48,6 +45,9 @@ from optimum.nvidia.quantization import AutoQuantizationConfig
 from optimum.nvidia.quantization.ammo import AmmoQuantizer
 from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
 from optimum.nvidia.utils.nvml import get_max_memory
+from transformers import AutoConfig, AutoTokenizer, GenerationConfig
+from transformers import PreTrainedModel as TransformersPretrainedModel
+from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
 
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
@@ -377,7 +377,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             )
         except OSError:
             generation_config = None
-        
+
         transformers_config = AutoConfig.from_pretrained(
             model_id,
             revision=revision,

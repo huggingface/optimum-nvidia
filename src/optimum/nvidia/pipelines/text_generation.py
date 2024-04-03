@@ -18,10 +18,10 @@ from enum import Enum
 from typing import Dict, List, Union
 
 import torch
-from transformers import PreTrainedTokenizer, TensorType
 
 from optimum.nvidia import AutoModelForCausalLM
 from optimum.nvidia.runtime import CausalLM
+from transformers import PreTrainedTokenizer, TensorType
 
 from .base import Pipeline
 
