@@ -65,9 +65,7 @@ if __name__ == "__main__":
     print(f"TRTLLM engines have been saved at {args.output}.")
 
     model = WhisperForConditionalGeneration.from_pretrained(args.output)
-    processor = AutoProcessor.from_pretrained(
-        args.model
-    )  # TODO: save processor in args.output (like ORTModel)
+    processor = AutoProcessor.from_pretrained(args.model)
 
     data = load_dataset(
         "hf-internal-testing/librispeech_asr_dummy", "clean", split="validation"

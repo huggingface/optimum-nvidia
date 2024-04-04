@@ -173,7 +173,6 @@ def convert_from_hf_whisper_encoder(
         model_params["embed_positions.weight"]  # .to(torch_dtype)
     )
 
-    # if mapping.is_last_pp_rank():
     # Final layer norm
     weights["model.ln_post.weight"] = torch_to_numpy(
         model_params["layer_norm.weight"].to(torch_dtype)
