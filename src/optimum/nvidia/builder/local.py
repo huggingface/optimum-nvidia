@@ -130,10 +130,10 @@ class LocalEngineBuilder:
                 stderr=STDOUT,
             )
 
-        LOGGER.info(
+        LOGGER.warning(
             f"trtllm-build stdout: {result.stdout.decode('utf-8') if result.stdout is not None else None}"
         )
-        LOGGER.info(
+        LOGGER.warning(
             f"trtllm-build stderr: {result.stderr.decode('utf-8') if result.stderr is not None else None}"
         )
 
