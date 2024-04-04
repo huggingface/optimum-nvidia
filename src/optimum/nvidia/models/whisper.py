@@ -388,7 +388,7 @@ class WhisperEncoderConfig(TensorRTConfig):
 
         trt_config = cls(
             architecture=config.architectures[0],
-            dtype=dtype_to_str(config.torch_dtype),  # TODO: always float32?
+            dtype=config.torch_dtype,  # TODO: always float32?
             logits_dtype="float32",
             vocab_size=config.vocab_size,
             max_position_embeddings=config.max_target_positions,
@@ -451,7 +451,7 @@ class WhisperDecoderConfig(TensorRTConfig):
 
         trt_config = cls(
             architecture=config.architectures[0],
-            dtype=dtype_to_str(config.torch_dtype),  # TODO: always float32?
+            dtype=config.torch_dtype,  # TODO: always float32?
             logits_dtype="float32",
             vocab_size=config.vocab_size,
             max_position_embeddings=config.max_target_positions,
