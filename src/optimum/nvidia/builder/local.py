@@ -130,14 +130,14 @@ class LocalEngineBuilder:
                 stderr=STDOUT,
             )
 
-        if result.returncode != 0:
-            LOGGER.warning(
-                f"trtllm-build stdout: {result.stdout.decode('utf-8') if result.stdout is not None else None}"
-            )
-            LOGGER.warning(
-                f"trtllm-build stderr: {result.stderr.decode('utf-8') if result.stderr is not None else None}"
-            )
+        LOGGER.info(
+            f"trtllm-build stdout: {result.stdout.decode('utf-8') if result.stdout is not None else None}"
+        )
+        LOGGER.info(
+            f"trtllm-build stderr: {result.stderr.decode('utf-8') if result.stderr is not None else None}"
+        )
 
+        if result.returncode != 0:
             raise ValueError(
                 f"Compilation failed ({result.returncode}), "
                 "please open up an issue at https://github.com/huggingface/optimum-nvidia"
