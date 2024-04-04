@@ -21,14 +21,14 @@ from tensorrt_llm.models import PretrainedConfig, PretrainedModel
 from tensorrt_llm.models.gemma.model import GemmaForCausalLM as TrtGemmaForCausalLM
 from tensorrt_llm.models.gemma.weight import load_from_hf_gemma
 from tensorrt_llm.plugin import PluginConfig
-from transformers import GemmaForCausalLM as TransformersGemmaForCausalLM
-from transformers import PretrainedConfig as TransformersPretrainedConfig
-from transformers import PreTrainedModel as TransformersPretrainedModel
 
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.config import dtype_to_str
 from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.runtime import CausalLM
+from transformers import GemmaForCausalLM as TransformersGemmaForCausalLM
+from transformers import PretrainedConfig as TransformersPretrainedConfig
+from transformers import PreTrainedModel as TransformersPretrainedModel
 
 
 LOGGER = getLogger(__name__)

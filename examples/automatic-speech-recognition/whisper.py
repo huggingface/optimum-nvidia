@@ -16,14 +16,18 @@ from argparse import ArgumentParser
 from logging import getLogger
 from pathlib import Path
 
+import torch
 from huggingface_hub import login
 
 from optimum.nvidia import setup_logging
+from transformers import AutoProcessor
 
 
 # Setup logging needs to happen before importing TRT ...
 setup_logging(False)
 LOGGER = getLogger(__name__)
+
+from datasets import load_dataset
 
 from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
 from optimum.nvidia.utils.cli import (
@@ -53,6 +57,28 @@ if __name__ == "__main__":
     if args.hub_token is not None:
         login(args.hub_token)
 
-    model = WhisperForConditionalGeneration.from_pretrained(args.model)
+    torch_dtype = torch.float32
+    model = WhisperForConditionalGeneration.from_pretrained(
+        args.model, torch_dtype=torch_dtype
+    )
     model.save_pretrained(args.output)
     print(f"TRTLLM engines have been saved at {args.output}.")
+
+    model = WhisperForConditionalGeneration.from_pretrained(args.output)
+    processor = AutoProcessor.from_pretrained(args.model)
+
+    data = load_dataset(
+        "hf-internal-testing/librispeech_asr_dummy", "clean", split="validation"
+    )
+
+    inputs = processor(
+        data[0]["audio"]["array"],
+        return_tensors="pt",
+        sampling_rate=data[0]["audio"]["sampling_rate"],
+    ).to("cuda")
+    input_features = inputs.input_features
+
+    input_features = input_features.to(torch_dtype)
+    generated_ids = model.generate(inputs=input_features)
+
+    transcription = processor.batch_decode(generated_ids, skip_special_tokens=True)[0]

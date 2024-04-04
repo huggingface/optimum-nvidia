@@ -17,11 +17,16 @@ import warnings
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 
 import tensorrt_llm.bindings as ctrrt
 import torch
 
+from transformers import GenerationConfig
+
+
+if TYPE_CHECKING:
+    from transformers import PretrainedConfig
 
 LOGGER = getLogger(__name__)
 
@@ -68,7 +73,9 @@ class CausalLM(CompiledModel):
         engines_folders: List[Path],
         *,
         gpus_per_node: int,
+        transformers_config: "PretrainedConfig",
         use_cuda_graph: bool = False,
+        generation_config: Optional[GenerationConfig] = None,
     ):
         if len(engines_folders) != 1:
             raise ValueError(
@@ -107,6 +114,12 @@ class CausalLM(CompiledModel):
 
         self.max_output_length = self._config.model_config.max_seq_len
         self.max_beam_width = self._session_config.max_beam_width
+
+        if generation_config is None:
+            generation_config = GenerationConfig()
+        self.generation_config = generation_config
+
+        self.transformers_config = transformers_config
 
     @property
     def config(self) -> ctrrt.GptJsonConfig:
@@ -212,8 +225,8 @@ class TensorRTForSpeechSeq2Seq(CompiledModel):
         engines_folders: List[Path],
         *,
         gpus_per_node: int,
+        transformers_config: "PretrainedConfig",
         use_cuda_graph: bool = False,
+        generation_config: Optional[GenerationConfig] = None,
     ):
         super().__init__(engines_folders)
-
-        # TODO: implement this.

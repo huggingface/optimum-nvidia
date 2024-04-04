@@ -20,6 +20,7 @@ from typing import Any, Dict
 
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.builder.config import EngineConfig
+from optimum.nvidia.utils.patching import BuilderPatcher
 
 
 LOGGER = getLogger()
@@ -111,7 +112,7 @@ class LocalEngineBuilder:
         cli_params_list = [str(t) for t in chain.from_iterable(cli_params.items())]
         cli_params_list = [i for i in cli_params_list if i != "None"]
 
-        LOGGER.debug(f"trtllm-build parameters: {cli_params_list}")
+        LOGGER.info(f"trtllm-build parameters: {cli_params_list}")
 
         for rank in range(self._config.mapping.world_size):
             ranked_checkpoint = f"rank{rank}.safetensors"
@@ -120,15 +121,23 @@ class LocalEngineBuilder:
                     f"Missing rank-{rank} checkpoints (rank{rank}.safetensors), cannot build."
                 )
 
-        # Run the build
-        result = run(
-            [LocalEngineBuilder.TRTLLM_BUILD_EXEC] + cli_params_list,
-            stdout=PIPE,
-            stderr=STDOUT,
-        )
+        # TODO: Remove BuilderPatcher once TensorRT-LLM updates its codebase to allow to disable `optimize(network)`.
+        with BuilderPatcher():
+            # Run the build
+            result = run(
+                [LocalEngineBuilder.TRTLLM_BUILD_EXEC] + cli_params_list,
+                stdout=PIPE,
+                stderr=STDOUT,
+            )
+
         if result.returncode != 0:
-            print(f"trtllm-build stdout: {result.stdout}")
-            print(f"trtllm-build stderr: {result.stderr}")
+            LOGGER.warning(
+                f"trtllm-build stdout: {result.stdout.decode('utf-8') if result.stdout is not None else None}"
+            )
+            LOGGER.warning(
+                f"trtllm-build stderr: {result.stderr.decode('utf-8') if result.stderr is not None else None}"
+            )
+
             raise ValueError(
                 f"Compilation failed ({result.returncode}), "
                 "please open up an issue at https://github.com/huggingface/optimum-nvidia"

@@ -20,14 +20,14 @@ from tensorrt_llm.models import PretrainedConfig, PretrainedModel
 from tensorrt_llm.models.llama.model import LLaMAForCausalLM
 from tensorrt_llm.models.llama.weight import load_from_hf_llama
 from tensorrt_llm.plugin import PluginConfig
-from transformers import MistralForCausalLM as TransformersMistralForCausalLM
-from transformers import PretrainedConfig as TransformersPretrainedConfig
-from transformers import PreTrainedModel as TransformersPretrainedModel
 
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.config import dtype_to_str
 from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.runtime import CausalLM
+from transformers import MistralForCausalLM as TransformersMistralForCausalLM
+from transformers import PretrainedConfig as TransformersPretrainedConfig
+from transformers import PreTrainedModel as TransformersPretrainedModel
 
 
 LOGGER = getLogger(__name__)

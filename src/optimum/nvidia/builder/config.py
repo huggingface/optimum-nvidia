@@ -259,7 +259,6 @@ class EngineConfigBuilder:
 
     def build(self) -> EngineConfig:
         self.validate()
-
         return EngineConfig(
             optimisation_level=self._optimisation_level,
             sharding_profile=self._sharding_profile,

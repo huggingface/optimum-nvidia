@@ -25,14 +25,30 @@ from tensorrt_llm.models.modeling_utils import (
 )
 from tensorrt_llm.plugin import PluginConfig
 from tensorrt_llm.quantization import QuantMode
-from transformers import AutoConfig, PretrainedConfig
 
 from optimum.nvidia.quantization import AmmoQuantizationConfig
 from optimum.nvidia.utils import get_user_agent
+from transformers import AutoConfig, PretrainedConfig
 
 
-def dtype_to_str(dtype: torch.dtype) -> str:
-    if dtype == torch.float32:
+SUPPORTED_DTYPES = [
+    "float32",
+    "float16",
+    "bfloat16",
+    "int32",
+    "int8",
+    "uint8",
+    "float8",
+]
+
+
+def dtype_to_str(dtype: Union[torch.dtype, str]) -> str:
+    if isinstance(dtype, str):
+        if dtype in SUPPORTED_DTYPES:
+            return dtype
+        else:
+            raise ValueError(f"Unsupported dtype ({dtype}) value")
+    elif dtype == torch.float32:
         return "float32"
     elif dtype == torch.float16:
         return "float16"

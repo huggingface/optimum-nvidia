@@ -50,6 +50,8 @@ TESTS_REQUIRES = [
     "parameterized",
     "datasets",
     "safetensors",
+    "soundfile",
+    "librosa",
 ]
 
 QUALITY_REQUIRES = [
