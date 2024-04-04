@@ -23,6 +23,7 @@ from tensorrt_llm.models.gemma.weight import load_from_hf_gemma
 from tensorrt_llm.plugin import PluginConfig
 
 from optimum.nvidia import TensorRTConfig
+from optimum.nvidia.config import dtype_to_str
 from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.runtime import CausalLM
 from transformers import GemmaForCausalLM as TransformersGemmaForCausalLM
@@ -50,7 +51,7 @@ class GemmaConfig(TensorRTConfig):
 
         trt_config = GemmaConfig(
             architecture=config.architectures[0],
-            dtype=config.torch_dtype,
+            dtype=dtype_to_str(config.torch_dtype),
             logits_dtype="float32",
             vocab_size=config.vocab_size,
             max_position_embeddings=config.max_position_embeddings,
