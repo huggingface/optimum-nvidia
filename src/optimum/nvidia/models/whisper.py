@@ -12,12 +12,23 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import copy
 import json
 import pathlib
 from collections import OrderedDict
 from logging import getLogger
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterator, List, Optional
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 import torch
@@ -30,15 +41,23 @@ from tensorrt_llm.models import PretrainedConfig, PretrainedModel
 from tensorrt_llm.models import WhisperEncoder as TrtWhisperEncoder
 from tensorrt_llm.plugin import PluginConfig
 from tensorrt_llm.runtime import GenerationSession, ModelConfig, SamplingConfig
+from tensorrt_llm.runtime.generation import LogitsProcessorList
 from tensorrt_llm.runtime.session import Session, TensorInfo
 
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.config import dtype_to_str
+from optimum.nvidia.generation.logits_process import (
+    TrtForceTokensLogitsProcessor,
+    TrtSuppressTokensAtBeginLogitsProcessor,
+    TrtSuppressTokensLogitsProcessor,
+    TrtWhisperNoSpeechDetection,
+)
 from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.runtime import TensorRTForSpeechSeq2Seq
 from optimum.nvidia.utils.nvml import get_max_memory
 from transformers import GenerationConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
+from transformers.models.whisper.generation_whisper import WhisperGenerationMixin
 from transformers.models.whisper.modeling_whisper import (
     WhisperDecoder as TransformersWhisperDecoder,
 )
@@ -55,8 +74,6 @@ if TYPE_CHECKING:
     from transformers import PretrainedConfig as TransformersPretrainedConfig
     from transformers.generation.logits_process import LogitsProcessorList
     from transformers.generation.stopping_criteria import StoppingCriteriaList
-    from transformers.generation.streamers import BaseStreamer
-    from transformers.modeling_utils import PreTrainedModel
 
 
 LOGGER = getLogger(__name__)
@@ -645,7 +662,9 @@ class OptimumWhisperDecoder(TensorRTForSpeechSeq2Seq, HuggingFaceHubModel):
         return convert_from_hf_whisper_decoder(source, config.mapping, config.dtype)
 
 
-class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubModel):
+class WhisperForConditionalGeneration(
+    TensorRTForSpeechSeq2Seq, HuggingFaceHubModel, WhisperGenerationMixin
+):
     MODEL_CONFIG = None
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersWhisperForConditionalGeneration
     TRT_LLM_TARGET_MODEL_CLASS = None  # Whisper is split in two in TRT-LLM.
@@ -824,9 +843,76 @@ class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubMo
 
         return outputs["output"]
 
+    def _retrieve_logit_processors(
+        self, generation_config, logits_processor, begin_index, is_shortform, num_beams
+    ):
+        # Adapted from WhisperGenerationMixin._retrieve_logit_processors with XxxLogitsProcessor -> TrtXxxLogitsProcessor
+
+        if generation_config.return_timestamps is True:
+            # TODO: implement.
+            raise NotImplementedError(
+                "return_timestamps=True is not implemented with TensorRT-LLM. Please open an issue at https://github.com/huggingface/optimum-nvidia/issues. In the meanwhile, please set `model.generation_config.return_timestamps=False`."
+            )
+
+        if generation_config.suppress_tokens is not None:
+            suppress_tokens_processor = TrtSuppressTokensLogitsProcessor(
+                generation_config.suppress_tokens
+            )
+            logits_processor = (
+                [suppress_tokens_processor]
+                if logits_processor is None
+                else [suppress_tokens_processor] + logits_processor
+            )
+            generation_config.suppress_tokens = None
+
+        if generation_config.begin_suppress_tokens is not None:
+            begin_suppress_processor = TrtSuppressTokensAtBeginLogitsProcessor(
+                generation_config.begin_suppress_tokens, begin_index=begin_index
+            )
+            logits_processor = (
+                [begin_suppress_processor]
+                if logits_processor is None
+                else [begin_suppress_processor] + logits_processor
+            )
+            generation_config.begin_suppress_tokens = None
+
+        if generation_config.no_speech_threshold is not None and not is_shortform:
+            no_speech_detector = TrtWhisperNoSpeechDetection(
+                no_speech_token=generation_config.no_timestamps_token_id - 1,
+                begin_index=begin_index,
+                scores_is_logprobs=num_beams > 1,
+            )
+            logits_processor = (
+                [no_speech_detector]
+                if logits_processor is None
+                else [no_speech_detector] + logits_processor
+            )
+            no_speech_detector.set_model(self)
+
+        if is_shortform and generation_config.forced_decoder_ids is not None:
+            forced_tokens_proc = TrtForceTokensLogitsProcessor(
+                generation_config.forced_decoder_ids
+            )
+            # It's important that the `forced_tokens_proc` processor is appended after
+            # the suppress_tokens processor or else it might happen that all token logits are suppressed to -inf
+            # which would lead to unexpected behavior
+            # The better approach here is to NOT make use of the `forced_tokens_proc` for Whisper and instead
+            # initialize all of them as `decoder_input_ids`.
+            # TODO(Sanchit): Make sure to deprecate this in v4.39 as there will be no `forced_decoder_ids` anymore.
+            logits_processor = (
+                [forced_tokens_proc]
+                if logits_processor is None
+                else logits_processor + [forced_tokens_proc]
+            )
+            generation_config.forced_decoder_ids = None
+
+        return logits_processor
+
     def _retrieve_init_tokens(
         self, input_features, generation_config, config, num_segment_frames, kwargs
     ):
+        # Adapted from WhisperGenerationMixin._retrieve_init_tokens with automatic language detection disabled.
+
         def replace_or_add(lst: List[int], num: int, itr: Iterator[int]):
             """short function to replace num with a itr in lst"""
             found = any(i in lst for i in itr)
@@ -959,17 +1045,30 @@ class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubMo
     def generate(
         self,
         inputs: Optional[torch.Tensor] = None,
-        generation_config: Optional["GenerationConfig"] = None,
+        generation_config: Optional[GenerationConfig] = None,
         logits_processor: Optional["LogitsProcessorList"] = None,
         stopping_criteria: Optional["StoppingCriteriaList"] = None,
         prefix_allowed_tokens_fn: Optional[
             Callable[[int, torch.Tensor], List[int]]
         ] = None,
-        synced_gpus: Optional[bool] = None,
-        assistant_model: Optional["PreTrainedModel"] = None,
-        streamer: Optional["BaseStreamer"] = None,
-        negative_prompt_ids: Optional[torch.Tensor] = None,
-        negative_prompt_attention_mask: Optional[torch.Tensor] = None,
+        synced_gpus: bool = False,
+        return_timestamps: Optional[bool] = None,
+        task: Optional[str] = None,
+        language: Optional[str] = None,
+        is_multilingual: Optional[bool] = None,
+        prompt_ids: Optional[torch.Tensor] = None,
+        prompt_condition_type: Optional[str] = None,  # first-segment, all-segments
+        condition_on_prev_tokens: Optional[bool] = None,
+        temperature: Optional[Union[float, Tuple[float, ...]]] = None,
+        compression_ratio_threshold: Optional[float] = None,
+        logprob_threshold: Optional[float] = None,
+        no_speech_threshold: Optional[float] = None,
+        num_segment_frames: Optional[int] = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        time_precision: float = 0.02,
+        return_token_timestamps: Optional[bool] = None,
+        return_segments: bool = False,
+        return_dict_in_generate: Optional[bool] = None,
         **kwargs,
     ):
         if inputs.device.type != "cuda":
@@ -977,36 +1076,66 @@ class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubMo
                 f"TensorRT-LLM only supports inputs on CUDA device. Got: inputs.device = {inputs.device}"
             )
 
-        def raise_unsupported(value: Any, name: str):
-            if value is not None:
+        def raise_unsupported(value: Any, name: str, default: Any = None):
+            if value != default:
                 raise ValueError(
                     f"TensorRTForSpeechSeq2Seq.generate does not support {name} (got {value}). Please open an issue at https://github.com/huggingface/optimum-nvidia/issues."
                 )
 
-        raise_unsupported(logits_processor, name="logits_processor")
         raise_unsupported(stopping_criteria, name="stopping_criteria")
         raise_unsupported(prefix_allowed_tokens_fn, name="prefix_allowed_tokens_fn")
-        raise_unsupported(synced_gpus, name="synced_gpus")
-        raise_unsupported(assistant_model, name="assistant_model")
-        raise_unsupported(streamer, name="streamer")
-        raise_unsupported(negative_prompt_ids, name="negative_prompt_ids")
-        raise_unsupported(
-            negative_prompt_attention_mask, name="negative_prompt_attention_mask"
+        raise_unsupported(synced_gpus, name="synced_gpus", default=False)
+        raise_unsupported(return_timestamps, name="return_timestamps")
+        raise_unsupported(task, name="task")
+        raise_unsupported(prompt_ids, name="prompt_ids")
+        raise_unsupported(prompt_condition_type, name="prompt_condition_type")
+        raise_unsupported(temperature, name="temperature")
+        raise_unsupported(attention_mask, name="attention_mask")
+        raise_unsupported(time_precision, name="time_precision", default=0.02)
+        raise_unsupported(return_token_timestamps, name="return_token_timestamps")
+        raise_unsupported(return_segments, name="return_segments", default=False)
+        raise_unsupported(return_dict_in_generate, name="return_dict_in_generate")
+
+        # 1. copy generation config
+        if generation_config is None:
+            generation_config = copy.deepcopy(self.generation_config)
+        else:
+            generation_config = copy.deepcopy(generation_config)
+
+        self._set_language_and_task(
+            language=language,
+            task=task,
+            is_multilingual=is_multilingual,
+            generation_config=generation_config,
+        )
+        self._set_token_ids(
+            generation_config=generation_config,
+            config=self.transformers_config,
+            kwargs=kwargs,
+        )
+        self._set_thresholds_and_condition(
+            generation_config=generation_config,
+            logprob_threshold=logprob_threshold,
+            compression_ratio_threshold=compression_ratio_threshold,
+            no_speech_threshold=no_speech_threshold,
+            condition_on_prev_tokens=condition_on_prev_tokens,
         )
 
-        if generation_config is None:
-            generation_config = self.generation_config
-
         num_beams = kwargs.pop("num_beams", generation_config.num_beams)
-
-        encoder_outputs = self.encoder(inputs)
-
-        batch_size = inputs.shape[0]
-
         input_stride = 1 * 2  # encoder's conv1 stride * encoder's conv2 stride
+
+        batch_size, total_input_frames = self._retrieve_total_input_frames(
+            input_features=inputs, input_stride=input_stride, kwargs=kwargs
+        )
         num_segment_frames = (
             input_stride * self.transformers_config.max_source_positions
         )
+        is_shortform = total_input_frames <= num_segment_frames
+        if not is_shortform:
+            raise ValueError(
+                "Whisper TensorRT-LLM implementation only supports short form for now. Please open an issue at https://github.com/huggingface/optimum-nvidia/issues."
+            )
+
         init_tokens = self._retrieve_init_tokens(
             inputs,
             generation_config=generation_config,
@@ -1014,6 +1143,20 @@ class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubMo
             num_segment_frames=num_segment_frames,
             kwargs=kwargs,
         )
+
+        begin_index = len(init_tokens)
+        logits_processor = self._retrieve_logit_processors(
+            generation_config=generation_config,
+            logits_processor=logits_processor,
+            begin_index=begin_index,  # begin index is index of first generated decoder token
+            is_shortform=is_shortform,
+            num_beams=kwargs.get("num_beams", 1),
+        )
+        logits_processor = LogitsProcessorList(logits_processor)
+
+        encoder_outputs = self.encoder(inputs)
+
+        batch_size = inputs.shape[0]
         one_tensor = torch.ones((batch_size, 1), device="cuda", dtype=torch.long)
         decoder_input_ids = torch.cat([t * one_tensor for t in init_tokens], dim=-1)
 
@@ -1086,6 +1229,7 @@ class WhisperForConditionalGeneration(TensorRTForSpeechSeq2Seq, HuggingFaceHubMo
             encoder_output=encoder_outputs,
             encoder_input_lengths=encoder_input_lengths,
             cross_attention_mask=cross_attention_mask,
+            logits_processor=logits_processor,
         )
         torch.cuda.synchronize()
 

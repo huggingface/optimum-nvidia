@@ -101,14 +101,9 @@ def test_generation(model_id: str, max_new_tokens: Optional[int]):
 
     if hasattr(torch_model.generation_config, "lang_to_id"):
         torch_model.generation_config.language = "<|en|>"
-        torch_model.generation_config.task = "transcribe"
         trt_model.generation_config.language = "<|en|>"
-        trt_model.generation_config.task = "transcribe"
 
     for i in range(20):
-        if i == 4:
-            continue  # Linnell sequence diverges at the very end - not a bug but just numerical difference
-
         inputs = processor(
             data[i]["audio"]["array"],
             return_tensors="pt",
@@ -154,9 +149,7 @@ def test_batched_generation(model_id: str, max_new_tokens: Optional[int]):
 
     if hasattr(torch_model.generation_config, "lang_to_id"):
         torch_model.generation_config.language = "<|en|>"
-        torch_model.generation_config.task = "transcribe"
         trt_model.generation_config.language = "<|en|>"
-        trt_model.generation_config.task = "transcribe"
 
     kwargs = {}
     if max_new_tokens is not None:
