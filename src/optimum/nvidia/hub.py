@@ -107,6 +107,11 @@ def find_prebuilt_engines(root: Path) -> Tuple[List[Path], List[Path]]:
     folders = list(dict.fromkeys(folders))
     relative_folders = list(dict.fromkeys(relative_folders))
 
+    # TODO: Handle this properly - we should enforce the directory names and use dicts instead of lists here.
+    if len(relative_folders) == 2 and "decoder" in relative_folders[0].as_posix():
+        folders.reverse()
+        relative_folders.reverse()
+
     return folders, relative_folders
 
 
