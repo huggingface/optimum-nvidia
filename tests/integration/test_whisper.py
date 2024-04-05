@@ -23,12 +23,12 @@ import datasets
 import huggingface_hub
 import pytest
 import torch
-
-from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
 from transformers import AutoProcessor
 from transformers import (
     WhisperForConditionalGeneration as TransformersWhisperForConditionalGeneration,
 )
+
+from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
 
 
 TEST_MODELS = [

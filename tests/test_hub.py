@@ -2,13 +2,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import mock
+from transformers import AutoConfig as HfAutoConfig
+from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 
 # import pytest
 import optimum.nvidia.hub
 from optimum.nvidia import AutoModelForCausalLM
 from optimum.nvidia.hub import FOLDER_TRTLLM_ENGINES
-from transformers import AutoConfig as HfAutoConfig
-from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 
 
 # from optimum.nvidia.utils.nvml import get_device_name

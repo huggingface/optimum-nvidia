@@ -43,18 +43,6 @@ from tensorrt_llm.plugin import PluginConfig
 from tensorrt_llm.runtime import GenerationSession, ModelConfig, SamplingConfig
 from tensorrt_llm.runtime.generation import LogitsProcessorList
 from tensorrt_llm.runtime.session import Session, TensorInfo
-
-from optimum.nvidia import TensorRTConfig
-from optimum.nvidia.config import dtype_to_str
-from optimum.nvidia.generation.logits_process import (
-    TrtForceTokensLogitsProcessor,
-    TrtSuppressTokensAtBeginLogitsProcessor,
-    TrtSuppressTokensLogitsProcessor,
-    TrtWhisperNoSpeechDetection,
-)
-from optimum.nvidia.hub import HuggingFaceHubModel
-from optimum.nvidia.runtime import TensorRTForSpeechSeq2Seq
-from optimum.nvidia.utils.nvml import get_max_memory
 from transformers import GenerationConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
 from transformers.models.whisper.generation_whisper import WhisperGenerationMixin
@@ -68,6 +56,18 @@ from transformers.models.whisper.modeling_whisper import (
     WhisperForConditionalGeneration as TransformersWhisperForConditionalGeneration,
 )
 from transformers.models.whisper.tokenization_whisper import TASK_IDS, TO_LANGUAGE_CODE
+
+from optimum.nvidia import TensorRTConfig
+from optimum.nvidia.config import dtype_to_str
+from optimum.nvidia.generation.logits_process import (
+    TrtForceTokensLogitsProcessor,
+    TrtSuppressTokensAtBeginLogitsProcessor,
+    TrtSuppressTokensLogitsProcessor,
+    TrtWhisperNoSpeechDetection,
+)
+from optimum.nvidia.hub import HuggingFaceHubModel
+from optimum.nvidia.runtime import TensorRTForSpeechSeq2Seq
+from optimum.nvidia.utils.nvml import get_max_memory
 
 
 if TYPE_CHECKING:

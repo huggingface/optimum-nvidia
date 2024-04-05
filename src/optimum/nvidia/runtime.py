@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 
 import tensorrt_llm.bindings as ctrrt
 import torch
-
 from transformers import GenerationConfig
 
 
