@@ -5,9 +5,9 @@ import numpy as np
 import torch
 from huggingface_hub import login
 from tqdm import trange
+from transformers import pipeline as raw_pipeline
 
 from optimum.nvidia.pipelines import pipeline
-from transformers import pipeline as raw_pipeline
 
 
 def get_transformers_pipeline(args: Namespace):

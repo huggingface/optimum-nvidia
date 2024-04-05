@@ -7,11 +7,11 @@ import numpy as np
 import torch
 from ammo.torch import quantization as atq
 from datasets import Dataset
+from transformers import PreTrainedTokenizer
+from transformers.utils.quantization_config import QuantizationConfigMixin
 
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.quantization.datasets import get_dataset
-from transformers import PreTrainedTokenizer
-from transformers.utils.quantization_config import QuantizationConfigMixin
 
 
 dtype = Union[str, torch.dtype]

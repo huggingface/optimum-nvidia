@@ -25,10 +25,10 @@ from tensorrt_llm.models.modeling_utils import (
 )
 from tensorrt_llm.plugin import PluginConfig
 from tensorrt_llm.quantization import QuantMode
+from transformers import AutoConfig, PretrainedConfig
 
 from optimum.nvidia.quantization import AmmoQuantizationConfig
 from optimum.nvidia.utils import get_user_agent
-from transformers import AutoConfig, PretrainedConfig
 
 
 SUPPORTED_DTYPES = [

@@ -2,12 +2,12 @@ import tempfile
 
 import pytest
 import torch
+from transformers import AutoConfig, AutoTokenizer
+from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 
 from optimum.nvidia import AutoModelForCausalLM
 from optimum.nvidia.quantization import AutoQuantizationConfig
 from optimum.nvidia.utils.tests.utils import requires_float8
-from transformers import AutoConfig, AutoTokenizer
-from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 
 
 @pytest.mark.parametrize(

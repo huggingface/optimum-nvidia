@@ -18,9 +18,9 @@ from pathlib import Path
 
 import torch
 from huggingface_hub import login
+from transformers import AutoProcessor
 
 from optimum.nvidia import setup_logging
-from transformers import AutoProcessor
 
 
 # Setup logging needs to happen before importing TRT ...

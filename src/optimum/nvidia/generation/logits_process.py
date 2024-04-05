@@ -1,5 +1,4 @@
 import torch
-
 from transformers import (
     ForceTokensLogitsProcessor,
     SuppressTokensAtBeginLogitsProcessor,
