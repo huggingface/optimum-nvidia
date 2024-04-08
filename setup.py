@@ -29,7 +29,7 @@ except Exception as error:
 INSTALL_REQUIRES = [
     "accelerate == 0.25",
     "datasets >= 2.14",
-    "huggingface-hub @ git+https://github.com/huggingface/huggingface_hub@45147c518ad3c1f70ecb462de4bf23cd553ba54b",
+    "huggingface-hub >= 0.22.0",
     "hf-transfer",
     "mpmath == 1.3.0",
     "numpy >= 1.26.0",
@@ -64,7 +64,7 @@ QUALITY_REQUIRES = [
 
 EXTRAS_REQUIRE = {
     "tests": TESTS_REQUIRES,
-    "quality": QUALITY_REQUIRES,
+#     "quality": QUALITY_REQUIRES,
 }
 
 setup(

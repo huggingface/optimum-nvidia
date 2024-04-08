@@ -26,7 +26,7 @@ classifiers = [
 dependencies = [
     "accelerate == 0.25",
     "datasets >= 2.14.0",
-    "huggingface-hub ~= 0.22.0",
+    "huggingface-hub >= 0.22.0",
     "hf-transfer",
     "mpmath == 1.3.0",
     "numpy >= 1.26.0",
@@ -49,7 +49,7 @@ Issues = "https://github.com/huggingface/optimum-nvidia/issues"
 # List additional dependencies
 [project.optional-dependencies]
 test = ["mock", "pytest", "pytest-xdist", "psutil", "parameterized", "datasets", "safetensors",]
-quality = ["black", "ruff", "isort", "hf_doc_builder @ git+https://github.com/huggingface/doc-builder.git",]
+# quality = ["black", "ruff", "isort", "hf_doc_builder @ git+https://github.com/huggingface/doc-builder.git",]
 
 # Configure build system
 [build-system]
