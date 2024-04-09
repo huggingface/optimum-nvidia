@@ -43,6 +43,7 @@ from tensorrt_llm.plugin import PluginConfig
 from tensorrt_llm.runtime import GenerationSession, ModelConfig, SamplingConfig
 from tensorrt_llm.runtime.generation import LogitsProcessorList
 from tensorrt_llm.runtime.session import Session, TensorInfo
+
 from transformers import GenerationConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
 from transformers.models.whisper.generation_whisper import WhisperGenerationMixin
@@ -1078,7 +1079,7 @@ class WhisperForConditionalGeneration(
         def raise_unsupported(value: Any, name: str, default: Any = None):
             if value != default:
                 raise ValueError(
-                    f"TensorRTForSpeechSeq2Seq.generate does not support {name} (got {value}). Please open an issue at https://github.com/huggingface/optimum-nvidia/issues."
+                    f"TensorRTForSpeechSeq2Seq.generate does not support the argument {name} (got {name}={value}). Please open an issue at https://github.com/huggingface/optimum-nvidia/issues."
                 )
 
         raise_unsupported(stopping_criteria, name="stopping_criteria")
