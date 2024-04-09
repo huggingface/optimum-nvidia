@@ -52,10 +52,7 @@ def test_generation(model_type: str):
 
         inp = tokenizer(prompts, padding=True, return_tensors="pt").to("cuda")
 
-        with torch.device("cuda"):
-            torch_model = TransformersAutoModelForCausalLM.from_pretrained(
-                model_id, torch_dtype=torch_dtype, attn_implementation="eager"
-            )
+        torch_model = TransformersAutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch_dtype, attn_implementation="eager")
         torch_model = torch_model.eval()
         torch_model = torch_model.to("cuda")  # TODO: remove?
 
