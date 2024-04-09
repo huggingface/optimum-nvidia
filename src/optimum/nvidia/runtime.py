@@ -28,7 +28,8 @@ from transformers.generation.utils import GenerationMixin
 
 
 if TYPE_CHECKING:
-    from transformers import PretrainedConfig
+    from transformers import PretrainedConfig, PreTrainedModel
+    from transformers.generation.streamers import BaseStreamer
     from transformers.generation.logits_process import LogitsProcessorList
     from transformers.generation.stopping_criteria import StoppingCriteriaList
 
@@ -257,7 +258,7 @@ class CausalLM(CompiledModel, GenerationMixin):
             # For some reason not in line with Transformers in case we finish early with BOS token (missing last BOS token).
             if total_length - input_length < max_new_tokens:
                 total_length += 1
-            
+
             return output_ids[:, :total_length], total_length
 
     def _prepare_inputs(

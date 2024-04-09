@@ -14,7 +14,6 @@
 #  limitations under the License.
 
 import gc
-from typing import Optional
 
 import pytest
 import torch
@@ -39,7 +38,7 @@ def test_generation(model_type: str):
 
     # TODO: test batched generation as well.
     # TODO: This is flaky depending on the prompt for Mistral / Gemma, maybe see if it is a bug or not.
-    prompts = ["Today I am in Paris and I would like to eat crepes."]  
+    prompts = ["Today I am in Paris and I would like to eat crepes."]
 
     max_new_tokens = 40
 
