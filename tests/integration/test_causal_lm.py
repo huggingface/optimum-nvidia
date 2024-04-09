@@ -45,7 +45,7 @@ def test_generation(model_type: str):
 
     for model_id in model_ids:
         # Make sure we remove the potentially already built engines.
-        # clean_cached_engines_for_model(model_id)
+        clean_cached_engines_for_model(model_id)
 
         tokenizer = AutoTokenizer.from_pretrained(model_id)
         tokenizer.pad_token = tokenizer.eos_token
