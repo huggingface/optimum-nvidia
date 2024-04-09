@@ -141,7 +141,7 @@ class TextGenerationPipeline(Pipeline):
         prompt_text = model_inputs.pop("prompt_text")
         attention_mask = model_inputs.get("attention_mask", None)
 
-        max_new_tokens = generate_kwargs.pop("max_new_tokens", -1)
+        max_new_tokens = generate_kwargs.pop("max_new_tokens", None)
         min_length = generate_kwargs.pop("min_length", -1)
         num_beams = generate_kwargs.pop("num_beams", 1)
         temperature = generate_kwargs.pop("temperature", 1.0)
@@ -234,13 +234,13 @@ class TextGenerationPipeline(Pipeline):
 
         for sequence in generated_sequence:
             # Decode text
-            beam_text = self.tokenizer.batch_decode(
+            text = self.tokenizer.decode(
                 sequence,
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=clean_up_tokenization_spaces,
             )
 
-            record = {"generated_text": beam_text}
+            record = {"generated_text": text}
             records.append(record)
 
         return records
