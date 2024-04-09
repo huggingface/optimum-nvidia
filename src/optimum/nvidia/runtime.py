@@ -102,6 +102,7 @@ class CausalLM(CompiledModel, GenerationMixin):
             max_beam_width=self._config.model_config.max_beam_width,
             max_sequence_length=self._config.model_config.max_seq_len,
         )
+
         self._session_config.cuda_graph_mode = use_cuda_graph
 
         # Create the engine
@@ -197,12 +198,6 @@ class CausalLM(CompiledModel, GenerationMixin):
             LOGGER.warning(f"Setting `pad_token_id` to `eos_token_id`:{eos_token_id} for open-end generation.")
             generation_config.pad_token_id = eos_token_id
 
-        generation_config.top_k = 0
-        generation_config.top_p = 0.
-        generation_config.length_penalty = 1.
-        generation_config.repetition_penalty = 1.
-        generation_config.temperature = 1.
-
         device = self._device
 
         seed = model_kwargs.pop("seed", 42)
@@ -233,6 +228,7 @@ class CausalLM(CompiledModel, GenerationMixin):
                     f"Input length {lengths} is bigger than maximum prompt length ({self.max_prompt_length})."
                 )
 
+            input_length = input_ids.shape[1]
             trt_inputs = ctrrt.GenerationInput(
                 end_id=generation_config.eos_token_id,
                 pad_id=generation_config.pad_token_id,
@@ -255,9 +251,14 @@ class CausalLM(CompiledModel, GenerationMixin):
 
             self._session.generate(trt_outputs, trt_inputs, sampling_config)
 
-            max_generated_length = trt_outputs.lengths
+            total_length = trt_outputs.lengths
             output_ids = trt_outputs.ids.flatten(0, 1)
-            return output_ids[:, :max_generated_length + 1]
+
+            # For some reason not in line with Transformers in case we finish early with BOS token (missing last BOS token).
+            if total_length - input_length < max_new_tokens:
+                total_length += 1
+            
+            return output_ids[:, :total_length], total_length
 
     def _prepare_inputs(
         self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None

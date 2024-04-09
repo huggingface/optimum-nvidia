@@ -32,6 +32,6 @@ def clean_cached_engines_for_model(model_id: str):
                 revision = f.read()
         cached_path = Path(full_model_path, "snapshots", revision)
 
-        for path in [cached_path / "encoder", cached_path / "decoder"]:
+        for path in [cached_path / "encoder", cached_path / "decoder", cached_path / "engines"]:
             if path.exists() and path.is_dir():
                 shutil.rmtree(path)

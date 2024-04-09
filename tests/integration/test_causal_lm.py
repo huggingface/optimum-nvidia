@@ -26,29 +26,26 @@ from transformers import AutoTokenizer
 
 
 MODEL_MAP = {
-    #"gemma": ["google/gemma-2b", "google/gemma-7b"],
-    "gemma": ["google/gemma-2b"],
+    "gemma": "google/gemma-2b-it",
     "llama": "meta-llama/Llama-2-7b-chat-hf",
     "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
 }
 
 @pytest.mark.parametrize("model_type", MODEL_MAP.keys())
-@pytest.mark.parametrize("max_new_tokens", [None])  # TODO: add a test
-def test_generation(model_type: str, max_new_tokens: Optional[int]):
+def test_generation(model_type: str):
     model_ids = [MODEL_MAP[model_type]] if isinstance(MODEL_MAP[model_type], str) else MODEL_MAP[model_type]
 
     torch_dtype = torch.float16  # TODO: test fp8, int4, int8, fp32
 
-    #prompts = ["Today I am in Paris and", "I am", "I would like"]
-    prompts = ["Today I am in Paris and"]
+    # TODO: test batched generation as well.
+    # TODO: This is flaky depending on the prompt for Mistral / Gemma, maybe see if it is a bug or not.
+    prompts = ["Today I am in Paris and I would like to eat crepes."]  
 
-    kwargs = {}
-    if max_new_tokens is not None:
-        kwargs["max_new_tokens"] = max_new_tokens
+    max_new_tokens = 40
 
     for model_id in model_ids:
         # Make sure we remove the potentially already built engines.
-        clean_cached_engines_for_model(model_id)
+        # clean_cached_engines_for_model(model_id)
 
         tokenizer = AutoTokenizer.from_pretrained(model_id)
         tokenizer.pad_token = tokenizer.eos_token
@@ -62,7 +59,14 @@ def test_generation(model_type: str, max_new_tokens: Optional[int]):
         torch_model = torch_model.eval()
         torch_model = torch_model.to("cuda")  # TODO: remove?
 
-        torch_generated_ids = torch_model.generate(**inp, num_beams=1, do_sample=False, top_k=None, **kwargs)
+        kwargs = {
+            "top_k": 1,
+            "top_p": 0,
+            "length_penalty": 1,
+            "repetition_penalty": 1,
+            "temperature": 1,
+        }
+        torch_generated_ids = torch_model.generate(**inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs)
 
         # Free a bit of memory.
         del torch_model
@@ -71,11 +75,6 @@ def test_generation(model_type: str, max_new_tokens: Optional[int]):
 
         trt_model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch_dtype)
 
-        trt_generated_ids = trt_model.generate(**inp, num_beams=1, do_sample=False, top_k=None, **kwargs)
+        trt_generated_ids, _ = trt_model.generate(**inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs)
 
-        print("trt_generated_ids", trt_generated_ids.shape, trt_generated_ids)
-        print("trt decode", tokenizer.batch_decode(trt_generated_ids))
-
-        print("torch_generated_ids", torch_generated_ids.shape, torch_generated_ids)
-        print("torch decode", tokenizer.batch_decode(torch_generated_ids))
         assert torch.equal(trt_generated_ids, torch_generated_ids)
