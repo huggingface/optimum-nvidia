@@ -27,7 +27,7 @@ from optimum.nvidia.pipelines import pipeline
 
 
 MODEL_MAP = {
-    "gemma": "google/gemma-2b-it",
+    "gemma": ["google/gemma-2b-it", "google/gemma-7b-it"],
     "llama": "meta-llama/Llama-2-7b-chat-hf",
     "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
 }
