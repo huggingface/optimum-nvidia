@@ -383,17 +383,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         except OSError:
             generation_config = None
 
-        transformers_config = AutoConfig.from_pretrained(
-            model_id,
-            revision=revision,
-            cache_dir=cache_dir,
-            force_download=force_download,
-            proxies=proxies,
-            resume_download=resume_download,
-            local_files_only=local_files_only,
-            token=token,
-        )
-
+        transformers_config = AutoConfig.for_model(**config)
         model = cls(
             engines_folders,
             gpus_per_node=model_kwargs.pop("gpus_per_node", 1),
