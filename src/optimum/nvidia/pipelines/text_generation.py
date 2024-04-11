@@ -49,7 +49,9 @@ class TextGenerationPipeline(Pipeline):
         self.tokenizer = tokenizer
         self._runtime = model
 
-    def __call__(self, inputs: Union[str, List[str]], add_special_tokens: bool = True, **kwargs):
+    def __call__(
+        self, inputs: Union[str, List[str]], add_special_tokens: bool = True, **kwargs
+    ):
         (
             preprocess_params,
             forward_params,

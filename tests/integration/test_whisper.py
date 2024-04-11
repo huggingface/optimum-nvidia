@@ -21,13 +21,13 @@ from typing import Optional
 import datasets
 import pytest
 import torch
-from utils_testing import clean_cached_engines_for_model
-
-from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
 from transformers import AutoProcessor
 from transformers import (
     WhisperForConditionalGeneration as TransformersWhisperForConditionalGeneration,
 )
+from utils_testing import clean_cached_engines_for_model
+
+from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
 
 
 TEST_MODELS = [

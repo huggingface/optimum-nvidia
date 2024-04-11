@@ -43,7 +43,6 @@ from tensorrt_llm.plugin import PluginConfig
 from tensorrt_llm.runtime import GenerationSession, ModelConfig, SamplingConfig
 from tensorrt_llm.runtime.generation import LogitsProcessorList
 from tensorrt_llm.runtime.session import Session, TensorInfo
-
 from transformers import GenerationConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
 from transformers.models.whisper.generation_whisper import WhisperGenerationMixin

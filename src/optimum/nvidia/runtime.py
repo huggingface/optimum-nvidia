@@ -22,16 +22,15 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import tensorrt_llm.bindings as ctrrt
 import torch
-
 from transformers import GenerationConfig
 from transformers.generation.utils import GenerationMixin
 
 
 if TYPE_CHECKING:
     from transformers import PretrainedConfig, PreTrainedModel
-    from transformers.generation.streamers import BaseStreamer
     from transformers.generation.logits_process import LogitsProcessorList
     from transformers.generation.stopping_criteria import StoppingCriteriaList
+    from transformers.generation.streamers import BaseStreamer
 
 LOGGER = getLogger(__name__)
 
@@ -137,7 +136,9 @@ class CausalLM(CompiledModel, GenerationMixin):
         generation_config: Optional[GenerationConfig] = None,
         logits_processor: Optional["LogitsProcessorList"] = None,
         stopping_criteria: Optional["StoppingCriteriaList"] = None,
-        prefix_allowed_tokens_fn: Optional[Callable[[int, torch.Tensor], List[int]]] = None,
+        prefix_allowed_tokens_fn: Optional[
+            Callable[[int, torch.Tensor], List[int]]
+        ] = None,
         synced_gpus: Optional[bool] = None,
         assistant_model: Optional["PreTrainedModel"] = None,
         streamer: Optional["BaseStreamer"] = None,
@@ -145,7 +146,6 @@ class CausalLM(CompiledModel, GenerationMixin):
         negative_prompt_attention_mask: Optional[torch.Tensor] = None,
         **kwargs,
     ) -> torch.LongTensor:
-
         def raise_unsupported(value: Any, name: str, default: Any = None):
             if value != default:
                 raise ValueError(
@@ -159,7 +159,9 @@ class CausalLM(CompiledModel, GenerationMixin):
         raise_unsupported(assistant_model, name="assistant_model")
         raise_unsupported(streamer, name="streamer")
         raise_unsupported(negative_prompt_ids, name="negative_prompt_ids")
-        raise_unsupported(negative_prompt_attention_mask, name="negative_prompt_attention_mask")
+        raise_unsupported(
+            negative_prompt_attention_mask, name="negative_prompt_attention_mask"
+        )
 
         # priority: `generation_config` argument > `model.generation_config` (the default generation config)
         if generation_config is None:
@@ -170,7 +172,8 @@ class CausalLM(CompiledModel, GenerationMixin):
             # 3) the user must have set generation parameters in the model config.
             if (
                 self.generation_config._from_model_config
-                and self.generation_config._original_object_hash == hash(self.generation_config)
+                and self.generation_config._original_object_hash
+                == hash(self.generation_config)
                 and self.config._has_non_default_generation_parameters()
             ):
                 new_generation_config = GenerationConfig.from_model_config(self.config)
@@ -185,9 +188,14 @@ class CausalLM(CompiledModel, GenerationMixin):
             generation_config = self.generation_config
 
         generation_config = copy.deepcopy(generation_config)
-        model_kwargs = generation_config.update(**kwargs)  # All unused kwargs must be model kwargs
+        model_kwargs = generation_config.update(
+            **kwargs
+        )  # All unused kwargs must be model kwargs
 
-        if generation_config.pad_token_id is None and generation_config.eos_token_id is not None:
+        if (
+            generation_config.pad_token_id is None
+            and generation_config.eos_token_id is not None
+        ):
             if model_kwargs.get("attention_mask", None) is None:
                 LOGGER.warning(
                     "The attention mask and the pad token id were not set. As a consequence, you may observe "
@@ -196,14 +204,18 @@ class CausalLM(CompiledModel, GenerationMixin):
             eos_token_id = generation_config.eos_token_id
             if isinstance(eos_token_id, list):
                 eos_token_id = eos_token_id[0]
-            LOGGER.warning(f"Setting `pad_token_id` to `eos_token_id`:{eos_token_id} for open-end generation.")
+            LOGGER.warning(
+                f"Setting `pad_token_id` to `eos_token_id`:{eos_token_id} for open-end generation."
+            )
             generation_config.pad_token_id = eos_token_id
 
         device = self._device
 
         seed = model_kwargs.pop("seed", 42)
         # If no GenerationConfig is provided, let's allocate one with default settings
-        sampling_config = ctrrt.SamplingConfig(min(generation_config.num_beams, self.max_beam_width))
+        sampling_config = ctrrt.SamplingConfig(
+            min(generation_config.num_beams, self.max_beam_width)
+        )
         sampling_config.random_seed = [seed]
         sampling_config.temperature = [generation_config.temperature]
         sampling_config.top_k = [generation_config.top_k]
