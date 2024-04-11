@@ -689,7 +689,7 @@ class WhisperForConditionalGeneration(
             generation_config = GenerationConfig()
         self.generation_config = generation_config
 
-        self.transformers_config = transformers_config
+        self.config = transformers_config
 
         # Encoder.
         serialize_path = engines_folders[0] / "rank0.engine"
@@ -1078,7 +1078,7 @@ class WhisperForConditionalGeneration(
         def raise_unsupported(value: Any, name: str, default: Any = None):
             if value != default:
                 raise ValueError(
-                    f"TensorRTForSpeechSeq2Seq.generate does not support {name} (got {value}). Please open an issue at https://github.com/huggingface/optimum-nvidia/issues."
+                    f"TensorRTForSpeechSeq2Seq.generate does not support the argument {name} (got {name}={value}). Please open an issue at https://github.com/huggingface/optimum-nvidia/issues."
                 )
 
         raise_unsupported(stopping_criteria, name="stopping_criteria")
@@ -1109,7 +1109,7 @@ class WhisperForConditionalGeneration(
         )
         self._set_token_ids(
             generation_config=generation_config,
-            config=self.transformers_config,
+            config=self.config,
             kwargs=kwargs,
         )
         self._set_thresholds_and_condition(
@@ -1126,9 +1126,7 @@ class WhisperForConditionalGeneration(
         batch_size, total_input_frames = self._retrieve_total_input_frames(
             input_features=inputs, input_stride=input_stride, kwargs=kwargs
         )
-        num_segment_frames = (
-            input_stride * self.transformers_config.max_source_positions
-        )
+        num_segment_frames = input_stride * self.config.max_source_positions
         is_shortform = total_input_frames <= num_segment_frames
         if not is_shortform:
             raise ValueError(
@@ -1138,7 +1136,7 @@ class WhisperForConditionalGeneration(
         init_tokens = self._retrieve_init_tokens(
             inputs,
             generation_config=generation_config,
-            config=self.transformers_config,
+            config=self.config,
             num_segment_frames=num_segment_frames,
             kwargs=kwargs,
         )
@@ -1171,16 +1169,16 @@ class WhisperForConditionalGeneration(
 
         if (
             max_new_tokens + decoder_input_ids.shape[-1]
-            > self.transformers_config.max_target_positions
+            > self.config.max_target_positions
         ):
             max_new_tokens = kwargs.get("max_new_tokens", 0)
             raise ValueError(
                 f"The length of `decoder_input_ids` equal `prompt_ids` plus special start tokens is {decoder_input_ids.shape[-1]}, and the `max_new_tokens` "
                 f"is {max_new_tokens}. Thus, the combined length of "
                 f"`decoder_input_ids` and `max_new_tokens` is: {max_new_tokens + decoder_input_ids.shape[-1]}. This exceeds the "
-                f"`max_target_positions` of the Whisper model: {self.transformers_config.max_target_positions}. "
+                f"`max_target_positions` of the Whisper model: {self.config.max_target_positions}. "
                 "You should either reduce the length of your prompt, or reduce the value of `max_new_tokens`, "
-                f"so that their combined length is less than {self.transformers_config.max_target_positions}."
+                f"so that their combined length is less than {self.config.max_target_positions}."
             )
 
         encoder_input_lengths = torch.tensor(

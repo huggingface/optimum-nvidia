@@ -13,20 +13,19 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import shutil
 import tempfile
 from glob import glob
 from pathlib import Path
 from typing import Optional
 
 import datasets
-import huggingface_hub
 import pytest
 import torch
 from transformers import AutoProcessor
 from transformers import (
     WhisperForConditionalGeneration as TransformersWhisperForConditionalGeneration,
 )
+from utils_testing import clean_cached_engines_for_model
 
 from optimum.nvidia.models.whisper import WhisperForConditionalGeneration
 
@@ -36,24 +35,6 @@ TEST_MODELS = [
     "openai/whisper-large-v3",
     "distil-whisper/distil-medium.en",
 ]
-
-
-def clean_cached_engines_for_model(model_id: str):
-    cache_dir = huggingface_hub.constants.HUGGINGFACE_HUB_CACHE
-    object_id = model_id.replace("/", "--")
-    full_model_path = Path(cache_dir, f"models--{object_id}")
-    if full_model_path.is_dir():
-        # Resolve refs (for instance to convert main to the associated commit sha)
-        revision_file = Path(full_model_path, "refs", "main")
-        revision = ""
-        if revision_file.is_file():
-            with open(revision_file) as f:
-                revision = f.read()
-        cached_path = Path(full_model_path, "snapshots", revision)
-
-        for path in [cached_path / "encoder", cached_path / "decoder"]:
-            if path.exists() and path.is_dir():
-                shutil.rmtree(path)
 
 
 @pytest.mark.parametrize("model_id", TEST_MODELS)

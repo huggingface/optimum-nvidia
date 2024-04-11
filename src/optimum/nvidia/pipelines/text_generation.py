@@ -38,9 +38,6 @@ class TextGenerationPipeline(Pipeline):
     __slots__ = (
         "tokenizer",
         "_runtime",
-        "_bos_token_id",
-        "_eos_token_id",
-        "_pad_token_id",
     )
 
     def __init__(self, model: CausalLM, tokenizer: PreTrainedTokenizer):
@@ -52,16 +49,15 @@ class TextGenerationPipeline(Pipeline):
         self.tokenizer = tokenizer
         self._runtime = model
 
-        self._bos_token_id = tokenizer.bos_token_id
-        self._eos_token_id = tokenizer.eos_token_id
-        self._pad_token_id = tokenizer.pad_token_id
-
-    def __call__(self, inputs: Union[str, List[str]], **kwargs):
+    def __call__(
+        self, inputs: Union[str, List[str]], add_special_tokens: bool = True, **kwargs
+    ):
         (
             preprocess_params,
             forward_params,
             postprocess_params,
-        ) = self._sanitize_parameters(**kwargs)
+        ) = self._sanitize_parameters(add_special_tokens=add_special_tokens, **kwargs)
+
         model_inputs = self.preprocess(inputs, **preprocess_params)
         model_outputs = self._forward(model_inputs, **forward_params)
         outputs = self.postprocess(model_outputs, **postprocess_params)
@@ -147,7 +143,7 @@ class TextGenerationPipeline(Pipeline):
         prompt_text = model_inputs.pop("prompt_text")
         attention_mask = model_inputs.get("attention_mask", None)
 
-        max_new_tokens = generate_kwargs.pop("max_new_tokens", -1)
+        max_new_tokens = generate_kwargs.pop("max_new_tokens", None)
         min_length = generate_kwargs.pop("min_length", -1)
         num_beams = generate_kwargs.pop("num_beams", 1)
         temperature = generate_kwargs.pop("temperature", 1.0)
@@ -188,9 +184,6 @@ class TextGenerationPipeline(Pipeline):
             repetition_penalty=repetition_penalty,
             length_penalty=length_penalty,
             seed=seed,
-            bos_token_id=self._bos_token_id,
-            eos_token_id=self._eos_token_id,
-            pad_token_id=self._pad_token_id,
         )
 
         return {
@@ -243,13 +236,13 @@ class TextGenerationPipeline(Pipeline):
 
         for sequence in generated_sequence:
             # Decode text
-            beam_text = self.tokenizer.batch_decode(
+            text = self.tokenizer.decode(
                 sequence,
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=clean_up_tokenization_spaces,
             )
 
-            record = {"generated_text": beam_text}
+            record = {"generated_text": text}
             records.append(record)
 
         return records

@@ -13,19 +13,24 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import copy
 import warnings
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Tuple, Union
 
 import tensorrt_llm.bindings as ctrrt
 import torch
 from transformers import GenerationConfig
+from transformers.generation.utils import GenerationMixin
 
 
 if TYPE_CHECKING:
-    from transformers import PretrainedConfig
+    from transformers import PretrainedConfig, PreTrainedModel
+    from transformers.generation.logits_process import LogitsProcessorList
+    from transformers.generation.stopping_criteria import StoppingCriteriaList
+    from transformers.generation.streamers import BaseStreamer
 
 LOGGER = getLogger(__name__)
 
@@ -53,7 +58,9 @@ class CompiledModel:
         return self._engines_folders_path
 
 
-class CausalLM(CompiledModel):
+class CausalLM(CompiledModel, GenerationMixin):
+    main_input_name = "input_ids"
+
     __slots__ = (
         "_device",
         "_config",
@@ -95,16 +102,28 @@ class CausalLM(CompiledModel):
             max_beam_width=self._config.model_config.max_beam_width,
             max_sequence_length=self._config.model_config.max_seq_len,
         )
+
         self._session_config.cuda_graph_mode = use_cuda_graph
 
         # Create the engine
         engine_file = self._config.engine_filename(self._mapping)
-        self._session = ctrrt.GptSession(
-            config=self._session_config,
-            model_config=self._config.model_config,
-            world_config=self._mapping,
-            engine_file=str(engines_folder.joinpath(engine_file)),
-        )
+
+        try:
+            self._session = ctrrt.GptSession(
+                config=self._session_config,
+                model_config=self._config.model_config,
+                world_config=self._mapping,
+                engine_file=str(engines_folder.joinpath(engine_file)),
+            )
+        except RuntimeError as e:
+            if "maxTokensInPagedKvCache" in repr(
+                e
+            ) and "must be large enough to process at least 1 sequence" in repr(e):
+                raise RuntimeError(
+                    f"Could not initialize TensorRT-LLM decoder session, likely due a large maximum output length set at compilation time (max_output_len={self._config.model_config.max_seq_len}). Please try and set a lower value for `max_output_length` when building the engine. Error: {e}"
+                )
+            else:
+                raise e
 
         # Additional cached properties
         self._use_packed_inputs = self._config.model_config.use_packed_input
@@ -118,61 +137,131 @@ class CausalLM(CompiledModel):
             generation_config = GenerationConfig()
         self.generation_config = generation_config
 
-        self.transformers_config = transformers_config
+        # Required for GenerationMixin compatibility.
+        self.config = transformers_config
 
-    @property
-    def config(self) -> ctrrt.GptJsonConfig:
-        return self._config
-
+    @torch.no_grad()
     def generate(
         self,
-        input_ids: torch.Tensor,
-        attention_mask: Optional[torch.Tensor] = None,
-        max_new_tokens: int = -1,
-        min_length: int = -1,
-        num_beams: int = 1,
-        temperature: float = 1.0,
-        top_k: int = 50,
-        top_p: float = 1.0,
-        repetition_penalty: float = 1.0,
-        length_penalty: float = 1.0,
-        seed: int = 0,
-        pad_token_id: int = 0,
-        bos_token_id: int = 1,
-        eos_token_id: int = 2,
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        inputs: Optional[torch.Tensor] = None,
+        generation_config: Optional[GenerationConfig] = None,
+        logits_processor: Optional["LogitsProcessorList"] = None,
+        stopping_criteria: Optional["StoppingCriteriaList"] = None,
+        prefix_allowed_tokens_fn: Optional[
+            Callable[[int, torch.Tensor], List[int]]
+        ] = None,
+        synced_gpus: Optional[bool] = None,
+        assistant_model: Optional["PreTrainedModel"] = None,
+        streamer: Optional["BaseStreamer"] = None,
+        negative_prompt_ids: Optional[torch.Tensor] = None,
+        negative_prompt_attention_mask: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> torch.LongTensor:
+        def raise_unsupported(value: Any, name: str, default: Any = None):
+            if value != default:
+                raise ValueError(
+                    f"{self.__class__.__name__}.generate does not support the argument {name} (got {name}={value}). Please open an issue at https://github.com/huggingface/optimum-nvidia/issues."
+                )
+
+        raise_unsupported(stopping_criteria, name="stopping_criteria")
+        raise_unsupported(prefix_allowed_tokens_fn, name="prefix_allowed_tokens_fn")
+        raise_unsupported(synced_gpus, name="synced_gpus")
+        raise_unsupported(logits_processor, name="logits_processor")
+        raise_unsupported(assistant_model, name="assistant_model")
+        raise_unsupported(streamer, name="streamer")
+        raise_unsupported(negative_prompt_ids, name="negative_prompt_ids")
+        raise_unsupported(
+            negative_prompt_attention_mask, name="negative_prompt_attention_mask"
+        )
+
+        # priority: `generation_config` argument > `model.generation_config` (the default generation config)
+        if generation_config is None:
+            # legacy: users may modify the model configuration to control generation. To trigger this legacy behavior,
+            # three conditions must be met
+            # 1) the generation config must have been created from the model config (`_from_model_config` field);
+            # 2) the generation config must have seen no modification since its creation (the hash is the same);
+            # 3) the user must have set generation parameters in the model config.
+            if (
+                self.generation_config._from_model_config
+                and self.generation_config._original_object_hash
+                == hash(self.generation_config)
+                and self.config._has_non_default_generation_parameters()
+            ):
+                new_generation_config = GenerationConfig.from_model_config(self.config)
+                if new_generation_config != self.generation_config:
+                    warnings.warn(
+                        "You have modified the pretrained model configuration to control generation. This is a"
+                        " deprecated strategy to control generation and will be removed soon, in a future version."
+                        " Please use and modify the model generation configuration (see"
+                        " https://huggingface.co/docs/transformers/generation_strategies#default-text-generation-configuration )"
+                    )
+                    self.generation_config = new_generation_config
+            generation_config = self.generation_config
+
+        generation_config = copy.deepcopy(generation_config)
+        model_kwargs = generation_config.update(
+            **kwargs
+        )  # All unused kwargs must be model kwargs
+
+        if (
+            generation_config.pad_token_id is None
+            and generation_config.eos_token_id is not None
+        ):
+            if model_kwargs.get("attention_mask", None) is None:
+                LOGGER.warning(
+                    "The attention mask and the pad token id were not set. As a consequence, you may observe "
+                    "unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results."
+                )
+            eos_token_id = generation_config.eos_token_id
+            if isinstance(eos_token_id, list):
+                eos_token_id = eos_token_id[0]
+            LOGGER.warning(
+                f"Setting `pad_token_id` to `eos_token_id`:{eos_token_id} for open-end generation."
+            )
+            generation_config.pad_token_id = eos_token_id
+
         device = self._device
 
+        seed = model_kwargs.pop("seed", 42)
         # If no GenerationConfig is provided, let's allocate one with default settings
-        generation_config = ctrrt.SamplingConfig(min(num_beams, self.max_beam_width))
-        generation_config.random_seed = [seed]
-        generation_config.temperature = [temperature]
-        generation_config.top_k = [top_k]
-        generation_config.top_p = [top_p]
-        generation_config.repetition_penalty = [repetition_penalty]
-        generation_config.length_penalty = [length_penalty]
+        sampling_config = ctrrt.SamplingConfig(
+            min(generation_config.num_beams, self.max_beam_width)
+        )
+        sampling_config.random_seed = [seed]
+        sampling_config.temperature = [generation_config.temperature]
+        sampling_config.top_k = [generation_config.top_k]
+        sampling_config.top_p = [generation_config.top_p]
+        sampling_config.repetition_penalty = [generation_config.repetition_penalty]
+        sampling_config.length_penalty = [generation_config.length_penalty]
 
-        if min_length > 0:
-            generation_config.min_length = [min_length]
+        if generation_config.min_new_tokens is not None:
+            sampling_config.min_length = [generation_config.min_new_tokens]
+
+        input_ids, _, model_kwargs = self._prepare_model_inputs(
+            inputs, generation_config.bos_token_id, model_kwargs
+        )
 
         with torch.no_grad():
             if not isinstance(input_ids, torch.Tensor):
                 raise TypeError("input_ids should be a PyTorch tensor (torch.Tensor)")
 
+            attention_mask = model_kwargs["attention_mask"]
             input_ids, lengths = self._prepare_inputs(input_ids, attention_mask)
             if torch.any(torch.gt(lengths, self.max_prompt_length)):
                 raise ValueError(
                     f"Input length {lengths} is bigger than maximum prompt length ({self.max_prompt_length})."
                 )
 
+            input_length = input_ids.shape[1]
             trt_inputs = ctrrt.GenerationInput(
-                end_id=eos_token_id,
-                pad_id=pad_token_id,
+                end_id=generation_config.eos_token_id,
+                pad_id=generation_config.pad_token_id,
                 ids=input_ids.to(device),
                 lengths=lengths.to(device),
                 packed=self._use_packed_inputs,
             )
 
+            max_new_tokens = generation_config.max_new_tokens
             if max_new_tokens is None or max_new_tokens < 1:
                 max_new_tokens = self.max_output_length - input_ids.shape[1]
 
@@ -184,9 +273,16 @@ class CausalLM(CompiledModel):
                 lengths=torch.empty(0, device=device, dtype=torch.int32),
             )
 
-            self._session.generate(trt_outputs, trt_inputs, generation_config)
+            self._session.generate(trt_outputs, trt_inputs, sampling_config)
 
-            return trt_outputs.ids, trt_outputs.lengths
+            total_length = trt_outputs.lengths
+            output_ids = trt_outputs.ids.flatten(0, 1)
+
+            # For some reason not in line with Transformers in case we finish early with BOS token (missing last BOS token).
+            if total_length - input_length < max_new_tokens:
+                total_length += 1
+
+            return output_ids[:, :total_length], total_length
 
     def _prepare_inputs(
         self, input_ids: torch.Tensor, attention_mask: Optional[torch.Tensor] = None

@@ -79,7 +79,5 @@ if __name__ == "__main__":
         max_new_tokens=args.max_new_tokens,
     )
 
-    generated_text = tokenizer.batch_decode(
-        generated.flatten(0, 1), skip_special_tokens=True
-    )
+    generated_text = tokenizer.batch_decode(generated, skip_special_tokens=True)
     print(generated_text)

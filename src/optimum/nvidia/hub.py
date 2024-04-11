@@ -403,7 +403,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 "Please open-up an issue at https://github.com/huggingface/optimum-nvidia"
             )
 
-        self.transformers_config.save_pretrained(save_directory)
+        self.config.save_pretrained(save_directory)
         if self.generation_config is not None:
             self.generation_config.save_pretrained(save_directory)
 

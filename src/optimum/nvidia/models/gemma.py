@@ -75,6 +75,7 @@ class GemmaConfig(TensorRTConfig):
             share_embedding_table=False,
             max_lora_rank=64,
             quantization=qconfig,
+            rotary_base=config.rope_theta,
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
