@@ -107,12 +107,23 @@ class CausalLM(CompiledModel, GenerationMixin):
 
         # Create the engine
         engine_file = self._config.engine_filename(self._mapping)
-        self._session = ctrrt.GptSession(
-            config=self._session_config,
-            model_config=self._config.model_config,
-            world_config=self._mapping,
-            engine_file=str(engines_folder.joinpath(engine_file)),
-        )
+
+        try:
+            self._session = ctrrt.GptSession(
+                config=self._session_config,
+                model_config=self._config.model_config,
+                world_config=self._mapping,
+                engine_file=str(engines_folder.joinpath(engine_file)),
+            )
+        except RuntimeError as e:
+            if "maxTokensInPagedKvCache" in repr(
+                e
+            ) and "must be large enough to process at least 1 sequence" in repr(e):
+                raise RuntimeError(
+                    f"Could not initialize TensorRT-LLM decoder session, likely due a large maximum output length set at compilation time (max_output_len={self._config.model_config.max_seq_len}). Please try and set a lower value for `max_output_length` when building the engine. Error: {e}"
+                )
+            else:
+                raise e
 
         # Additional cached properties
         self._use_packed_inputs = self._config.model_config.use_packed_input

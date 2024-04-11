@@ -81,7 +81,7 @@ def test_generation(model_type: str):
         torch.cuda.empty_cache()
 
         trt_model = AutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=torch_dtype
+            model_id, torch_dtype=torch_dtype, max_output_length=1000
         )
 
         trt_generated_ids, _ = trt_model.generate(
@@ -109,7 +109,7 @@ def test_pipeline(model_type: str):
 
     for model_id in model_ids:
         # Make sure we remove the potentially already built engines.
-        # clean_cached_engines_for_model(model_id)
+        clean_cached_engines_for_model(model_id)
 
         pipe_torch = transformers_pipeline(
             task="text-generation",
@@ -131,7 +131,9 @@ def test_pipeline(model_type: str):
         gc.collect()
         torch.cuda.empty_cache()
 
-        pipe_trt = pipeline(task="text-generation", model=model_id)
+        pipe_trt = pipeline(
+            task="text-generation", model=model_id, max_output_length=1000
+        )
 
         with torch.no_grad():
             res_trt = pipe_trt(
