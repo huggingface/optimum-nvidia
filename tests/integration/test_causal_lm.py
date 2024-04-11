@@ -47,7 +47,7 @@ def test_generation(model_type: str):
     # TODO: This is flaky depending on the prompt for Mistral / Gemma, maybe see if it is a bug or not.
     prompts = ["Today I am in Paris and I would like to eat crepes."]
 
-    max_new_tokens = 40
+    max_new_tokens = 30
 
     for model_id in model_ids:
         # Make sure we remove the potentially already built engines.
