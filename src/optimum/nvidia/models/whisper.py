@@ -1126,9 +1126,7 @@ class WhisperForConditionalGeneration(
         batch_size, total_input_frames = self._retrieve_total_input_frames(
             input_features=inputs, input_stride=input_stride, kwargs=kwargs
         )
-        num_segment_frames = (
-            input_stride * self.config.max_source_positions
-        )
+        num_segment_frames = input_stride * self.config.max_source_positions
         is_shortform = total_input_frames <= num_segment_frames
         if not is_shortform:
             raise ValueError(
