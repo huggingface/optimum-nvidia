@@ -88,7 +88,9 @@ tokenizer = AutoTokenizer.from_pretrained("meta-llama/Llama-2-7b-chat-hf", paddi
 
 model = AutoModelForCausalLM.from_pretrained(
   "meta-llama/Llama-2-7b-chat-hf",
-+ use_fp8=True,  
++ use_fp8=True,
++ max_prompt_length=16_000,
++ max_batch_size=32,
 )
 
 model_inputs = tokenizer(["How is autonomous vehicle technology transforming the future of transportation and urban planning?"], return_tensors="pt").to("cuda")
