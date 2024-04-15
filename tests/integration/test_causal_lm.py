@@ -32,6 +32,7 @@ MODEL_MAP = {
     "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
 }
 
+
 @pytest.mark.parametrize("model_type", MODEL_MAP.keys())
 @pytest.mark.parametrize("batch_size", [1, 3])
 def test_generation(model_type: str, batch_size: int):
@@ -62,7 +63,9 @@ def test_generation(model_type: str, batch_size: int):
         inp = tokenizer(prompts, padding=True, return_tensors="pt").to("cuda")
 
         torch_model = TransformersAutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=torch_dtype, attn_implementation="eager",
+            model_id,
+            torch_dtype=torch_dtype,
+            attn_implementation="eager",
         )
         torch_model = torch_model.eval()
         torch_model = torch_model.to("cuda")  # TODO: remove?
@@ -84,7 +87,10 @@ def test_generation(model_type: str, batch_size: int):
         torch.cuda.empty_cache()
 
         trt_model = AutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=torch_dtype, max_output_length=1000, max_batch_size=batch_size,
+            model_id,
+            torch_dtype=torch_dtype,
+            max_output_length=1000,
+            max_batch_size=batch_size,
         )
 
         trt_generated_ids, _ = trt_model.generate(
@@ -97,7 +103,9 @@ def test_generation(model_type: str, batch_size: int):
         else:
             assert trt_generated_ids.shape == torch_generated_ids.shape
 
-        torch_text = tokenizer.batch_decode(torch_generated_ids, skip_special_tokens=True)
+        torch_text = tokenizer.batch_decode(
+            torch_generated_ids, skip_special_tokens=True
+        )
         trt_text = tokenizer.batch_decode(trt_generated_ids, skip_special_tokens=True)
 
         assert torch_text == trt_text
