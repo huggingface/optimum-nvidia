@@ -275,7 +275,7 @@ class CausalLM(CompiledModel, GenerationMixin):
 
             self._session.generate(trt_outputs, trt_inputs, sampling_config)
 
-            total_length = trt_outputs.lengths
+            total_length = trt_outputs.lengths.max().item()
             output_ids = trt_outputs.ids.flatten(0, 1)
 
             # For some reason not in line with Transformers in case we finish early with BOS token (missing last BOS token).
