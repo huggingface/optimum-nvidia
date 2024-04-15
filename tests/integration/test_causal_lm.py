@@ -32,9 +32,9 @@ MODEL_MAP = {
     "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
 }
 
-
 @pytest.mark.parametrize("model_type", MODEL_MAP.keys())
-def test_generation(model_type: str):
+@pytest.mark.parametrize("batch_size", [1, 3])
+def test_generation(model_type: str, batch_size: int):
     model_ids = (
         [MODEL_MAP[model_type]]
         if isinstance(MODEL_MAP[model_type], str)
@@ -46,6 +46,8 @@ def test_generation(model_type: str):
     # TODO: test batched generation as well.
     # TODO: This is flaky depending on the prompt for Mistral / Gemma, maybe see if it is a bug or not.
     prompts = ["Today I am in Paris and I would like to eat crepes."]
+    for _ in range(batch_size - 1):
+        prompts.append("I knew about a boy who played")
 
     max_new_tokens = 15
 
@@ -55,11 +57,12 @@ def test_generation(model_type: str):
 
         tokenizer = AutoTokenizer.from_pretrained(model_id)
         tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.padding_side = "left"
 
         inp = tokenizer(prompts, padding=True, return_tensors="pt").to("cuda")
 
         torch_model = TransformersAutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=torch_dtype, attn_implementation="eager"
+            model_id, torch_dtype=torch_dtype, attn_implementation="eager",
         )
         torch_model = torch_model.eval()
         torch_model = torch_model.to("cuda")  # TODO: remove?
@@ -81,14 +84,23 @@ def test_generation(model_type: str):
         torch.cuda.empty_cache()
 
         trt_model = AutoModelForCausalLM.from_pretrained(
-            model_id, torch_dtype=torch_dtype, max_output_length=1000
+            model_id, torch_dtype=torch_dtype, max_output_length=1000, max_batch_size=batch_size,
         )
 
         trt_generated_ids, _ = trt_model.generate(
             **inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
         )
 
-        assert torch.equal(trt_generated_ids, torch_generated_ids)
+        # TODO: left/right padding is not aligned between Transformers and TRT-LLM.
+        if batch_size == 1:
+            assert torch.equal(trt_generated_ids, torch_generated_ids)
+        else:
+            assert trt_generated_ids.shape == torch_generated_ids.shape
+
+        torch_text = tokenizer.batch_decode(torch_generated_ids, skip_special_tokens=True)
+        trt_text = tokenizer.batch_decode(trt_generated_ids, skip_special_tokens=True)
+
+        assert torch_text == trt_text
 
 
 @pytest.mark.parametrize("model_type", MODEL_MAP.keys())

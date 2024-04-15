@@ -240,6 +240,7 @@ class CausalLM(CompiledModel, GenerationMixin):
         input_ids, _, model_kwargs = self._prepare_model_inputs(
             inputs, generation_config.bos_token_id, model_kwargs
         )
+        input_length = input_ids.shape[1]
 
         with torch.no_grad():
             if not isinstance(input_ids, torch.Tensor):
@@ -252,7 +253,6 @@ class CausalLM(CompiledModel, GenerationMixin):
                     f"Input length {lengths} is bigger than maximum prompt length ({self.max_prompt_length})."
                 )
 
-            input_length = input_ids.shape[1]
             trt_inputs = ctrrt.GenerationInput(
                 end_id=generation_config.eos_token_id,
                 pad_id=generation_config.pad_token_id,
@@ -275,10 +275,10 @@ class CausalLM(CompiledModel, GenerationMixin):
 
             self._session.generate(trt_outputs, trt_inputs, sampling_config)
 
-            total_length = trt_outputs.lengths
+            total_length = trt_outputs.lengths.max().item()
             output_ids = trt_outputs.ids.flatten(0, 1)
 
-            # For some reason not in line with Transformers in case we finish early with BOS token (missing last BOS token).
+            # For some reason not in line with Transformers in case we finish early with EOS token (missing last EOS token).
             if total_length - input_length < max_new_tokens:
                 total_length += 1
 
