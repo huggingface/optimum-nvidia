@@ -17,8 +17,8 @@ from typing import Dict
 
 import numpy as np
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
-from tensorrt_llm.models.phi.model import PhiForCausalLM as TrtPhiForCausalLM
 from tensorrt_llm.models.phi.convert import convert_hf_phi
+from tensorrt_llm.models.phi.model import PhiForCausalLM as TrtPhiForCausalLM
 from tensorrt_llm.plugin import PluginConfig
 from transformers import PhiForCausalLM as TransformersPhiForCausalLM
 from transformers import PretrainedConfig as TransformersPretrainedConfig
@@ -103,9 +103,9 @@ class PhiForCausalLM(CausalLM, HuggingFaceHubModel):
 
     @staticmethod
     def convert_weights(
-            target: PretrainedModel,
-            source: TransformersPretrainedModel,
-            config: PretrainedConfig,
+        target: PretrainedModel,
+        source: TransformersPretrainedModel,
+        config: PretrainedConfig,
     ) -> Dict[str, np.ndarray]:
         if config.quant_mode.has_any_quant():
             raise NotImplementedError("Quantization is not supported yet.")

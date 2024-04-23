@@ -31,7 +31,7 @@ _SUPPORTED_MODEL_CLASS = {
     "llama": LlamaForCausalLM,
     "mistral": MistralForCausalLM,
     "gemma": GemmaForCausalLM,
-    "phi": PhiForCausalLM
+    "phi": PhiForCausalLM,
 }
 
 
