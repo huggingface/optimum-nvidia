@@ -34,6 +34,7 @@ MODEL_MAP = {
     "llama": "meta-llama/Llama-2-7b-chat-hf",
     "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
     "phi": ["microsoft/phi", "microsoft/phi-1.5", "microsoft/phi-2"],
+    "phi3": "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct/"
 }
 
 

@@ -24,7 +24,7 @@ from ..hub import extract_model_type
 from .gemma import GemmaForCausalLM
 from .llama import LlamaForCausalLM
 from .mistral import MistralForCausalLM
-from .phi import PhiForCausalLM
+from .phi import PhiForCausalLM, Phi3ForCausalLM
 
 
 _SUPPORTED_MODEL_CLASS = {
@@ -32,6 +32,7 @@ _SUPPORTED_MODEL_CLASS = {
     "mistral": MistralForCausalLM,
     "gemma": GemmaForCausalLM,
     "phi": PhiForCausalLM,
+    "phi3": Phi3ForCausalLM
 }
 
 

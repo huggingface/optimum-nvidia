@@ -27,6 +27,7 @@ from .hub import get_user_agent
 from .nvml import has_float8_support
 from .offload import maybe_offload_weights_to_cpu
 from .onnx import to_onnx
+from .safetensors import iter_safetensors
 
 
 def rgetattr(obj, attr):
