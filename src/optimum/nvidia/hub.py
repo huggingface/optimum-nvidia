@@ -19,6 +19,7 @@ from logging import getLogger
 from pathlib import Path
 from typing import (
     Any,
+    Callable,
     Dict,
     List,
     Optional,
@@ -26,7 +27,7 @@ from typing import (
     Tuple,
     Type,
     Union,
-    runtime_checkable, Callable,
+    runtime_checkable,
 )
 from warnings import warn
 
@@ -46,7 +47,11 @@ from optimum.nvidia.builder import LocalEngineBuilder
 from optimum.nvidia.builder.config import EngineConfigBuilder
 from optimum.nvidia.quantization import AutoQuantizationConfig
 from optimum.nvidia.quantization.ammo import AmmoQuantizer
-from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu, iter_safetensors
+from optimum.nvidia.utils import (
+    get_user_agent,
+    iter_safetensors,
+    maybe_offload_weights_to_cpu,
+)
 from optimum.nvidia.utils.nvml import get_max_memory
 
 
@@ -119,7 +124,9 @@ def find_prebuilt_engines(root: Path) -> Tuple[List[Path], List[Path]]:
 class SupportsTensorrtConversion(Protocol):
     MODEL_CONFIG: Type[TensorRTConfig]
     HF_LIBRARY_TARGET_MODEL_CLASS: Type[ModelHubMixin]
-    HF_CHECKPOINT_TRANSFORM_FN: Optional[Callable[[Dict[str, np.array]], Dict[str, np.array]]] = None
+    HF_CHECKPOINT_TRANSFORM_FN: Optional[
+        Callable[[Dict[str, np.array]], Dict[str, np.array]]
+    ] = None
     TRT_LLM_TARGET_MODEL_CLASS: Type[PretrainedModel]
 
     @staticmethod
@@ -160,6 +167,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         # Retrieve configuration
         if hf_model_config["model_type"] == "phi3":
             from transformers import PhiConfig
+
             config = PhiConfig.from_dict(hf_model_config)
             config.attention_bias = False
             config.model_type == "llama"

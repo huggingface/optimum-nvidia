@@ -18,13 +18,15 @@ from typing import Dict
 import numpy as np
 import torch
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
+from tensorrt_llm.models.llama.model import LLaMAForCausalLM as TrtLlamaForCausalLM
 from tensorrt_llm.models.llama.weight import load_from_hf_llama
 from tensorrt_llm.models.phi.convert import convert_hf_weights
 from tensorrt_llm.models.phi.model import PhiForCausalLM as TrtPhiForCausalLM
-from tensorrt_llm.models.llama.model import LLaMAForCausalLM as TrtLlamaForCausalLM
 from tensorrt_llm.plugin import PluginConfig
-from transformers import PhiForCausalLM as TransformersPhiForCausalLM, LlamaForCausalLM as TransformersLlamaForCausalLM
-from transformers import PretrainedConfig as TransformersPretrainedConfig, PreTrainedModel as TransformersPretrainedModel
+from transformers import LlamaForCausalLM as TransformersLlamaForCausalLM
+from transformers import PhiForCausalLM as TransformersPhiForCausalLM
+from transformers import PretrainedConfig as TransformersPretrainedConfig
+from transformers import PreTrainedModel as TransformersPretrainedModel
 
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.config import dtype_to_str
@@ -181,7 +183,9 @@ class PhiForCausalLM(CausalLM, HuggingFaceHubModel):
         }
 
 
-def transform_checkpoint_to_llama(params: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+def transform_checkpoint_to_llama(
+    params: Dict[str, torch.Tensor],
+) -> Dict[str, torch.Tensor]:
     state_dict = {}
     for name, tensor in params.items():
         if "qkv_proj" in name:
@@ -211,4 +215,3 @@ class Phi3ForCausalLM(CausalLM, HuggingFaceHubModel):
         config: PretrainedConfig,
     ) -> Dict[str, torch.Tensor]:
         return load_from_hf_llama(target, source, config.mapping, config.dtype)
-

@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
-from typing import Generator, Dict
+from typing import Dict, Generator
 
 import torch
 from safetensors.torch import load
-from transformers.modeling_utils import SAFE_WEIGHTS_NAME, SAFE_WEIGHTS_INDEX_NAME
+from transformers.modeling_utils import SAFE_WEIGHTS_INDEX_NAME, SAFE_WEIGHTS_NAME
 
 
 def iter_safetensors(path: Path) -> Generator[Dict[str, torch.Tensor], None, None]:
