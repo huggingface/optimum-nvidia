@@ -24,12 +24,14 @@ from ..hub import extract_model_type
 from .gemma import GemmaForCausalLM
 from .llama import LlamaForCausalLM
 from .mistral import MistralForCausalLM
+from .phi import PhiForCausalLM
 
 
 _SUPPORTED_MODEL_CLASS = {
     "llama": LlamaForCausalLM,
     "mistral": MistralForCausalLM,
     "gemma": GemmaForCausalLM,
+    "phi": PhiForCausalLM
 }
 
 
