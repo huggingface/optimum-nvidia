@@ -21,7 +21,7 @@ import torch
 from tensorrt_llm import Mapping
 from tensorrt_llm.models import PretrainedConfig as TensorRTPretrainedConfig
 from tensorrt_llm.models.modeling_utils import (
-    QuantizationConfig as TensorRTQuantizationConfig,
+    QuantConfig as TensorRTQuantizationConfig,
 )
 from tensorrt_llm.plugin import PluginConfig
 from tensorrt_llm.quantization import QuantMode
