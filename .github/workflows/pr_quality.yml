@@ -27,7 +27,6 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt update && apt install -y openmpi-bin libopenmpi-dev git
           python3 -m pip install black ruff isort
       - name: Check quality
         run: |
