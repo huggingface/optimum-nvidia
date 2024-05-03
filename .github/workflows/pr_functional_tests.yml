@@ -24,7 +24,7 @@ jobs:
         config:
           - name: GPU-Enabled Optimum-Nvidia Functional Test Suite
             runner: [ci, nvidia-gpu]
-            image: huggingface/optimum-nvidia:ci
+            image: nvidia/cuda:12.1.0-devel-ubuntu22.04
             report: dev
         cuda_arch: [sm_86, sm_89]
 
@@ -53,7 +53,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade -e .[quality,tests]
+          python3 -m pip install --upgrade -e .[quality,tests] --pre --extra-index-url https://pypi.nvidia.com 
 
       - name: Run nvidia-smi
         run: |
