@@ -43,6 +43,10 @@ jobs:
         shell: bash
 
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Checkout optimum-nvidia
         uses: actions/checkout@v4
         with:
