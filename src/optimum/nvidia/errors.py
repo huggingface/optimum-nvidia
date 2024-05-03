@@ -29,7 +29,7 @@ class OptimumNvidiaException(Exception):
 class UnsupportedModelException(OptimumNvidiaException):
     def __init__(self, model_type: str):
         super().__init__(
-        f"Model of type {model_type} is not supported. "
+            f"Model of type {model_type} is not supported. "
             "Please open-up an issue at https://github.com/huggingface/optimum-nvidia/issues"
         )
 
