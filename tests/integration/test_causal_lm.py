@@ -20,12 +20,11 @@ import torch
 from transformers import AutoModelForCausalLM as TransformersAutoModelForCausalLM
 from transformers import AutoTokenizer
 from transformers import pipeline as transformers_pipeline
-
-from optimum.nvidia.utils.tests.utils import requires_multi_gpu
 from utils_testing import clean_cached_engines_for_model
 
 from optimum.nvidia import AutoModelForCausalLM
 from optimum.nvidia.pipelines import pipeline
+from optimum.nvidia.utils.tests.utils import requires_multi_gpu
 
 
 MODEL_MAP = {

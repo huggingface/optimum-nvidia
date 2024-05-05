@@ -582,7 +582,7 @@ class TrtWhisperDecoderPretrainedModel(PretrainedModel):
         gather_context_logits: bool = False,
         gather_generation_logits: bool = False,
         lora_target_modules: List[str] = None,
-        **kwargs
+        **kwargs,
     ):
         if not use_cache:
             raise NotImplementedError("use_cache=False is not implemented for Whisper.")
