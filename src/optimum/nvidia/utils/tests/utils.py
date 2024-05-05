@@ -39,6 +39,8 @@ requires_gpu = pytest.mark.skipif(
     f"no GPU detected (num_gpus={get_device_count()})",
 )
 
+requires_multi_gpu = pytest.mark.skipif(get_device_count() > 1)
+
 
 def requires_gpu_compute_capabilities_ge(min_capabilities: int, device: int = 0):
     (major, minor) = get_device_compute_capabilities(device)
