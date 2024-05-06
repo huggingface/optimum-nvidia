@@ -37,6 +37,10 @@ MODEL_MAP = {
     "phi3": ["microsoft/Phi-3-mini-4k-instruct", "microsoft/Phi-3-mini-128k-instruct"],
 }
 
+MODEL_NEEDS_REMOTE_CODE = {
+    "phi3"
+}
+
 
 @pytest.mark.parametrize("model_type", MODEL_MAP.keys())
 @pytest.mark.parametrize("batch_size", [1, 3])
@@ -142,6 +146,7 @@ def test_pipeline(model_type: str):
             model=model_id,
             device="cuda:1",
             torch_dtype=torch.float16,
+            trust_remote_code=model_type in MODEL_NEEDS_REMOTE_CODE
         )
 
         with torch.no_grad():
