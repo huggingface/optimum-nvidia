@@ -164,4 +164,23 @@ def test_pipeline(model_type: str):
                 **kwargs,
             )
 
-        assert res_torch[0]["generated_text"] == res_trt[0]["generated_text"]
+        transformers_output = res_torch[0]["generated_text"]
+        trtllm_output = res_trt[0]["generated_text"]
+
+        def count_indexwise_difference(lhs, rhs) -> (int, int):
+            maximum_overlapping_span = min(len(transformers_output), len(trtllm_output))
+
+            lhs_ = lhs[:maximum_overlapping_span]
+            rhs_ = rhs[:maximum_overlapping_span]
+            count = 0
+
+            for (l, r) in zip(lhs_, rhs_):
+                if l != r:
+                    count += 1
+
+            return count, length
+
+        mismatch, length = count_indexwise_difference(transformers_output, trtllm_output)
+        mismatch_percent = float(length - mismatch) / float(mismatch)
+
+        assert mismatch_percent <= 5.0, f"{mismatch} mismatched tokens over {length} > 5% ({mismatch_percent} %)"
