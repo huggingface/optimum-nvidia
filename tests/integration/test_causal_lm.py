@@ -178,7 +178,7 @@ def test_pipeline(model_type: str):
                 if l != r:
                     count += 1
 
-            return count, length
+            return count, maximum_overlapping_span
 
         mismatch, length = count_indexwise_difference(
             transformers_output, trtllm_output
