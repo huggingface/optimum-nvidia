@@ -12,19 +12,23 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+from typing import Optional
 
 from optimum.nvidia.utils.nvml import SM_FP8_SUPPORTED
 
 
 class OptimumNvidiaException(Exception):
-    def __init__(self, operation: str, msg: str):
-        super().__init__(f"[{operation}] {msg}.")
+    def __init__(self, msg: str, operation: Optional[str] = None):
+        if operation:
+            super().__init__(f"[{operation}] {msg}.")
+        else:
+            super().__init__(f"{msg}")
 
 
 ### Model support
 class UnsupportedModelException(OptimumNvidiaException):
     def __init__(self, model_type: str):
-        super(
+        super().__init__(
             f"Model of type {model_type} is not supported. "
             "Please open-up an issue at https://github.com/huggingface/optimum-nvidia/issues"
         )
@@ -36,8 +40,8 @@ class UnsupportedHardwareFeature(OptimumNvidiaException):
     Base exception class for all features not supported by underlying hardware
     """
 
-    def __init__(self, msg):
-        super("feature", msg)
+    def __init__(self, msg, feature: str):
+        super(msg)
 
     @classmethod
     def float8(cls) -> "UnsupportedHardwareFeature":
@@ -50,7 +54,8 @@ class Float8NotSupported(UnsupportedHardwareFeature):
     """
 
     def __init__(self):
-        super(
+        super().__init__(
             "float8 is not supported on your device. "
-            f"Please use a device with compute capabilities {SM_FP8_SUPPORTED}"
+            f"Please use a device with compute capabilities {SM_FP8_SUPPORTED}",
+            "float8",
         )

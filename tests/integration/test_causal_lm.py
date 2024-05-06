@@ -24,6 +24,7 @@ from utils_testing import clean_cached_engines_for_model
 
 from optimum.nvidia import AutoModelForCausalLM
 from optimum.nvidia.pipelines import pipeline
+from optimum.nvidia.utils.tests.utils import requires_multi_gpu
 
 
 MODEL_MAP = {
@@ -111,6 +112,7 @@ def test_generation(model_type: str, batch_size: int):
         assert torch_text == trt_text
 
 
+@requires_multi_gpu
 @pytest.mark.parametrize("model_type", MODEL_MAP.keys())
 def test_pipeline(model_type: str):
     model_ids = (
@@ -134,7 +136,7 @@ def test_pipeline(model_type: str):
         pipe_torch = transformers_pipeline(
             task="text-generation",
             model=model_id,
-            device="cuda",
+            device="cuda:1",
             torch_dtype=torch.float16,
         )
 

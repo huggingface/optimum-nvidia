@@ -1,4 +1,4 @@
-name: GPU Enabled Functional Test on PRs
+name: GPU Enabled Integration Test on PRs
 
 on:
   pull_request:
@@ -26,7 +26,7 @@ jobs:
       matrix:
         config:
           - name: GPU-enabled Optimum-Nvidia Integration Test Suite
-            image: huggingface/optimum-nvidia:ci
+            image: nvidia/cuda:12.1.0-devel-ubuntu22.04
         cuda_arch: [sm_86, sm_89]
 
     name: ${{ matrix.config.name }}
@@ -43,18 +43,19 @@ jobs:
         shell: bash
 
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Checkout optimum-nvidia
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Uninstall optimum-nvidia before doing anything
-        run: |
-          python3 -m pip uninstall -y optimum-nvidia
-
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade -e .[quality,tests]
+          apt update && apt install -y openmpi-bin libopenmpi-dev git
+          python3 -m pip install --upgrade -e .[quality,tests]  --pre --extra-index-url https://pypi.nvidia.com
 
       - name: Run nvidia-smi
         run: |
