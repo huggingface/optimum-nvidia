@@ -19,6 +19,7 @@ from logging import getLogger
 from pathlib import Path
 from typing import (
     Any,
+    Callable,
     Dict,
     List,
     Optional,
@@ -46,7 +47,11 @@ from optimum.nvidia.builder import LocalEngineBuilder
 from optimum.nvidia.builder.config import EngineConfigBuilder
 from optimum.nvidia.quantization import AutoQuantizationConfig
 from optimum.nvidia.quantization.ammo import AmmoQuantizer
-from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
+from optimum.nvidia.utils import (
+    get_user_agent,
+    iter_safetensors,
+    maybe_offload_weights_to_cpu,
+)
 from optimum.nvidia.utils.nvml import get_max_memory
 
 
@@ -119,6 +124,9 @@ def find_prebuilt_engines(root: Path) -> Tuple[List[Path], List[Path]]:
 class SupportsTensorrtConversion(Protocol):
     MODEL_CONFIG: Type[TensorRTConfig]
     HF_LIBRARY_TARGET_MODEL_CLASS: Type[ModelHubMixin]
+    HF_CHECKPOINT_TRANSFORM_FN: Optional[
+        Callable[[Dict[str, np.array]], Dict[str, np.array]]
+    ] = None
     TRT_LLM_TARGET_MODEL_CLASS: Type[PretrainedModel]
 
     @staticmethod
@@ -157,7 +165,15 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             engines_folder.mkdir(exist_ok=True, parents=True)
 
         # Retrieve configuration
-        config = AutoConfig.for_model(**hf_model_config)
+        if hf_model_config["model_type"] == "phi3":
+            from transformers import PhiConfig
+
+            config = PhiConfig.from_dict(hf_model_config)
+            config.attention_bias = False
+            config.model_type == "llama"
+        else:
+            config = AutoConfig.for_model(**hf_model_config)
+
         if "torch_dtype" in model_kwargs:
             config.torch_dtype = model_kwargs["torch_dtype"]
 
@@ -165,6 +181,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         model_config = HuggingFaceHubModel.convert_config_to_trtllm(
             cls, config, config_class=config_class, **model_kwargs
         )
+
+        if config.architectures[0] == "Phi3ForCausalLM":
+            model_config.architecture = "LlamaForCausalLM"
 
         # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
         LOGGER.debug("Allocating TRTLLM model to build the checkpoint")
@@ -182,6 +201,21 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             engine_config.plugins_config = model_config.get_plugins_config()
 
         max_memory = get_max_memory()
+
+        if cls.HF_CHECKPOINT_TRANSFORM_FN:
+            LOGGER.info("Detected checkpoint transformation function")
+
+            transformed_state = {}
+            for state in iter_safetensors(local_path):
+                transformed_state |= cls.HF_CHECKPOINT_TRANSFORM_FN(state)
+
+            if transformed_state:
+                LOGGER.info(
+                    f"Loading the model from a transformed state_dict "
+                    f"({config.model_type} -> {cls.HF_LIBRARY_TARGET_MODEL_CLASS.config_class.model_type})"
+                )
+                hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS(config)
+                hf_model.load_state_dict(transformed_state)
 
         if hf_model is None:
             LOGGER.debug(
@@ -383,6 +417,8 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         except OSError:
             generation_config = None
 
+        if config["model_type"] == "phi3":
+            config["model_type"] = "llama"
         transformers_config = AutoConfig.for_model(**config)
         model = cls(
             engines_folders,

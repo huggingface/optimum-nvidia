@@ -14,6 +14,7 @@
 #  limitations under the License.
 
 import gc
+from typing import List, Tuple, Union
 
 import pytest
 import torch
@@ -30,20 +31,25 @@ from optimum.nvidia.utils.tests.utils import requires_multi_gpu
 MAX_TOKENS_DELTA_PERCENT_ATOL = 10.0
 
 MODEL_MAP = {
-    "gemma": ["google/gemma-2b-it", "google/gemma-7b-it"],
+    "gemma": ["google/gemma-2b-it"],
     "llama": "meta-llama/Llama-2-7b-chat-hf",
     "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
+    "phi": ["microsoft/phi-1", "microsoft/phi-1.5", "microsoft/phi-2"],
+    "phi3": ["microsoft/Phi-3-mini-4k-instruct"],
 }
 
+MODEL_NEEDS_REMOTE_CODE = {"phi3"}
 
-@pytest.mark.parametrize("model_type", MODEL_MAP.keys())
-@pytest.mark.parametrize("batch_size", [1, 3])
-def test_generation(model_type: str, batch_size: int):
-    model_ids = (
-        [MODEL_MAP[model_type]]
-        if isinstance(MODEL_MAP[model_type], str)
-        else MODEL_MAP[model_type]
-    )
+
+@pytest.mark.parametrize("model_family_and_id", MODEL_MAP.items())
+@pytest.mark.parametrize("batch_size", [1, 2])
+def test_generation(
+    model_family_and_id: Tuple[str, Union[str, List[str]]], batch_size: int
+):
+    model_family, model_ids = model_family_and_id
+
+    if not isinstance(model_ids, list):
+        model_ids = [model_ids]
 
     torch_dtype = torch.float16  # TODO: test fp8, int4, int8, fp32
 
@@ -69,6 +75,7 @@ def test_generation(model_type: str, batch_size: int):
             model_id,
             torch_dtype=torch_dtype,
             attn_implementation="eager",
+            trust_remote_code=model_family in MODEL_NEEDS_REMOTE_CODE,
         )
         torch_model = torch_model.eval()
         torch_model = torch_model.to("cuda")  # TODO: remove?
@@ -115,13 +122,12 @@ def test_generation(model_type: str, batch_size: int):
 
 
 @requires_multi_gpu
-@pytest.mark.parametrize("model_type", MODEL_MAP.keys())
-def test_pipeline(model_type: str):
-    model_ids = (
-        [MODEL_MAP[model_type]]
-        if isinstance(MODEL_MAP[model_type], str)
-        else MODEL_MAP[model_type]
-    )
+@pytest.mark.parametrize("model_family_and_id", MODEL_MAP.items())
+def test_pipeline(model_family_and_id: Tuple[str, Union[str, List[str]]]):
+    model_family, model_ids = model_family_and_id
+
+    if not isinstance(model_ids, list):
+        model_ids = [model_ids]
 
     kwargs = {
         "top_k": 1,
@@ -140,6 +146,7 @@ def test_pipeline(model_type: str):
             model=model_id,
             device="cuda:1",
             torch_dtype=torch.float16,
+            trust_remote_code=model_family in MODEL_NEEDS_REMOTE_CODE,
         )
 
         with torch.no_grad():

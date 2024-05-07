@@ -131,7 +131,7 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
             exclude_modules = qconfig.get("module_to_not_convert", [])
 
             return mode, TensorRTQuantizationConfig(
-                quantization_algo=quant_method,
+                quant_algo=quant_method,
                 kv_cache_quant_algo=None,
                 group_size=group_size,
                 has_zero_point=has_zero_point,
