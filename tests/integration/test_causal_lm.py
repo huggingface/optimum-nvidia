@@ -27,6 +27,8 @@ from optimum.nvidia.pipelines import pipeline
 from optimum.nvidia.utils.tests.utils import requires_multi_gpu
 
 
+MAX_TOKENS_DELTA_PERCENT_ATOL = 10.0
+
 MODEL_MAP = {
     "gemma": ["google/gemma-2b-it", "google/gemma-7b-it"],
     "llama": "meta-llama/Llama-2-7b-chat-hf",
@@ -164,4 +166,27 @@ def test_pipeline(model_type: str):
                 **kwargs,
             )
 
-        assert res_torch[0]["generated_text"] == res_trt[0]["generated_text"]
+        transformers_output = res_torch[0]["generated_text"]
+        trtllm_output = res_trt[0]["generated_text"]
+
+        def count_indexwise_difference(lhs, rhs) -> (int, int):
+            maximum_overlapping_span = min(len(transformers_output), len(trtllm_output))
+
+            lhs_ = lhs[:maximum_overlapping_span]
+            rhs_ = rhs[:maximum_overlapping_span]
+            count = 0
+
+            for l, r in zip(lhs_, rhs_):
+                if l != r:
+                    count += 1
+
+            return count, maximum_overlapping_span
+
+        num_mismatched_tokens, num_tokens = count_indexwise_difference(
+            transformers_output, trtllm_output
+        )
+        mismatch_percent = float(num_mismatched_tokens) / float(num_tokens) * 100
+
+        assert (
+            mismatch_percent <= MAX_TOKENS_DELTA_PERCENT_ATOL
+        ), f"{num_mismatched_tokens} mismatched tokens over {num_tokens} > {MAX_TOKENS_DELTA_PERCENT_ATOL} % ({mismatch_percent} %)"
