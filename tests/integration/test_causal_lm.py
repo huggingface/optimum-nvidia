@@ -43,7 +43,9 @@ MODEL_NEEDS_REMOTE_CODE = {"phi3"}
 
 @pytest.mark.parametrize("model_family_and_id", MODEL_MAP.items())
 @pytest.mark.parametrize("batch_size", [1, 2])
-def test_generation(model_family_and_id: Tuple[str, Union[str, List[str]]], batch_size: int):
+def test_generation(
+    model_family_and_id: Tuple[str, Union[str, List[str]]], batch_size: int
+):
     model_family, model_ids = model_family_and_id
 
     if not isinstance(model_ids, list):
