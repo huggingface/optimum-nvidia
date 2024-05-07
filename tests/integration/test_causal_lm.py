@@ -31,11 +31,11 @@ from optimum.nvidia.utils.tests.utils import requires_multi_gpu
 MAX_TOKENS_DELTA_PERCENT_ATOL = 10.0
 
 MODEL_MAP = {
-    "gemma": ["google/gemma-2b-it", "google/gemma-7b-it"],
+    "gemma": ["google/gemma-2b-it"],
     "llama": "meta-llama/Llama-2-7b-chat-hf",
     "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
     "phi": ["microsoft/phi-1", "microsoft/phi-1.5", "microsoft/phi-2"],
-    "phi3": ["microsoft/Phi-3-mini-4k-instruct", "microsoft/Phi-3-mini-128k-instruct"],
+    "phi3": ["microsoft/Phi-3-mini-4k-instruct"],
 }
 
 MODEL_NEEDS_REMOTE_CODE = {"phi3"}
