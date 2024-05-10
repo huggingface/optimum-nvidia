@@ -56,6 +56,12 @@ FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]*.engine"
 
 HUB_TRTLLM_ENGINE_PATTERNS = ["**/config.json", f"**/{FILE_TRTLLM_ENGINE_PATTERN}"]
 HUB_SAFETENSORS_PATTERNS = ["config.json", "*.safetensors", SAFE_WEIGHTS_INDEX_NAME]
+
+MODELING_KWARGS_ALIASES = {
+    "tp": "tp_size",
+    "pp": "pp_size"
+}
+
 LOGGER = getLogger()
 LOGGER.setLevel(level="INFO")
 
@@ -149,7 +155,6 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
         # Path where will be stored the engines
         if engine_save_path is None:
-            engine_save_path = local_path
             engines_folder = local_path / FOLDER_TRTLLM_ENGINES
             engines_folder.mkdir(exist_ok=True, parents=True)
         else:
@@ -456,6 +461,16 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             config_class = cls.MODEL_CONFIG
 
         trt_config = config_class.from_config(config)
+
+        # Push any additional args to the config if provided
+        for key, value in additional_params.items():
+            if key in MODELING_KWARGS_ALIASES:
+                LOGGER.debug(f"Overriding user-provided config attribute {key} to {MODELING_KWARGS_ALIASES[key]}")
+                key = MODELING_KWARGS_ALIASES[key]
+
+            LOGGER.debug(f"Setting additional config argument {key} = {value}")
+            setattr(trt_config, key, value)
+
         if hasattr(trt_config, "check_config"):
             trt_config.check_config()
 
