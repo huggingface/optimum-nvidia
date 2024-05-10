@@ -64,7 +64,7 @@ if __name__ == "__main__":
         tokenizer.pad_token = tokenizer.eos_token
 
     # Create the model
-    model = AutoModelForCausalLM.from_pretrained(args.model, use_fp8=args.fp8)
+    model = AutoModelForCausalLM.from_pretrained(args.model, use_fp8=args.fp8, tp=args.tp, pp=args.pp)
     model.save_pretrained(args.output)
 
     prompt = "What is the latest generation of Nvidia GPUs?"

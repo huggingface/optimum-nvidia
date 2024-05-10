@@ -24,12 +24,14 @@ def register_common_model_topology_args(parser: ArgumentParser) -> ArgumentParse
         "--tensor-parallelism",
         type=int,
         default=1,
+        dest="tp",
         help="Define the number of slice for each tensor each GPU will receive.",
     )
     parser.add_argument(
         "--pipeline-parallelism",
         type=int,
         default=1,
+        dest="pp",
         help="Define the number of sections to split neural network layers",
     )
     parser.add_argument(
