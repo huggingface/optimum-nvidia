@@ -311,6 +311,11 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         token: Optional[Union[str, bool]],
         **model_kwargs,
     ) -> T:
+        # Config attributes are being injected also along "config"...
+        for key in config.keys():
+            if key in model_kwargs:
+                model_kwargs.pop(key)
+
         if not isinstance(cls, SupportsTensorrtConversion):
             raise ValueError(
                 f"{cls} doesn't support converting from Hugging Face Hub model."
