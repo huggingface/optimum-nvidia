@@ -16,6 +16,7 @@ from logging import getLogger
 from typing import Dict
 
 import numpy as np
+from tensorrt_llm.layers import MoeConfig
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
 from tensorrt_llm.models.llama.model import LLaMAForCausalLM
 from tensorrt_llm.models.llama.weight import load_from_hf_llama
@@ -74,6 +75,7 @@ class MixtralConfig(TensorRTConfig):
             max_lora_rank=64,
             head_size=config.hidden_size / config.num_attention_heads,
             quantization=qconfig,
+            moe_num_experts=getattr(config, "num_local_experts", 0),
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
