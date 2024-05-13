@@ -116,7 +116,7 @@ def convert_quant_method_to_trt(
         raise ValueError(f"Unsupported quantization method: {method}")
 
 
-class TensorRTConfig(TensorRTPretrainedConfig, ABC):
+class TensorRTConfig(ABC, TensorRTPretrainedConfig):
     @staticmethod
     def get_quantization_config(
         config: PretrainedConfig,
@@ -145,9 +145,7 @@ class TensorRTConfig(TensorRTPretrainedConfig, ABC):
 
     @staticmethod
     @abstractmethod
-    def from_config(
-        config: PretrainedConfig, mapping: Optional[Mapping]
-    ) -> "TensorRTConfig":
+    def from_config(config: PretrainedConfig, mapping: Optional[Mapping]) -> "TensorRTConfig":
         raise NotImplementedError()
 
     @staticmethod
@@ -156,7 +154,7 @@ class TensorRTConfig(TensorRTPretrainedConfig, ABC):
         *,
         revision: Optional[str] = None,
         token: Union[bool, str, None] = None,
-        mapping: Optional[Mapping] = None,
+        mapping: Optional[Mapping] = None
     ):
         config = AutoConfig.from_pretrained(
             model_id_or_path,

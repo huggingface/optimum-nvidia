@@ -170,6 +170,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             cls, config, config_class=config_class, **model_kwargs
         )
 
+        if model_config.has_moe:
+            model_config.moe_config.validate()
+
         # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
         LOGGER.debug("Allocating TRTLLM model to build the checkpoint")
         model = cls.TRT_LLM_TARGET_MODEL_CLASS.from_config(model_config)
