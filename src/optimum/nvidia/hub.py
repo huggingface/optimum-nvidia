@@ -47,7 +47,6 @@ from optimum.nvidia.builder.config import EngineConfigBuilder
 from optimum.nvidia.quantization import AutoQuantizationConfig
 from optimum.nvidia.quantization.ammo import AmmoQuantizer
 from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
-from optimum.nvidia.utils.nvml import get_max_memory
 
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
@@ -186,8 +185,6 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         if engine_config.plugins_config is None:
             engine_config.plugins_config = model_config.get_plugins_config()
 
-        max_memory = get_max_memory()
-
         if hf_model is None:
             LOGGER.debug(
                 f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
@@ -195,8 +192,8 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
             hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
                 local_path,
-                device_map="auto",
-                max_memory=max_memory,
+                torch_dtype="auto",
+                device_map="cpu",
                 local_files_only=True,
             )
         else:
@@ -269,10 +266,6 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 )
                 model_config.set_rank(rank)
                 converted_weights = cls.convert_weights(model, hf_model, model_config)
-                converted_weights = {
-                    name: numpy_to_torch(tensor)
-                    for name, tensor in converted_weights.items()
-                }
 
                 # Bind the converted weights against the TRTLLM model
                 model.load(converted_weights)
