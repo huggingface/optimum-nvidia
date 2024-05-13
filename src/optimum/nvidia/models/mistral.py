@@ -45,9 +45,7 @@ class MistralConfig(TensorRTConfig):
     """
 
     @staticmethod
-    def from_config(
-        config: TransformersPretrainedConfig, mapping: Optional[Mapping]
-    ) -> "TensorRTConfig":
+    def from_config(config: TransformersPretrainedConfig, mapping: Optional[Mapping]) -> "TensorRTConfig":
         mapping = mapping or Mapping()
 
         # Retrieve the quantization from the transformers config (if provided)

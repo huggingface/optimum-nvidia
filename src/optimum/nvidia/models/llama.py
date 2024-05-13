@@ -45,9 +45,7 @@ class LlamaConfig(TensorRTConfig):
     """
 
     @staticmethod
-    def from_config(
-        config: TransformersPretrainedConfig, mapping: Optional[Mapping] = None
-    ) -> "TensorRTConfig":
+    def from_config(config: TransformersPretrainedConfig, mapping: Optional[Mapping] = None) -> "TensorRTConfig":
         mapping = mapping or Mapping()
 
         # Retrieve the quantization from the transformers config (if provided)
@@ -115,6 +113,4 @@ class LlamaForCausalLM(CausalLM, HuggingFaceHubModel):
         if config.quant_mode.has_any_quant():
             raise NotImplementedError("Quantization is not supported yet.")
 
-        return load_weights_from_hf(
-            config=config.to_dict(), mapping=config.mapping, model=source
-        )
+        return load_weights_from_hf(config=config, mapping=config.mapping, model=source)
