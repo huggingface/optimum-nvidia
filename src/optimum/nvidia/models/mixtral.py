@@ -18,8 +18,8 @@ from typing import Dict
 import numpy as np
 from tensorrt_llm.layers import MoeConfig
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
+from tensorrt_llm.models.llama.convert import load_weights_from_hf
 from tensorrt_llm.models.llama.model import LLaMAForCausalLM
-from tensorrt_llm.models.llama.weight import load_from_hf_llama
 from tensorrt_llm.plugin import PluginConfig
 from transformers import MixtralForCausalLM as TransformersMixtralForCausalLM
 from transformers import PretrainedConfig as TransformersPretrainedConfig
@@ -76,6 +76,7 @@ class MixtralConfig(TensorRTConfig):
             head_size=config.hidden_size / config.num_attention_heads,
             quantization=qconfig,
             moe_num_experts=getattr(config, "num_local_experts", 0),
+            moe_top_k=getattr(config, "num_experts_per_tok", 0)
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
@@ -84,7 +85,7 @@ class MixtralConfig(TensorRTConfig):
 
     def get_plugins_config(self) -> PluginConfig:
         config = super().get_plugins_config()
-        config.moe_plugin = "enable"
+        config.moe_plugin = self.dtype
         config.bert_attention_plugin = "disable"
         config.gpt_attention_plugin = self.dtype
         config.gemm_plugin = self.dtype
@@ -108,6 +109,6 @@ class MixtralForCausalLM(CausalLM, HuggingFaceHubModel):
             config: PretrainedConfig,
     ) -> Dict[str, np.ndarray]:
         if config.quant_mode.has_any_quant():
-            raise NotImplementedError("Quantization is not supported yet.")
+            config.quantization.exclude_modules.append("router")
 
-        return load_from_hf_llama(target, source, config.mapping, config.dtype)
+        return load_weights_from_hf(config=config.to_dict(), mapping=config.mapping, model=source)

@@ -19,6 +19,7 @@ from typing import Optional, Union
 
 import torch
 from tensorrt_llm import Mapping
+from tensorrt_llm.layers import MoeConfig
 from tensorrt_llm.models import PretrainedConfig as TensorRTPretrainedConfig
 from tensorrt_llm.models.modeling_utils import (
     QuantConfig as TensorRTQuantizationConfig,
@@ -144,14 +145,16 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
 
     @staticmethod
     @abstractmethod
-    def from_config(config: PretrainedConfig) -> "TensorRTConfig":
+    def from_config(config: PretrainedConfig, mapping: Optional[Mapping]) -> "TensorRTConfig":
         raise NotImplementedError()
 
     @staticmethod
     def from_pretrained(
         model_id_or_path: str,
+        *,
         revision: Optional[str] = None,
         token: Union[bool, str, None] = None,
+        mapping: Optional[Mapping] = None
     ):
         config = AutoConfig.from_pretrained(
             model_id_or_path,
@@ -159,12 +162,23 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
             token=token,
             user_agent=get_user_agent(),
         )
-        return TensorRTConfig.from_config(config)
+        return TensorRTConfig.from_config(config, mapping)
 
     @staticmethod
     @abstractmethod
     def supports_strong_typing() -> bool:
         raise NotImplementedError()
+
+    @property
+    def has_moe(self) -> bool:
+        return getattr(self, "moe_num_experts", 1)
+
+    @property
+    def moe_config(self) -> Optional[MoeConfig]:
+        if self.has_moe:
+            return MoeConfig()
+        else:
+            return None
 
     def shard(
         self,
