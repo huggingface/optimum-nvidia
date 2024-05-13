@@ -35,7 +35,7 @@ import torch
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
 from safetensors.torch import save_file as to_safetensors
-from tensorrt_llm._utils import numpy_to_torch
+from tensorrt_llm import Mapping
 from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
@@ -56,9 +56,10 @@ FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]*.engine"
 HUB_TRTLLM_ENGINE_PATTERNS = ["**/config.json", f"**/{FILE_TRTLLM_ENGINE_PATTERN}"]
 HUB_SAFETENSORS_PATTERNS = ["config.json", "*.safetensors", SAFE_WEIGHTS_INDEX_NAME]
 
-MODELING_KWARGS_ALIASES = {
+SHARDING_KWARGS = {"tp_size", "pp_size", "world_size", "gpus_per_node", "rank"}
+SHARDING_KWARGS_ALIASES = {
     "tp": "tp_size",
-    "pp": "pp_size"
+    "pp": "pp_size",
 }
 
 LOGGER = getLogger()
@@ -120,17 +121,45 @@ def find_prebuilt_engines(root: Path) -> Tuple[List[Path], List[Path]]:
     return folders, relative_folders
 
 
+def get_sharding_info(**kwargs):
+    mapping_kwargs = {}
+
+    for name_, value in kwargs.items():
+
+        # Handle aliased args
+        if name_ in SHARDING_KWARGS_ALIASES:
+            name = SHARDING_KWARGS_ALIASES[name_]
+        else:
+            name = name_
+
+        # Ensure we are targeting a sharding kwarg
+        if name in SHARDING_KWARGS:
+            # Check if not already present
+            if name in mapping_kwargs and name != name_:
+                LOGGER.warning(f"Parameter {name} already defined through {name_}")
+
+            mapping_kwargs[name] = value
+
+    if mapping_kwargs:
+        if "world_size" not in mapping_kwargs:
+            mapping_kwargs["world_size"] = mapping_kwargs["tp_size"] * mapping_kwargs["pp_size"]
+            LOGGER.debug(f"Set sharding_info's world_size to {mapping_kwargs['world_size']}")
+        return Mapping(**mapping_kwargs)
+    else:
+        return None
+
+
 @runtime_checkable
 class SupportsTensorrtConversion(Protocol):
     MODEL_CONFIG: Type[TensorRTConfig]
     HF_LIBRARY_TARGET_MODEL_CLASS: Type[ModelHubMixin]
-    TRT_LLM_TARGET_MODEL_CLASS: Type[PretrainedModel]
 
+    TRT_LLM_TARGET_MODEL_CLASS: Type[PretrainedModel]
     @staticmethod
     def convert_weights(
-        target: PretrainedModel,
-        source: TransformersPretrainedModel,
-        config: PretrainedConfig,
+            target: PretrainedModel,
+            source: TransformersPretrainedModel,
+            config: PretrainedConfig,
     ) -> Dict[str, np.ndarray]: ...
 
 
@@ -164,6 +193,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         config = AutoConfig.for_model(**hf_model_config)
         if "torch_dtype" in model_kwargs:
             config.torch_dtype = model_kwargs["torch_dtype"]
+
+        # Get sharding information to forward to the config converted
+        model_kwargs["mapping"] = get_sharding_info(**model_kwargs)
 
         # Convert the original config to a model config TRTLLM understands
         model_config = HuggingFaceHubModel.convert_config_to_trtllm(
@@ -461,17 +493,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         if config_class is None:
             config_class = cls.MODEL_CONFIG
 
-        trt_config = config_class.from_config(config)
+        mapping = additional_params.get("mapping", None)
 
-        # Push any additional args to the config if provided
-        for key, value in additional_params.items():
-            if key in MODELING_KWARGS_ALIASES:
-                LOGGER.debug(f"Overriding user-provided config attribute {key} to {MODELING_KWARGS_ALIASES[key]}")
-                key = MODELING_KWARGS_ALIASES[key]
-
-            LOGGER.debug(f"Setting additional config argument {key} = {value}")
-            setattr(trt_config, key, value)
-
+        trt_config = config_class.from_config(config, mapping)
         if hasattr(trt_config, "check_config"):
             trt_config.check_config()
 

@@ -382,7 +382,9 @@ def convert_from_hf_whisper_decoder(
 
 class WhisperEncoderConfig(TensorRTConfig):
     @classmethod
-    def from_config(cls, config: "TransformersPretrainedConfig") -> "TensorRTConfig":
+    def from_config(cls, config: "TransformersPretrainedConfig", mapping: Optional[Mapping] = None) -> "TensorRTConfig":
+        mapping = mapping or Mapping()
+
         # Retrieve the quantization from the transformers config (if provided)
         _, qconfig = TensorRTConfig.get_quantization_config(config)
 
@@ -400,12 +402,12 @@ class WhisperEncoderConfig(TensorRTConfig):
             intermediate_size=None,
             norm_epsilon=None,
             position_embedding_type="learned_absolute",
-            world_size=1,
-            tp_size=1,
-            pp_size=1,
+            world_size=mapping.world_size,
+            tp_size=mapping.tp_size,
+            pp_size=mapping.pp_size,
             quantization=qconfig,
-            use_parallel_embedding=None,
-            embedding_sharding_dim=None,
+            use_parallel_embedding=mapping.tp_size > 1,
+            embedding_sharding_dim=0 if mapping.tp_size > 1 else None,
             share_embedding_table=None,
             head_size=-1,  # We need to set it otherwise TRT-LLM tries to compute `hidden_size // num_attention_heads`
             max_source_positions=config.max_source_positions,

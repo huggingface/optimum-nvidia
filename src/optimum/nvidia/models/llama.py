@@ -13,12 +13,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from logging import getLogger
-from typing import Dict
+from typing import Dict, Optional
 
 import numpy as np
+from tensorrt_llm import Mapping
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
+from tensorrt_llm.models.llama.convert import load_weights_from_hf
 from tensorrt_llm.models.llama.model import LLaMAForCausalLM
-from tensorrt_llm.models.llama.weight import load_from_hf_llama
 from tensorrt_llm.plugin import PluginConfig
 from transformers import LlamaForCausalLM as TransformersLlamaForCausalLM
 from transformers import PretrainedConfig as TransformersPretrainedConfig
@@ -44,7 +45,9 @@ class LlamaConfig(TensorRTConfig):
     """
 
     @staticmethod
-    def from_config(config: TransformersPretrainedConfig) -> "TensorRTConfig":
+    def from_config(config: TransformersPretrainedConfig, mapping: Optional[Mapping] = None) -> "TensorRTConfig":
+        mapping = mapping or Mapping()
+
         # Retrieve the quantization from the transformers config (if provided)
         _, qconfig = TensorRTConfig.get_quantization_config(config)
 
@@ -64,15 +67,17 @@ class LlamaConfig(TensorRTConfig):
             intermediate_size=config.intermediate_size,
             norm_epsilon=config.rms_norm_eps,
             position_embedding_type="rope_gpt_neox",
-            world_size=1,
-            tp_size=1,
-            pp_size=1,
+            rotary_base=getattr(config, "rope_theta", 10000.0),
+            rotary_scaling=getattr(config, "rope_scaling", None),
+            world_size=mapping.world_size,
+            tp_size=mapping.tp_size,
+            pp_size=mapping.pp_size,
             use_prompt_tuning=False,
             use_parallel_embedding=False,
             embedding_sharding_dim=0,
             share_embedding_table=False,
             max_lora_rank=64,
-            head_size=config.hidden_size / config.num_attention_heads,
+            head_size=config.hidden_size // config.num_attention_heads,
             quantization=qconfig,
         )
 
@@ -108,4 +113,4 @@ class LlamaForCausalLM(CausalLM, HuggingFaceHubModel):
         if config.quant_mode.has_any_quant():
             raise NotImplementedError("Quantization is not supported yet.")
 
-        return load_from_hf_llama(target, source, config.mapping, config.dtype)
+        return load_weights_from_hf(config=config, mapping=config.mapping, model=source)

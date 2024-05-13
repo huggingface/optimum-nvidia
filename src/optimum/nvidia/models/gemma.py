@@ -14,9 +14,10 @@
 #  limitations under the License.
 
 from logging import getLogger
-from typing import Dict
+from typing import Dict, Optional
 
 import torch
+from tensorrt_llm import Mapping
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
 from tensorrt_llm.models.gemma.model import GemmaForCausalLM as TrtGemmaForCausalLM
 from tensorrt_llm.models.gemma.weight import load_from_hf_gemma
@@ -45,7 +46,9 @@ class GemmaConfig(TensorRTConfig):
     """
 
     @staticmethod
-    def from_config(config: TransformersPretrainedConfig) -> "TensorRTConfig":
+    def from_config(config: TransformersPretrainedConfig, mapping: Optional[Mapping] = None) -> "TensorRTConfig":
+        mapping = mapping or Mapping()
+
         # Retrieve the quantization from the transformers config (if provided)
         _, qconfig = TensorRTConfig.get_quantization_config(config)
 
@@ -66,16 +69,17 @@ class GemmaConfig(TensorRTConfig):
             intermediate_size=config.intermediate_size,
             norm_epsilon=config.rms_norm_eps,
             position_embedding_type="rope_gpt_neox",
-            world_size=1,
-            tp_size=1,
-            pp_size=1,
+            rotary_base=getattr(config, "rope_theta", 10000.0),
+            rotary_scaling=getattr(config, "rope_scaling", None),
+            world_size=mapping.world_size,
+            tp_size=mapping.tp_size,
+            pp_size=mapping.pp_size,
             use_prompt_tuning=False,
-            use_parallel_embedding=False,
+            use_parallel_embedding=mapping.tp_size > 1,
             embedding_sharding_dim=0,
             share_embedding_table=False,
             max_lora_rank=64,
             quantization=qconfig,
-            rotary_base=config.rope_theta,
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
