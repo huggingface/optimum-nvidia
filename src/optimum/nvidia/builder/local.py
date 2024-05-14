@@ -85,9 +85,11 @@ class LocalEngineBuilder:
         build_params = {
             "--checkpoint_dir": root,
             "--output_dir": root,
-            "--model_config": root / "config.json",
+            "--model_config": root / "model.json",
             "--builder_opt": build_config.optimisation_level,
             "--logits_dtype": build_config.logits_dtype,
+            "--tp_size": model_config.mapping.tp_size,
+            "--pp_size": model_config.mapping.pp_size,
         }
 
         if hasattr(model_config, "trt_model_class") and hasattr(
