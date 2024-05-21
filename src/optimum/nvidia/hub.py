@@ -50,8 +50,11 @@ from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
 
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
+ATTR_TRTLLM_CHECKPOINT_FOLDER = "__trtllm_checkpoint_folder__"
+FOLDER_TRTLLM_CHECKPOINTS = "checkpoints"
 FOLDER_TRTLLM_ENGINES = "engines"
-FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]*.engine"
+FILE_TRTLLM_CHECKPOINT_PATTERN = "rank[0-9]+.safetensors"
+FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]+.engine"
 
 HUB_TRTLLM_ENGINE_PATTERNS = ["**/config.json", f"**/{FILE_TRTLLM_ENGINE_PATTERN}"]
 HUB_SAFETENSORS_PATTERNS = ["config.json", "*.safetensors", SAFE_WEIGHTS_INDEX_NAME]
@@ -173,7 +176,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         hf_model: Optional[TransformersPretrainedModel] = None,
         config_class: Optional[TensorRTConfig] = None,
         **model_kwargs,
-    ) -> Tuple[List[Path], List[Path]]:
+    ) -> Tuple[List[Path], List[Path], List[Path]]:
         """
         :param local_path:
         :param hf_model_config:
@@ -182,12 +185,13 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         """
 
         # Path where will be stored the engines
-        if engine_save_path is None:
-            engines_folder = local_path / FOLDER_TRTLLM_ENGINES
-            engines_folder.mkdir(exist_ok=True, parents=True)
-        else:
-            engines_folder = engine_save_path / FOLDER_TRTLLM_ENGINES
-            engines_folder.mkdir(exist_ok=True, parents=True)
+        root = engine_save_path if engine_save_path else local_path
+        checkpoint_folder = root / FOLDER_TRTLLM_CHECKPOINTS
+        engines_folder = root / FOLDER_TRTLLM_ENGINES
+
+        # Ensure all the tree exists
+        checkpoint_folder.mkdir(exist_ok=True, parents=True)
+        engines_folder.mkdir(exist_ok=True, parents=True)
 
         # Retrieve configuration
         config = AutoConfig.for_model(**hf_model_config)
@@ -284,7 +288,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
             hf_quantizer = AmmoQuantizer(
                 quantization_config=qconfig,
-                artifact_path=engines_folder,
+                artifact_path=checkpoint_folder,
                 tensor_parallel_degree=engine_config.sharding_profile.tensor_parallelism,
                 pipeline_parallel_degree=engine_config.sharding_profile.pipeline_parallelism,
                 export_tensorrt_llm_config=True,
@@ -308,21 +312,21 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 # Write ranked-checkpoints
                 to_safetensors(
                     converted_weights,
-                    engines_folder / f"rank{model_config.mapping.rank}.safetensors",
+                    checkpoint_folder / f"rank{model_config.mapping.rank}.safetensors",
                 )
 
             # Write global config
-            model_config.save_pretrained(engines_folder)
+            model_config.save_pretrained(checkpoint_folder)
 
         # We are freeing memory used by the HF Model to let the engine build goes forward
         del hf_model
         torch.cuda.empty_cache()
 
         # Build
-        engine_builder = LocalEngineBuilder(model_config, engines_folder)
+        engine_builder = LocalEngineBuilder(model_config, checkpoint_folder, engines_folder)
         engine_builder.build(engine_config)
 
-        return [engines_folder], [engines_folder.relative_to(local_path)]
+        return [checkpoint_folder], [engines_folder], [engines_folder.relative_to(local_path)]
 
     @classmethod
     def _from_pretrained(
@@ -372,7 +376,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             )
 
         # Look for prebuilt engine files, if none found, we convert and build
-        engines_folders, relative_paths_engines_folders = find_prebuilt_engines(
+        checkpoints_folders, (engines_folders, relative_paths_engines_folders) = None, find_prebuilt_engines(
             local_path
         )
         if len(engines_folders) == 0:
@@ -401,7 +405,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                     prebuilt_engines_only=False,
                 )
 
-            engines_folders, relative_paths_engines_folders = cls.convert_and_build(
+            checkpoint_folders, engines_folders, relative_paths_engines_folders = cls.convert_and_build(
                 local_path, config, **model_kwargs
             )
         else:
@@ -430,6 +434,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             transformers_config=transformers_config,
         )
 
+        setattr(model, ATTR_TRTLLM_CHECKPOINT_FOLDER, checkpoints_folders)
         setattr(model, ATTR_TRTLLM_ENGINE_FOLDER, engines_folders)
         model._relative_path_engines_folders = relative_paths_engines_folders
         return model
