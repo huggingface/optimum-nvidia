@@ -26,7 +26,7 @@ from transformers import GemmaForCausalLM as TransformersGemmaForCausalLM
 from transformers import PretrainedConfig as TransformersPretrainedConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
 
-from optimum.nvidia import TensorRTConfig
+from optimum.nvidia import TensorRTConfig, TensorRTModelConverter
 from optimum.nvidia.config import dtype_to_str
 from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.runtime import CausalLM
@@ -115,3 +115,8 @@ class GemmaForCausalLM(CausalLM, HuggingFaceHubModel):
             raise NotImplementedError("Quantization is not supported yet.")
 
         return load_from_hf_gemma(target, source, config.mapping, config.dtype)
+
+
+class GemmaConverter(TensorRTModelConverter):
+    CONFIG_CLASS = GemmaConfig
+    MODEL_CLASS = GemmaForCausalLM

@@ -25,7 +25,7 @@ from transformers import LlamaForCausalLM as TransformersLlamaForCausalLM
 from transformers import PretrainedConfig as TransformersPretrainedConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
 
-from optimum.nvidia import TensorRTConfig
+from optimum.nvidia import TensorRTConfig, TensorRTModelConverter
 from optimum.nvidia.config import dtype_to_str
 from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.runtime import CausalLM
@@ -114,3 +114,9 @@ class LlamaForCausalLM(CausalLM, HuggingFaceHubModel):
             raise NotImplementedError("Quantization is not supported yet.")
 
         return load_weights_from_hf(config=config, mapping=config.mapping, model=source)
+
+
+class LlamaConverter(TensorRTModelConverter):
+    CONFIG_CLASS = LlamaConfig
+    MODEL_CLASS = LlamaForCausalLM
+

@@ -14,6 +14,7 @@
 #  limitations under the License.
 
 from .config import TensorRTConfig
+from .converter import TensorRTModelConverter
 from .logging import DEFAULT_LOGGING_FMT, setup_logging
 from .models import AutoModelForCausalLM
 from .pipelines import pipeline
