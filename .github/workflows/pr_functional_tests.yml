@@ -60,6 +60,10 @@ jobs:
         run: |
           nvidia-smi
 
+      - name: Print TensorRT-LLM version
+        run: |
+          python -c "from tensorrt_llm import __version__; print(__version__)"
+
       - name: Run optimum-nvidia functional test-suite
         run: |
           pytest -n 4 -s -vvvvv -p no:warnings -o log_cli=true --ignore=tests/integration/ tests/
