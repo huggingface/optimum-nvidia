@@ -382,7 +382,9 @@ def convert_from_hf_whisper_decoder(
 
 class WhisperEncoderConfig(TensorRTConfig):
     @classmethod
-    def from_config(cls, config: "TransformersPretrainedConfig", mapping: Optional[Mapping] = None) -> "TensorRTConfig":
+    def from_config(
+        cls, config: "TransformersPretrainedConfig", mapping: Optional[Mapping] = None
+    ) -> "TensorRTConfig":
         mapping = mapping or Mapping()
 
         # Retrieve the quantization from the transformers config (if provided)

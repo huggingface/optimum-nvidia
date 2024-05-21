@@ -128,7 +128,6 @@ def get_sharding_info(**kwargs):
     mapping_kwargs = {}
 
     for name_, value in kwargs.items():
-
         # Handle aliased args
         if name_ in SHARDING_KWARGS_ALIASES:
             name = SHARDING_KWARGS_ALIASES[name_]
@@ -145,8 +144,12 @@ def get_sharding_info(**kwargs):
 
     if mapping_kwargs:
         if "world_size" not in mapping_kwargs:
-            mapping_kwargs["world_size"] = mapping_kwargs["tp_size"] * mapping_kwargs["pp_size"]
-            LOGGER.debug(f"Set sharding_info's world_size to {mapping_kwargs['world_size']}")
+            mapping_kwargs["world_size"] = (
+                mapping_kwargs["tp_size"] * mapping_kwargs["pp_size"]
+            )
+            LOGGER.debug(
+                f"Set sharding_info's world_size to {mapping_kwargs['world_size']}"
+            )
         return Mapping(**mapping_kwargs)
     else:
         return None
@@ -158,11 +161,12 @@ class SupportsTensorrtConversion(Protocol):
     HF_LIBRARY_TARGET_MODEL_CLASS: Type[ModelHubMixin]
 
     TRT_LLM_TARGET_MODEL_CLASS: Type[PretrainedModel]
+
     @staticmethod
     def convert_weights(
-            target: PretrainedModel,
-            source: TransformersPretrainedModel,
-            config: PretrainedConfig,
+        target: PretrainedModel,
+        source: TransformersPretrainedModel,
+        config: PretrainedConfig,
     ) -> Dict[str, np.ndarray]: ...
 
 
@@ -323,10 +327,16 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         torch.cuda.empty_cache()
 
         # Build
-        engine_builder = LocalEngineBuilder(model_config, checkpoint_folder, engines_folder)
+        engine_builder = LocalEngineBuilder(
+            model_config, checkpoint_folder, engines_folder
+        )
         engine_builder.build(engine_config)
 
-        return [checkpoint_folder], [engines_folder], [engines_folder.relative_to(local_path)]
+        return (
+            [checkpoint_folder],
+            [engines_folder],
+            [engines_folder.relative_to(local_path)],
+        )
 
     @classmethod
     def _from_pretrained(
@@ -376,8 +386,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             )
 
         # Look for prebuilt engine files, if none found, we convert and build
-        checkpoints_folders, (engines_folders, relative_paths_engines_folders) = None, find_prebuilt_engines(
-            local_path
+        checkpoints_folders, (engines_folders, relative_paths_engines_folders) = (
+            None,
+            find_prebuilt_engines(local_path),
         )
         if len(engines_folders) == 0:
             LOGGER.info(
@@ -405,8 +416,8 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                     prebuilt_engines_only=False,
                 )
 
-            checkpoint_folders, engines_folders, relative_paths_engines_folders = cls.convert_and_build(
-                local_path, config, **model_kwargs
+            checkpoint_folders, engines_folders, relative_paths_engines_folders = (
+                cls.convert_and_build(local_path, config, **model_kwargs)
             )
         else:
             LOGGER.info(f"Found pre-built engines at: {engines_folders}")

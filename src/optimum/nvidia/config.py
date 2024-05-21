@@ -145,7 +145,9 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
 
     @staticmethod
     @abstractmethod
-    def from_config(config: PretrainedConfig, mapping: Optional[Mapping]) -> "TensorRTConfig":
+    def from_config(
+        config: PretrainedConfig, mapping: Optional[Mapping]
+    ) -> "TensorRTConfig":
         raise NotImplementedError()
 
     @staticmethod
@@ -154,7 +156,7 @@ class TensorRTConfig(ABC, TensorRTPretrainedConfig):
         *,
         revision: Optional[str] = None,
         token: Union[bool, str, None] = None,
-        mapping: Optional[Mapping] = None
+        mapping: Optional[Mapping] = None,
     ):
         config = AutoConfig.from_pretrained(
             model_id_or_path,

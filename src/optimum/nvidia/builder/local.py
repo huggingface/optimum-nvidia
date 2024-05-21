@@ -59,7 +59,10 @@ class LocalEngineBuilder:
 
     @staticmethod
     def build_cli_command(
-        checkpoints: Path, engines: Path, model_config: TensorRTConfig, build_config: EngineConfig
+        checkpoints: Path,
+        engines: Path,
+        model_config: TensorRTConfig,
+        build_config: EngineConfig,
     ) -> Dict[str, Any]:
         workload_params = {
             "--max_batch_size": build_config.workload_profile.max_batch_size,
@@ -103,7 +106,9 @@ class LocalEngineBuilder:
 
         return build_params | generation_params | workload_params | plugins_params
 
-    def __init__(self, config: TensorRTConfig, checkpoint_folder: Path, output_folder: Path):
+    def __init__(
+        self, config: TensorRTConfig, checkpoint_folder: Path, output_folder: Path
+    ):
         self._config = config
         self._checkpoint_folder = checkpoint_folder
         self._output_folder = output_folder

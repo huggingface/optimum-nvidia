@@ -45,7 +45,9 @@ class MixtralConfig(TensorRTConfig):
     """
 
     @staticmethod
-    def from_config(config: TransformersPretrainedConfig, mapping: Optional[Mapping]) -> "TensorRTConfig":
+    def from_config(
+        config: TransformersPretrainedConfig, mapping: Optional[Mapping]
+    ) -> "TensorRTConfig":
         mapping = mapping or Mapping()
 
         # Retrieve the quantization from the transformers config (if provided)
@@ -80,7 +82,7 @@ class MixtralConfig(TensorRTConfig):
             head_size=config.hidden_size // config.num_attention_heads,
             quantization=qconfig,
             moe_num_experts=getattr(config, "num_local_experts", 0),
-            moe_top_k=getattr(config, "num_experts_per_tok", 0)
+            moe_top_k=getattr(config, "num_experts_per_tok", 0),
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
@@ -115,4 +117,6 @@ class MixtralForCausalLM(CausalLM, HuggingFaceHubModel):
         if config.quant_mode.has_any_quant():
             config.quantization.exclude_modules.append("router")
 
-        return load_weights_from_hf(config=config.to_dict(), mapping=config.mapping, model=source)
+        return load_weights_from_hf(
+            config=config.to_dict(), mapping=config.mapping, model=source
+        )
