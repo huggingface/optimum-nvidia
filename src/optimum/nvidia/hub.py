@@ -315,7 +315,10 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 model.load(converted_weights)
 
                 # Write ranked-checkpoints
-                converted_weights = {name: numpy_to_torch(tensor) for name, tensor in converted_weights.items()}
+                converted_weights = {
+                    name: numpy_to_torch(tensor) if isinstance(tensor, np.ndarray) else tensor
+                    for name, tensor in converted_weights.items()
+                }
                 to_safetensors(
                     converted_weights,
                     checkpoint_folder / f"rank{model_config.mapping.rank}.safetensors",
