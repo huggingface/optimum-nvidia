@@ -8,7 +8,6 @@ from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 # import pytest
 import optimum.nvidia.hub
 from optimum.nvidia import AutoModelForCausalLM
-from optimum.nvidia.hub import FOLDER_TRTLLM_ENGINES
 
 
 # from optimum.nvidia.utils.nvml import get_device_name
