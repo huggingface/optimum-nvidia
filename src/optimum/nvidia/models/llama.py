@@ -115,4 +115,4 @@ class LlamaForCausalLM(CausalLM, HuggingFaceHubModel):
         if config.quant_mode.has_any_quant():
             raise NotImplementedError("Quantization is not supported yet.")
 
-        return load_weights_from_hf(config=config, mapping=config.mapping, model=source)
+        return load_weights_from_hf(config=config.to_dict(), mapping=config.mapping, model=source)

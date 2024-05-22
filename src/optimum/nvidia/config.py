@@ -116,7 +116,8 @@ def convert_quant_method_to_trt(
         raise ValueError(f"Unsupported quantization method: {method}")
 
 
-class TensorRTConfig(ABC, TensorRTPretrainedConfig):
+class TensorRTConfig(TensorRTPretrainedConfig, ABC):
+
     @staticmethod
     def get_quantization_config(
         config: PretrainedConfig,
