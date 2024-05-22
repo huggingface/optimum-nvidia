@@ -54,8 +54,8 @@ ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
 ATTR_TRTLLM_CHECKPOINT_FOLDER = "__trtllm_checkpoint_folder__"
 FOLDER_TRTLLM_CHECKPOINTS = "checkpoints"
 FOLDER_TRTLLM_ENGINES = "engines"
-FILE_TRTLLM_CHECKPOINT_PATTERN = "rank[0-9]+.safetensors"
-FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]+.engine"
+FILE_TRTLLM_CHECKPOINT_PATTERN = "rank[0-9]*.safetensors"
+FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]*.engine"
 
 HUB_TRTLLM_ENGINE_PATTERNS = ["**/config.json", f"**/{FILE_TRTLLM_ENGINE_PATTERN}"]
 HUB_SAFETENSORS_PATTERNS = ["config.json", "*.safetensors", SAFE_WEIGHTS_INDEX_NAME]
