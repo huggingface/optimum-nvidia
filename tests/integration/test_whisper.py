@@ -46,8 +46,8 @@ def test_whisper(model_id: str):
     with tempfile.TemporaryDirectory() as tmp_f:
         model.save_pretrained(tmp_f)
 
-        encoder_engines_files = glob(Path(tmp_f, "encoder/engines/*.engine").as_posix())
-        decoder_engines_files = glob(Path(tmp_f, "decoder/engines/*.engine").as_posix())
+        encoder_engines_files = glob(Path(tmp_f, "encoder/*.engine").as_posix())
+        decoder_engines_files = glob(Path(tmp_f, "decoder/*.engine").as_posix())
 
         assert len(encoder_engines_files) > 0
         assert len(decoder_engines_files) > 0
