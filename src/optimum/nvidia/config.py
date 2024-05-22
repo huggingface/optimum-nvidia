@@ -117,7 +117,6 @@ def convert_quant_method_to_trt(
 
 
 class TensorRTConfig(TensorRTPretrainedConfig, ABC):
-
     @staticmethod
     def get_quantization_config(
         config: PretrainedConfig,

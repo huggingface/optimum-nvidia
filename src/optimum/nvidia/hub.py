@@ -36,8 +36,8 @@ from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
 from safetensors.torch import save_file as to_safetensors
 from tensorrt_llm import Mapping
-from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
 from tensorrt_llm._utils import numpy_to_torch
+from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
 from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
@@ -316,7 +316,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
                 # Write ranked-checkpoints
                 converted_weights = {
-                    name: numpy_to_torch(tensor) if isinstance(tensor, np.ndarray) else tensor
+                    name: numpy_to_torch(tensor)
+                    if isinstance(tensor, np.ndarray)
+                    else tensor
                     for name, tensor in converted_weights.items()
                 }
                 to_safetensors(
