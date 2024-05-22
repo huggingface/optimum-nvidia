@@ -772,6 +772,7 @@ class WhisperForConditionalGeneration(
 
         LOGGER.info("Building Whisper encoder...")
         (
+            encoder_checkpoints_folder,
             encoder_engines_folder,
             encoder_engines_relative_folder,
         ) = OptimumWhisperEncoder.convert_and_build(
@@ -785,6 +786,7 @@ class WhisperForConditionalGeneration(
 
         LOGGER.info("Building Whisper decoder...")
         (
+            decoder_checkpoints_folder,
             decoder_engines_folder,
             decoder_engines_relative_folder,
         ) = OptimumWhisperDecoder.convert_and_build(
@@ -796,10 +798,14 @@ class WhisperForConditionalGeneration(
             **model_kwargs,
         )
 
-        return [encoder_engines_folder[0], decoder_engines_folder[0]], [
-            encoder_engines_relative_folder[0],
-            decoder_engines_relative_folder[0],
-        ]
+        return (
+            [encoder_checkpoints_folder[0], decoder_checkpoints_folder[0]],
+            [encoder_engines_folder[0], decoder_engines_folder[0]],
+            [
+                encoder_engines_relative_folder[0],
+                decoder_engines_relative_folder[0],
+            ],
+        )
 
     def encoder(
         self,
