@@ -449,7 +449,9 @@ class WhisperEncoderConfig(TensorRTConfig):
 
 class WhisperDecoderConfig(TensorRTConfig):
     @classmethod
-    def from_config(cls, config: "TransformersPretrainedConfig") -> "TensorRTConfig":
+    def from_config(cls, config: "TransformersPretrainedConfig", mapping: Optional[Mapping]) -> "TensorRTConfig":
+        mapping = mapping or Mapping()
+
         # Retrieve the quantization from the transformers config (if provided)
         _, qconfig = TensorRTConfig.get_quantization_config(config)
 
@@ -467,9 +469,9 @@ class WhisperDecoderConfig(TensorRTConfig):
             intermediate_size=None,
             norm_epsilon=None,
             position_embedding_type="learned_absolute",
-            world_size=1,
-            tp_size=1,
-            pp_size=1,
+            world_size=mapping.world_size,
+            tp_size=mapping.tp_size,
+            pp_size=mapping.pp_size,
             quantization=qconfig,
             use_parallel_embedding=None,
             embedding_sharding_dim=None,
