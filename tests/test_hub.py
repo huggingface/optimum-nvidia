@@ -49,8 +49,7 @@ def test_save_engine_locally_and_reload():
             model.save_pretrained(trtllm_out)
 
             assert trtllm_out.exists()
-            assert (trtllm_out / FOLDER_TRTLLM_ENGINES).exists()
-            assert (trtllm_out / FOLDER_TRTLLM_ENGINES / "rank0.engine").exists()
+            assert (trtllm_out / "rank0.engine").exists()
 
         def _reload():
             with mock.patch("optimum.nvidia.hub.HuggingFaceHubModel.convert_and_build"):
