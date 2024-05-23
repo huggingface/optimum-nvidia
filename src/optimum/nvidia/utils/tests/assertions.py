@@ -21,8 +21,8 @@ def assert_generated_partially_match(
 def assert_generated_text_partially_match(generated: str, gold: str, atol: float):
     assert 0 < atol < 1
 
-    max_overlap = min(generated.shape[0], gold.shape[0])
     generated, gold = np.asarray(generated.split()), np.asarray(gold.split())
+    max_overlap = min(len(generated), len(gold))
     matched = np.sum(generated[:max_overlap] == gold[:max_overlap])
     ratio = matched / max_overlap
 

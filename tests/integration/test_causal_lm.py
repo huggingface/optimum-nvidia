@@ -31,7 +31,7 @@ from optimum.nvidia.utils.tests import (
 )
 
 
-MODEL_MAP = {
+MODEL_TO_TEST = {
     "google/gemma-2b-it",
     "meta-llama/Llama-2-7b-chat-hf",
     "mistralai/Mistral-7B-Instruct-v0.2",
@@ -43,15 +43,9 @@ MODEL_KWARGS_MAPS = {"Mixtral-8x7B-Instruct-v0.1": {"tp": 4}}
 
 
 @requires_multi_gpu
-@pytest.mark.parametrize("model_id", MODEL_MAP)
+@pytest.mark.parametrize("model_id", MODEL_TO_TEST)
 @pytest.mark.parametrize("batch_size", [1, 3])
 def test_generation(model_id: str, batch_size: int):
-    # model_ids = (
-    #     [MODEL_MAP[model_type]]
-    #     if isinstance(MODEL_MAP[model_type], str)
-    #     else MODEL_MAP[model_type]
-    # )
-
     torch_dtype = torch.float16  # TODO: test fp8, int4, int8, fp32
 
     # TODO: test batched generation as well.
@@ -121,14 +115,8 @@ def test_generation(model_id: str, batch_size: int):
 
 
 @requires_multi_gpu
-@pytest.mark.parametrize("model_id", MODEL_MAP)
+@pytest.mark.parametrize("model_id", MODEL_TO_TEST)
 def test_pipeline(model_id: str):
-    # model_ids = (
-    #     [MODEL_MAP[model_type]]
-    #     if isinstance(MODEL_MAP[model_type], str)
-    #     else MODEL_MAP[model_type]
-    # )
-
     kwargs = {
         "top_k": 1,
         "top_p": 0,
@@ -143,7 +131,7 @@ def test_pipeline(model_id: str):
     pipe_torch = transformers_pipeline(
         task="text-generation",
         model=model_id,
-        device="cuda:1",
+        device="cpu",
         torch_dtype=torch.float16,
     )
 
