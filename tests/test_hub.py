@@ -8,6 +8,7 @@ from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 # import pytest
 import optimum.nvidia.hub
 from optimum.nvidia import AutoModelForCausalLM
+from optimum.nvidia.hub import FOLDER_TRTLLM_ENGINES
 
 
 # from optimum.nvidia.utils.nvml import get_device_name
@@ -48,7 +49,7 @@ def test_save_engine_locally_and_reload():
             model.save_pretrained(trtllm_out)
 
             assert trtllm_out.exists()
-            assert (trtllm_out / "rank0.engine").exists()
+            assert (trtllm_out / FOLDER_TRTLLM_ENGINES / "rank0.engine").exists()
 
         def _reload():
             with mock.patch("optimum.nvidia.hub.HuggingFaceHubModel.convert_and_build"):
