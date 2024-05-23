@@ -449,7 +449,9 @@ class WhisperEncoderConfig(TensorRTConfig):
 
 class WhisperDecoderConfig(TensorRTConfig):
     @classmethod
-    def from_config(cls, config: "TransformersPretrainedConfig", mapping: Optional[Mapping]) -> "TensorRTConfig":
+    def from_config(
+        cls, config: "TransformersPretrainedConfig", mapping: Optional[Mapping]
+    ) -> "TensorRTConfig":
         mapping = mapping or Mapping()
 
         # Retrieve the quantization from the transformers config (if provided)
