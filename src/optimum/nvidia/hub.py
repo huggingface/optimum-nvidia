@@ -35,6 +35,7 @@ import torch
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
 from safetensors.torch import save_file as to_safetensors
+from tensorrt_llm import Mapping
 from tensorrt_llm._utils import numpy_to_torch
 from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
 from transformers import AutoConfig, AutoTokenizer, GenerationConfig
@@ -47,15 +48,24 @@ from optimum.nvidia.builder.config import EngineConfigBuilder
 from optimum.nvidia.quantization import AutoQuantizationConfig
 from optimum.nvidia.quantization.ammo import AmmoQuantizer
 from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
-from optimum.nvidia.utils.nvml import get_max_memory
 
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
+ATTR_TRTLLM_CHECKPOINT_FOLDER = "__trtllm_checkpoint_folder__"
+FOLDER_TRTLLM_CHECKPOINTS = "checkpoints"
 FOLDER_TRTLLM_ENGINES = "engines"
+FILE_TRTLLM_CHECKPOINT_PATTERN = "rank[0-9]*.safetensors"
 FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]*.engine"
 
 HUB_TRTLLM_ENGINE_PATTERNS = ["**/config.json", f"**/{FILE_TRTLLM_ENGINE_PATTERN}"]
 HUB_SAFETENSORS_PATTERNS = ["config.json", "*.safetensors", SAFE_WEIGHTS_INDEX_NAME]
+
+SHARDING_KWARGS = {"tp_size", "pp_size", "world_size", "gpus_per_node", "rank"}
+SHARDING_KWARGS_ALIASES = {
+    "tp": "tp_size",
+    "pp": "pp_size",
+}
+
 LOGGER = getLogger()
 LOGGER.setLevel(level="INFO")
 
@@ -115,10 +125,42 @@ def find_prebuilt_engines(root: Path) -> Tuple[List[Path], List[Path]]:
     return folders, relative_folders
 
 
+def get_sharding_info(**kwargs):
+    mapping_kwargs = {}
+
+    for name_, value in kwargs.items():
+        # Handle aliased args
+        if name_ in SHARDING_KWARGS_ALIASES:
+            name = SHARDING_KWARGS_ALIASES[name_]
+        else:
+            name = name_
+
+        # Ensure we are targeting a sharding kwarg
+        if name in SHARDING_KWARGS:
+            # Check if not already present
+            if name in mapping_kwargs and name != name_:
+                LOGGER.warning(f"Parameter {name} already defined through {name_}")
+
+            mapping_kwargs[name] = value
+
+    if mapping_kwargs:
+        if "world_size" not in mapping_kwargs:
+            mapping_kwargs["world_size"] = (
+                mapping_kwargs["tp_size"] * mapping_kwargs["pp_size"]
+            )
+            LOGGER.debug(
+                f"Set sharding_info's world_size to {mapping_kwargs['world_size']}"
+            )
+        return Mapping(**mapping_kwargs)
+    else:
+        return None
+
+
 @runtime_checkable
 class SupportsTensorrtConversion(Protocol):
     MODEL_CONFIG: Type[TensorRTConfig]
     HF_LIBRARY_TARGET_MODEL_CLASS: Type[ModelHubMixin]
+
     TRT_LLM_TARGET_MODEL_CLASS: Type[PretrainedModel]
 
     @staticmethod
@@ -139,7 +181,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         hf_model: Optional[TransformersPretrainedModel] = None,
         config_class: Optional[TensorRTConfig] = None,
         **model_kwargs,
-    ) -> Tuple[List[Path], List[Path]]:
+    ) -> Tuple[List[Path], List[Path], List[Path]]:
         """
         :param local_path:
         :param hf_model_config:
@@ -148,23 +190,29 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         """
 
         # Path where will be stored the engines
-        if engine_save_path is None:
-            engine_save_path = local_path
-            engines_folder = local_path / FOLDER_TRTLLM_ENGINES
-            engines_folder.mkdir(exist_ok=True, parents=True)
-        else:
-            engines_folder = engine_save_path / FOLDER_TRTLLM_ENGINES
-            engines_folder.mkdir(exist_ok=True, parents=True)
+        root = engine_save_path if engine_save_path else local_path
+        checkpoint_folder = root / FOLDER_TRTLLM_CHECKPOINTS
+        engines_folder = root / FOLDER_TRTLLM_ENGINES
+
+        # Ensure all the tree exists
+        checkpoint_folder.mkdir(exist_ok=True, parents=True)
+        engines_folder.mkdir(exist_ok=True, parents=True)
 
         # Retrieve configuration
         config = AutoConfig.for_model(**hf_model_config)
         if "torch_dtype" in model_kwargs:
             config.torch_dtype = model_kwargs["torch_dtype"]
 
+        # Get sharding information to forward to the config converted
+        model_kwargs["mapping"] = get_sharding_info(**model_kwargs)
+
         # Convert the original config to a model config TRTLLM understands
         model_config = HuggingFaceHubModel.convert_config_to_trtllm(
             cls, config, config_class=config_class, **model_kwargs
         )
+
+        if model_config.has_moe:
+            model_config.moe_config.validate()
 
         # We now have a TRTLLM compatible config, so let's feed it to the target TRTLLM model to create a checkpoint
         LOGGER.debug("Allocating TRTLLM model to build the checkpoint")
@@ -181,8 +229,6 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         if engine_config.plugins_config is None:
             engine_config.plugins_config = model_config.get_plugins_config()
 
-        max_memory = get_max_memory()
-
         if hf_model is None:
             LOGGER.debug(
                 f"Loading weights from {local_path} into the model ({cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__})"
@@ -190,8 +236,8 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
             hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
                 local_path,
-                device_map="auto",
-                max_memory=max_memory,
+                torch_dtype="auto",
+                device_map="cpu",
                 local_files_only=True,
             )
         else:
@@ -247,7 +293,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
 
             hf_quantizer = AmmoQuantizer(
                 quantization_config=qconfig,
-                artifact_path=engines_folder,
+                artifact_path=checkpoint_folder,
                 tensor_parallel_degree=engine_config.sharding_profile.tensor_parallelism,
                 pipeline_parallel_degree=engine_config.sharding_profile.pipeline_parallelism,
                 export_tensorrt_llm_config=True,
@@ -264,32 +310,40 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 )
                 model_config.set_rank(rank)
                 converted_weights = cls.convert_weights(model, hf_model, model_config)
-                converted_weights = {
-                    name: numpy_to_torch(tensor)
-                    for name, tensor in converted_weights.items()
-                }
 
                 # Bind the converted weights against the TRTLLM model
                 model.load(converted_weights)
 
                 # Write ranked-checkpoints
+                converted_weights = {
+                    name: numpy_to_torch(tensor)
+                    if isinstance(tensor, np.ndarray)
+                    else tensor
+                    for name, tensor in converted_weights.items()
+                }
                 to_safetensors(
                     converted_weights,
-                    engines_folder / f"rank{model_config.mapping.rank}.safetensors",
+                    checkpoint_folder / f"rank{model_config.mapping.rank}.safetensors",
                 )
 
             # Write global config
-            model_config.save_pretrained(engines_folder)
+            model_config.save_pretrained(checkpoint_folder)
 
         # We are freeing memory used by the HF Model to let the engine build goes forward
         del hf_model
         torch.cuda.empty_cache()
 
         # Build
-        engine_builder = LocalEngineBuilder(model_config, engines_folder)
+        engine_builder = LocalEngineBuilder(
+            model_config, checkpoint_folder, engines_folder
+        )
         engine_builder.build(engine_config)
 
-        return [engines_folder], [engines_folder.relative_to(local_path)]
+        return (
+            [checkpoint_folder],
+            [engines_folder],
+            [engines_folder.relative_to(local_path)],
+        )
 
     @classmethod
     def _from_pretrained(
@@ -306,6 +360,11 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         token: Optional[Union[str, bool]],
         **model_kwargs,
     ) -> T:
+        # Config attributes are being injected also along "config"...
+        for key in config.keys():
+            if key in model_kwargs:
+                model_kwargs.pop(key)
+
         if not isinstance(cls, SupportsTensorrtConversion):
             raise ValueError(
                 f"{cls} doesn't support converting from Hugging Face Hub model."
@@ -334,8 +393,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             )
 
         # Look for prebuilt engine files, if none found, we convert and build
-        engines_folders, relative_paths_engines_folders = find_prebuilt_engines(
-            local_path
+        checkpoints_folders, (engines_folders, relative_paths_engines_folders) = (
+            None,
+            find_prebuilt_engines(local_path),
         )
         if len(engines_folders) == 0:
             LOGGER.info(
@@ -363,8 +423,8 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                     prebuilt_engines_only=False,
                 )
 
-            engines_folders, relative_paths_engines_folders = cls.convert_and_build(
-                local_path, config, **model_kwargs
+            checkpoint_folders, engines_folders, relative_paths_engines_folders = (
+                cls.convert_and_build(local_path, config, **model_kwargs)
             )
         else:
             LOGGER.info(f"Found pre-built engines at: {engines_folders}")
@@ -392,6 +452,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
             transformers_config=transformers_config,
         )
 
+        setattr(model, ATTR_TRTLLM_CHECKPOINT_FOLDER, checkpoints_folders)
         setattr(model, ATTR_TRTLLM_ENGINE_FOLDER, engines_folders)
         model._relative_path_engines_folders = relative_paths_engines_folders
         return model
@@ -455,7 +516,9 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
         if config_class is None:
             config_class = cls.MODEL_CONFIG
 
-        trt_config = config_class.from_config(config)
+        mapping = additional_params.get("mapping", None)
+
+        trt_config = config_class.from_config(config, mapping)
         if hasattr(trt_config, "check_config"):
             trt_config.check_config()
 

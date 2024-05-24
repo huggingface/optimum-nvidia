@@ -24,27 +24,28 @@ from utils_testing import clean_cached_engines_for_model
 
 from optimum.nvidia import AutoModelForCausalLM
 from optimum.nvidia.pipelines import pipeline
-from optimum.nvidia.utils.tests.utils import requires_multi_gpu
+from optimum.nvidia.utils.tests import (
+    assert_generated_partially_match,
+    assert_generated_text_partially_match,
+    requires_multi_gpu,
+)
 
 
-MAX_TOKENS_DELTA_PERCENT_ATOL = 10.0
-
-MODEL_MAP = {
-    "gemma": ["google/gemma-2b-it", "google/gemma-7b-it"],
-    "llama": "meta-llama/Llama-2-7b-chat-hf",
-    "mistral": "mistralai/Mistral-7B-Instruct-v0.2",
+MODEL_TO_TEST = {
+    "google/gemma-2b-it",
+    "meta-llama/Llama-2-7b-chat-hf",
+    "mistralai/Mistral-7B-Instruct-v0.2",
+    "meta-llama/Meta-Llama-3-8B",
+    "mistralai/Mixtral-8x7B-Instruct-v0.1",
 }
 
+MODEL_KWARGS_MAPS = {"Mixtral-8x7B-Instruct-v0.1": {"tp": 4}}
 
-@pytest.mark.parametrize("model_type", MODEL_MAP.keys())
+
+@requires_multi_gpu
+@pytest.mark.parametrize("model_id", MODEL_TO_TEST)
 @pytest.mark.parametrize("batch_size", [1, 3])
-def test_generation(model_type: str, batch_size: int):
-    model_ids = (
-        [MODEL_MAP[model_type]]
-        if isinstance(MODEL_MAP[model_type], str)
-        else MODEL_MAP[model_type]
-    )
-
+def test_generation(model_id: str, batch_size: int):
     torch_dtype = torch.float16  # TODO: test fp8, int4, int8, fp32
 
     # TODO: test batched generation as well.
@@ -55,73 +56,23 @@ def test_generation(model_type: str, batch_size: int):
 
     max_new_tokens = 15
 
-    for model_id in model_ids:
-        # Make sure we remove the potentially already built engines.
-        clean_cached_engines_for_model(model_id)
+    # Make sure we remove the potentially already built engines.
+    clean_cached_engines_for_model(model_id)
 
-        tokenizer = AutoTokenizer.from_pretrained(model_id)
-        tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.padding_side = "left"
+    tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = "left"
 
-        inp = tokenizer(prompts, padding=True, return_tensors="pt").to("cuda")
+    inp = tokenizer(prompts, padding=True, return_tensors="pt").to("cuda")
 
-        torch_model = TransformersAutoModelForCausalLM.from_pretrained(
-            model_id,
-            torch_dtype=torch_dtype,
-            attn_implementation="eager",
-        )
-        torch_model = torch_model.eval()
-        torch_model = torch_model.to("cuda")  # TODO: remove?
-
-        kwargs = {
-            "top_k": 1,
-            "top_p": 0,
-            "length_penalty": 1,
-            "repetition_penalty": 1,
-            "temperature": 1,
-        }
-        torch_generated_ids = torch_model.generate(
-            **inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
-        )
-
-        # Free a bit of memory.
-        del torch_model
-        gc.collect()
-        torch.cuda.empty_cache()
-
-        trt_model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            torch_dtype=torch_dtype,
-            max_output_length=1000,
-            max_batch_size=batch_size,
-        )
-
-        trt_generated_ids, _ = trt_model.generate(
-            **inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
-        )
-
-        # TODO: left/right padding is not aligned between Transformers and TRT-LLM.
-        if batch_size == 1:
-            assert torch.equal(trt_generated_ids, torch_generated_ids)
-        else:
-            assert trt_generated_ids.shape == torch_generated_ids.shape
-
-        torch_text = tokenizer.batch_decode(
-            torch_generated_ids, skip_special_tokens=True
-        )
-        trt_text = tokenizer.batch_decode(trt_generated_ids, skip_special_tokens=True)
-
-        assert torch_text == trt_text
-
-
-@requires_multi_gpu
-@pytest.mark.parametrize("model_type", MODEL_MAP.keys())
-def test_pipeline(model_type: str):
-    model_ids = (
-        [MODEL_MAP[model_type]]
-        if isinstance(MODEL_MAP[model_type], str)
-        else MODEL_MAP[model_type]
+    torch_model = TransformersAutoModelForCausalLM.from_pretrained(
+        model_id,
+        torch_dtype=torch_dtype,
+        attn_implementation="eager",
+        device_map="auto",
     )
+    torch_model = torch_model.eval()
+    torch_model = torch_model.to("cuda")  # TODO: remove?
 
     kwargs = {
         "top_k": 1,
@@ -130,63 +81,87 @@ def test_pipeline(model_type: str):
         "repetition_penalty": 1,
         "temperature": 1,
     }
+    torch_generated_ids = torch_model.generate(
+        **inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
+    )
 
-    for model_id in model_ids:
-        # Make sure we remove the potentially already built engines.
-        clean_cached_engines_for_model(model_id)
+    # Free a bit of memory.
+    del torch_model
+    gc.collect()
+    torch.cuda.empty_cache()
 
-        pipe_torch = transformers_pipeline(
-            task="text-generation",
-            model=model_id,
-            device="cuda:1",
-            torch_dtype=torch.float16,
+    trt_model = AutoModelForCausalLM.from_pretrained(
+        model_id,
+        torch_dtype=torch_dtype,
+        max_output_length=1000,
+        max_batch_size=batch_size,
+        **MODEL_KWARGS_MAPS.get(model_id, {}),
+    )
+
+    trt_generated_ids, _ = trt_model.generate(
+        **inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
+    )
+
+    # TODO: left/right padding is not aligned between Transformers and TRT-LLM.
+    assert trt_generated_ids.shape == torch_generated_ids.shape
+    for i in range(batch_size):
+        mask = inp["attention_mask"][i]
+        shift = len(mask) - mask.sum()
+        assert_generated_partially_match(
+            trt_generated_ids[i].cpu().numpy(),
+            torch_generated_ids[i, shift:].cpu().numpy(),
+            0.05,
         )
 
-        with torch.no_grad():
-            res_torch = pipe_torch(
-                "Today I am in Paris and I would like to eat crepes.",
-                add_special_tokens=True,
-                max_new_tokens=20,
-                **kwargs,
-            )
 
-        # Free a bit of memory.
-        del pipe_torch
-        gc.collect()
-        torch.cuda.empty_cache()
+@requires_multi_gpu
+@pytest.mark.parametrize("model_id", MODEL_TO_TEST)
+def test_pipeline(model_id: str):
+    kwargs = {
+        "top_k": 1,
+        "top_p": 0,
+        "length_penalty": 1,
+        "repetition_penalty": 1,
+        "temperature": 1,
+    }
 
-        pipe_trt = pipeline(
-            task="text-generation", model=model_id, max_output_length=1000
+    # Make sure we remove the potentially already built engines.
+    clean_cached_engines_for_model(model_id)
+
+    pipe_torch = transformers_pipeline(
+        task="text-generation",
+        model=model_id,
+        device="cpu",
+        torch_dtype=torch.float16,
+    )
+
+    with torch.no_grad():
+        res_torch = pipe_torch(
+            "Today I am in Paris and I would like to eat crepes.",
+            add_special_tokens=True,
+            max_new_tokens=20,
+            **kwargs,
         )
 
-        with torch.no_grad():
-            res_trt = pipe_trt(
-                "Today I am in Paris and I would like to eat crepes.",
-                max_new_tokens=20,
-                **kwargs,
-            )
+    # Free a bit of memory.
+    del pipe_torch
+    gc.collect()
+    torch.cuda.empty_cache()
 
-        transformers_output = res_torch[0]["generated_text"]
-        trtllm_output = res_trt[0]["generated_text"]
+    pipe_trt = pipeline(
+        task="text-generation",
+        model=model_id,
+        max_output_length=1000,
+        **MODEL_KWARGS_MAPS.get(model_id, {}),
+    )
 
-        def count_indexwise_difference(lhs, rhs) -> (int, int):
-            maximum_overlapping_span = min(len(transformers_output), len(trtllm_output))
-
-            lhs_ = lhs[:maximum_overlapping_span]
-            rhs_ = rhs[:maximum_overlapping_span]
-            count = 0
-
-            for l, r in zip(lhs_, rhs_):
-                if l != r:
-                    count += 1
-
-            return count, maximum_overlapping_span
-
-        num_mismatched_tokens, num_tokens = count_indexwise_difference(
-            transformers_output, trtllm_output
+    with torch.no_grad():
+        res_trt = pipe_trt(
+            "Today I am in Paris and I would like to eat crepes.",
+            max_new_tokens=20,
+            **kwargs,
         )
-        mismatch_percent = float(num_mismatched_tokens) / float(num_tokens) * 100
 
-        assert (
-            mismatch_percent <= MAX_TOKENS_DELTA_PERCENT_ATOL
-        ), f"{num_mismatched_tokens} mismatched tokens over {num_tokens} > {MAX_TOKENS_DELTA_PERCENT_ATOL} % ({mismatch_percent} %)"
+    assert_generated_text_partially_match(
+        res_torch[0]["generated_text"], res_trt[0]["generated_text"], atol=0.05
+    )

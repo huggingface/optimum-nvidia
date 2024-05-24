@@ -382,7 +382,11 @@ def convert_from_hf_whisper_decoder(
 
 class WhisperEncoderConfig(TensorRTConfig):
     @classmethod
-    def from_config(cls, config: "TransformersPretrainedConfig") -> "TensorRTConfig":
+    def from_config(
+        cls, config: "TransformersPretrainedConfig", mapping: Optional[Mapping] = None
+    ) -> "TensorRTConfig":
+        mapping = mapping or Mapping()
+
         # Retrieve the quantization from the transformers config (if provided)
         _, qconfig = TensorRTConfig.get_quantization_config(config)
 
@@ -400,12 +404,12 @@ class WhisperEncoderConfig(TensorRTConfig):
             intermediate_size=None,
             norm_epsilon=None,
             position_embedding_type="learned_absolute",
-            world_size=1,
-            tp_size=1,
-            pp_size=1,
+            world_size=mapping.world_size,
+            tp_size=mapping.tp_size,
+            pp_size=mapping.pp_size,
             quantization=qconfig,
-            use_parallel_embedding=None,
-            embedding_sharding_dim=None,
+            use_parallel_embedding=mapping.tp_size > 1,
+            embedding_sharding_dim=0 if mapping.tp_size > 1 else None,
             share_embedding_table=None,
             head_size=-1,  # We need to set it otherwise TRT-LLM tries to compute `hidden_size // num_attention_heads`
             max_source_positions=config.max_source_positions,
@@ -445,7 +449,11 @@ class WhisperEncoderConfig(TensorRTConfig):
 
 class WhisperDecoderConfig(TensorRTConfig):
     @classmethod
-    def from_config(cls, config: "TransformersPretrainedConfig") -> "TensorRTConfig":
+    def from_config(
+        cls, config: "TransformersPretrainedConfig", mapping: Optional[Mapping]
+    ) -> "TensorRTConfig":
+        mapping = mapping or Mapping()
+
         # Retrieve the quantization from the transformers config (if provided)
         _, qconfig = TensorRTConfig.get_quantization_config(config)
 
@@ -463,9 +471,9 @@ class WhisperDecoderConfig(TensorRTConfig):
             intermediate_size=None,
             norm_epsilon=None,
             position_embedding_type="learned_absolute",
-            world_size=1,
-            tp_size=1,
-            pp_size=1,
+            world_size=mapping.world_size,
+            tp_size=mapping.tp_size,
+            pp_size=mapping.pp_size,
             quantization=qconfig,
             use_parallel_embedding=None,
             embedding_sharding_dim=None,
@@ -768,6 +776,7 @@ class WhisperForConditionalGeneration(
 
         LOGGER.info("Building Whisper encoder...")
         (
+            encoder_checkpoints_folder,
             encoder_engines_folder,
             encoder_engines_relative_folder,
         ) = OptimumWhisperEncoder.convert_and_build(
@@ -781,6 +790,7 @@ class WhisperForConditionalGeneration(
 
         LOGGER.info("Building Whisper decoder...")
         (
+            decoder_checkpoints_folder,
             decoder_engines_folder,
             decoder_engines_relative_folder,
         ) = OptimumWhisperDecoder.convert_and_build(
@@ -792,10 +802,14 @@ class WhisperForConditionalGeneration(
             **model_kwargs,
         )
 
-        return [encoder_engines_folder[0], decoder_engines_folder[0]], [
-            encoder_engines_relative_folder[0],
-            decoder_engines_relative_folder[0],
-        ]
+        return (
+            [encoder_checkpoints_folder[0], decoder_checkpoints_folder[0]],
+            [encoder_engines_folder[0], decoder_engines_folder[0]],
+            [
+                encoder_engines_relative_folder[0],
+                decoder_engines_relative_folder[0],
+            ],
+        )
 
     def encoder(
         self,

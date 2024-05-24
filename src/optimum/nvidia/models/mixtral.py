@@ -12,17 +12,16 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
 from logging import getLogger
 from typing import Dict, Optional
 
-import torch
+import numpy as np
 from tensorrt_llm import Mapping
 from tensorrt_llm.models import PretrainedConfig, PretrainedModel
-from tensorrt_llm.models.gemma.model import GemmaForCausalLM as TrtGemmaForCausalLM
-from tensorrt_llm.models.gemma.weight import load_from_hf_gemma
+from tensorrt_llm.models.llama.convert import load_weights_from_hf
+from tensorrt_llm.models.llama.model import LLaMAForCausalLM
 from tensorrt_llm.plugin import PluginConfig
-from transformers import GemmaForCausalLM as TransformersGemmaForCausalLM
+from transformers import MixtralForCausalLM as TransformersMixtralForCausalLM
 from transformers import PretrainedConfig as TransformersPretrainedConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
 
@@ -35,11 +34,11 @@ from optimum.nvidia.runtime import CausalLM
 LOGGER = getLogger(__name__)
 
 
-class GemmaConfig(TensorRTConfig):
+class MixtralConfig(TensorRTConfig):
     r"""
-    This is the configuration class to store the configuration of a [`LlamaGemmaConfig`]. It is used to instantiate an Gemma
+    This is the configuration class to store the configuration of a [`MixtralModel`]. It is used to instantiate an Mixtral
     model according to the specified arguments, defining the model architecture. Instantiating a configuration with the
-    defaults will yield a similar configuration to that of the Gemma-7B.
+    defaults will yield a similar configuration to that of the Mixtral-8x7b.
 
     Configuration objects inherit from [`TensorRTConfig`] and can be used to control the model outputs. Read the
     documentation from [`TensorRTConfig`] for more information.
@@ -47,14 +46,14 @@ class GemmaConfig(TensorRTConfig):
 
     @staticmethod
     def from_config(
-        config: TransformersPretrainedConfig, mapping: Optional[Mapping] = None
+        config: TransformersPretrainedConfig, mapping: Optional[Mapping]
     ) -> "TensorRTConfig":
         mapping = mapping or Mapping()
 
         # Retrieve the quantization from the transformers config (if provided)
         _, qconfig = TensorRTConfig.get_quantization_config(config)
 
-        trt_config = GemmaConfig(
+        trt_config = MixtralConfig(
             architecture=config.architectures[0],
             dtype=dtype_to_str(config.torch_dtype),
             logits_dtype="float32",
@@ -66,8 +65,7 @@ class GemmaConfig(TensorRTConfig):
             num_key_value_heads=getattr(
                 config, "num_key_value_heads", config.num_attention_heads
             ),
-            head_size=config.head_dim,
-            hidden_act=config.hidden_act,
+            hidden_act="swiglu",
             intermediate_size=config.intermediate_size,
             norm_epsilon=config.rms_norm_eps,
             position_embedding_type="rope_gpt_neox",
@@ -77,11 +75,14 @@ class GemmaConfig(TensorRTConfig):
             tp_size=mapping.tp_size,
             pp_size=mapping.pp_size,
             use_prompt_tuning=False,
-            use_parallel_embedding=mapping.tp_size > 1,
+            use_parallel_embedding=False,
             embedding_sharding_dim=0,
             share_embedding_table=False,
             max_lora_rank=64,
+            head_size=config.hidden_size // config.num_attention_heads,
             quantization=qconfig,
+            moe_num_experts=getattr(config, "num_local_experts", 0),
+            moe_top_k=getattr(config, "num_experts_per_tok", 0),
         )
 
         trt_config.mapping.gpus_per_node = min(trt_config.mapping.world_size, 8)
@@ -90,7 +91,7 @@ class GemmaConfig(TensorRTConfig):
 
     def get_plugins_config(self) -> PluginConfig:
         config = super().get_plugins_config()
-        config.moe_plugin = "disable"
+        config.moe_plugin = self.dtype
         config.bert_attention_plugin = "disable"
         config.gpt_attention_plugin = self.dtype
         config.gemm_plugin = self.dtype
@@ -102,18 +103,20 @@ class GemmaConfig(TensorRTConfig):
         return False
 
 
-class GemmaForCausalLM(CausalLM, HuggingFaceHubModel):
-    MODEL_CONFIG = GemmaConfig
-    HF_LIBRARY_TARGET_MODEL_CLASS = TransformersGemmaForCausalLM
-    TRT_LLM_TARGET_MODEL_CLASS = TrtGemmaForCausalLM
+class MixtralForCausalLM(CausalLM, HuggingFaceHubModel):
+    MODEL_CONFIG = MixtralConfig
+    HF_LIBRARY_TARGET_MODEL_CLASS = TransformersMixtralForCausalLM
+    TRT_LLM_TARGET_MODEL_CLASS = LLaMAForCausalLM
 
     @staticmethod
     def convert_weights(
         target: PretrainedModel,
         source: TransformersPretrainedModel,
         config: PretrainedConfig,
-    ) -> Dict[str, torch.Tensor]:
+    ) -> Dict[str, np.ndarray]:
         if config.quant_mode.has_any_quant():
-            raise NotImplementedError("Quantization is not supported yet.")
+            config.quantization.exclude_modules.append("router")
 
-        return load_from_hf_gemma(target, source, config.mapping, config.dtype)
+        return load_weights_from_hf(
+            config=config.to_dict(), mapping=config.mapping, model=source
+        )

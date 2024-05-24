@@ -59,7 +59,10 @@ class LocalEngineBuilder:
 
     @staticmethod
     def build_cli_command(
-        root: Path, model_config: TensorRTConfig, build_config: EngineConfig
+        checkpoints: Path,
+        engines: Path,
+        model_config: TensorRTConfig,
+        build_config: EngineConfig,
     ) -> Dict[str, Any]:
         workload_params = {
             "--max_batch_size": build_config.workload_profile.max_batch_size,
@@ -83,11 +86,13 @@ class LocalEngineBuilder:
         }
 
         build_params = {
-            "--checkpoint_dir": root,
-            "--output_dir": root,
-            "--model_config": root / "config.json",
+            "--checkpoint_dir": checkpoints,
+            "--output_dir": engines,
+            "--model_config": checkpoints / "model.json",
             "--builder_opt": build_config.optimisation_level,
             "--logits_dtype": build_config.logits_dtype,
+            "--tp_size": model_config.mapping.tp_size,
+            "--pp_size": model_config.mapping.pp_size,
         }
 
         if hasattr(model_config, "trt_model_class") and hasattr(
@@ -101,13 +106,16 @@ class LocalEngineBuilder:
 
         return build_params | generation_params | workload_params | plugins_params
 
-    def __init__(self, config: TensorRTConfig, output_folder: Path):
+    def __init__(
+        self, config: TensorRTConfig, checkpoint_folder: Path, output_folder: Path
+    ):
         self._config = config
+        self._checkpoint_folder = checkpoint_folder
         self._output_folder = output_folder
 
     def build(self, config: EngineConfig):
         cli_params = LocalEngineBuilder.build_cli_command(
-            self._output_folder, self._config, config
+            self._checkpoint_folder, self._output_folder, self._config, config
         )
         cli_params_list = [str(t) for t in chain.from_iterable(cli_params.items())]
         cli_params_list = [i for i in cli_params_list if i != "None"]
@@ -116,7 +124,7 @@ class LocalEngineBuilder:
 
         for rank in range(self._config.mapping.world_size):
             ranked_checkpoint = f"rank{rank}.safetensors"
-            if not (self._output_folder / ranked_checkpoint).exists():
+            if not (self._checkpoint_folder / ranked_checkpoint).exists():
                 raise ValueError(
                     f"Missing rank-{rank} checkpoints (rank{rank}.safetensors), cannot build."
                 )

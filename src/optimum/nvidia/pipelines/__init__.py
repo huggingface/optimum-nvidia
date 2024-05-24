@@ -30,6 +30,7 @@ SUPPORTED_MODEL_WITH_TASKS: Dict[str, Dict[str, Tuple[Type[Pipeline], Type]]] = 
     "gemma": {"text-generation": (TextGenerationPipeline, AutoModelForCausalLM)},
     "llama": {"text-generation": (TextGenerationPipeline, AutoModelForCausalLM)},
     "mistral": {"text-generation": (TextGenerationPipeline, AutoModelForCausalLM)},
+    "mixtral": {"text-generation": (TextGenerationPipeline, AutoModelForCausalLM)},
 }
 
 
