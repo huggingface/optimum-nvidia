@@ -25,8 +25,6 @@ from transformers import MixtralForCausalLM as TransformersMixtralForCausalLM
 from transformers import PretrainedConfig as TransformersPretrainedConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
 
-from optimum.nvidia import TensorRTConfig
-from optimum.nvidia.config import dtype_to_str
 from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.runtime import CausalLM
 

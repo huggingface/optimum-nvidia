@@ -25,7 +25,6 @@ class OptimumNvidiaException(Exception):
             super().__init__(f"{msg}")
 
 
-### Model support
 class UnsupportedModelException(OptimumNvidiaException):
     def __init__(self, model_type: str):
         super().__init__(
@@ -34,7 +33,6 @@ class UnsupportedModelException(OptimumNvidiaException):
         )
 
 
-### Unsupported features blocks
 class UnsupportedHardwareFeature(OptimumNvidiaException):
     """
     Base exception class for all features not supported by underlying hardware

@@ -56,9 +56,6 @@ from transformers.models.whisper.modeling_whisper import (
     WhisperForConditionalGeneration as TransformersWhisperForConditionalGeneration,
 )
 from transformers.models.whisper.tokenization_whisper import TASK_IDS, TO_LANGUAGE_CODE
-
-from optimum.nvidia import TensorRTConfig
-from optimum.nvidia.config import dtype_to_str
 from optimum.nvidia.generation.logits_process import (
     TrtForceTokensLogitsProcessor,
     TrtSuppressTokensAtBeginLogitsProcessor,

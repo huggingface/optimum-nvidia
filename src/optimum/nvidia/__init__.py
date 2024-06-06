@@ -13,9 +13,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from .config import TensorRTConfig
-from .converter import TensorRTModelConverter
+LIBRARY_NAME = "trtllm"
+
+
+from .export import ExportConfig
 from .logging import DEFAULT_LOGGING_FMT, setup_logging
 from .models import AutoModelForCausalLM
-from .pipelines import pipeline
+# from .pipelines import pipeline
 from .version import VERSION, __version__

@@ -19,24 +19,26 @@ from typing import Any, Dict, Optional, Type, Union
 from huggingface_hub import ModelHubMixin
 
 from optimum.nvidia.errors import UnsupportedModelException
-
-from ..hub import extract_model_type
-from .gemma import GemmaForCausalLM
-from .llama import LlamaForCausalLM
-from .mistral import MistralForCausalLM
-from .mixtral import MixtralForCausalLM
+from tensorrt_llm.models.gemma.model import GemmaForCausalLM
+from tensorrt_llm.models.llama.model import LLaMAForCausalLM
+from tensorrt_llm.models.phi.model import PhiForCausalLM
 
 
 _SUPPORTED_MODEL_CLASS = {
-    "llama": LlamaForCausalLM,
-    "mistral": MistralForCausalLM,
-    "mixtral": MixtralForCausalLM,
+    "llama": LLaMAForCausalLM,
+    "mistral": LLaMAForCausalLM,
+    "mixtral": LLaMAForCausalLM,
     "gemma": GemmaForCausalLM,
+    "phi": PhiForCausalLM
 }
 
 
 class AutoModelForCausalLM(ModelHubMixin):
-    """ """
+    """
+    """
+
+    def __init__(self):
+        super().__init__()
 
     @classmethod
     def _from_pretrained(
@@ -56,13 +58,7 @@ class AutoModelForCausalLM(ModelHubMixin):
         if config is None:
             raise ValueError("Unable to determine the model type with config = None")
 
-        model_type, _ = extract_model_type(config)
-        if model_type is None:
-            raise ValueError(
-                "Unable to determine the model type from the provided config. "
-                "Please open-up an issue at https://github.com/huggingface/optimum-nvidia/issues"
-            )
-
+        model_type = config["model_type"]
         if model_type not in _SUPPORTED_MODEL_CLASS:
             raise UnsupportedModelException(model_type)
 

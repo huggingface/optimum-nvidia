@@ -14,4 +14,3 @@
 #  limitations under the License.
 
 from .auto import AutoModelForCausalLM
-from .base import SupportsFromHuggingFace
