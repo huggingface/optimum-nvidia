@@ -13,39 +13,38 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from glob import glob
 from logging import getLogger
 from pathlib import Path
 from typing import (
-    Any,
     Dict,
     List,
     Optional,
-    Tuple,
     Type,
     Union,
 )
-from warnings import warn
 
-import torch
-from huggingface_hub import ModelHubMixin, cached_download, snapshot_download, cached_assets_path
+from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
-from optimum.utils import NormalizedConfig
-from safetensors.torch import save_file as to_safetensors
-from tensorrt_llm import Mapping, __version__ as trtllm_version, BuildConfig
-from tensorrt_llm.auto_parallel.config import infer_cluster_key
-from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
-from transformers import AutoConfig, AutoTokenizer, GenerationConfig
-from transformers import PreTrainedModel as TransformersPretrainedModel
-from transformers.utils import CONFIG_NAME, GENERATION_CONFIG_NAME, SAFE_WEIGHTS_INDEX_NAME
+from tensorrt_llm import BuildConfig
+from tensorrt_llm import __version__ as trtllm_version
+from transformers import AutoConfig, GenerationConfig
+from transformers.utils import (
+    CONFIG_NAME,
+    GENERATION_CONFIG_NAME,
+    SAFE_WEIGHTS_INDEX_NAME,
+)
 
-from optimum.nvidia import ExportConfig, LIBRARY_NAME
-from optimum.nvidia.export import PATH_FOLDER_ENGINES, PATH_FOLDER_CHECKPOINTS, Workspace, TensorRTModelConverter
-from optimum.nvidia.export.config import default
-from optimum.nvidia.quantization import AutoQuantizationConfig
-from optimum.nvidia.quantization.ammo import AmmoQuantizer
-from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
-from optimum.nvidia.utils.nvml import get_device_name, get_device_count
+from optimum.nvidia import LIBRARY_NAME, ExportConfig
+from optimum.nvidia.export import (
+    PATH_FOLDER_CHECKPOINTS,
+    PATH_FOLDER_ENGINES,
+    TensorRTModelConverter,
+)
+from optimum.nvidia.lang import DataType
+from optimum.nvidia.models import SupportsTransformersConversion, SupportsFromHuggingFace
+from optimum.nvidia.utils import get_user_agent
+from optimum.nvidia.utils.nvml import get_device_count, get_device_name
+from optimum.utils import NormalizedConfig
 
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
@@ -99,6 +98,7 @@ class HuggingFaceHubModel(
         token: Optional[Union[str, bool]],
         export_config: Optional[ExportConfig] = None,
         force_export: bool = False,
+        use_cuda_graph: bool = False
     ) -> T:
         if get_device_count() < 1:
             raise ValueError("No GPU detected on this platform")
@@ -129,9 +129,6 @@ class HuggingFaceHubModel(
         if not checkpoint_files:
             LOGGER.info(f"No prebuild engines nor checkpoint were found, starting from scratch with {model_id}")
 
-            # Retrieve a proper transformers' config
-            config = NormalizedConfig(AutoConfig.for_model(**config))
-
             # Retrieve the snapshot if needed
             original_checkpoints_path_for_conversion = snapshot_download(
                 model_id,
@@ -146,17 +143,33 @@ class HuggingFaceHubModel(
                 allow_patterns=HUB_SNAPSHOT_ALLOW_PATTERNS
             )
 
+            # Retrieve a proper transformers' config
+            config = NormalizedConfig(AutoConfig.for_model(**config))
+            generation_config = GenerationConfig.from_pretrained(original_checkpoints_path_for_conversion)
+
             # If no export config, let's grab a default one
-            export_config = export_config or default(config)
+            export_config = export_config or ExportConfig.from_config(config)
 
             # Forward everything to the exporter
-            if hasattr(cls, "TRT_LLM_TARGET_MODEL_CLASS"):
-                model = cls.TRT_LLM_TARGET_MODEL_CLASS.from_hugging_face(original_checkpoints_path_for_conversion)
+            if isinstance(cls, SupportsTransformersConversion) and isinstance(cls.TRT_LLM_TARGET_MODEL_CLASS, SupportsFromHuggingFace):
+                model = cls.TRT_LLM_TARGET_MODEL_CLASS.from_hugging_face(
+                    original_checkpoints_path_for_conversion,
+                    dtype=DataType.from_torch(config.torch_dtype).value,
+                    mapping=export_config.sharding.to_mapping(),
+                )
                 converter = TensorRTModelConverter()
-                checkpoints = converter.convert(model)
-                engines = converter.build(model, BuildConfig())
+                build_config = export_config.to_builder_config()
 
-        raise NotImplementedError()
+                # checkpoints = converter.convert(model)
+                engines = converter.build(model, build_config)
+
+            return cls(
+                engines if isinstance(engines, list) else [engines.root],
+                gpus_per_node=get_device_count(),
+                transformers_config=config,
+                use_cuda_graph=use_cuda_graph,
+                generation_config=generation_config,
+            )
 
     def _save_pretrained(self, save_directory: Path) -> None:
         raise NotImplementedError()

@@ -3,11 +3,16 @@ from pathlib import Path
 from typing import Iterable
 
 from huggingface_hub import cached_assets_path
+from tensorrt_llm import __version__ as TRTLLM_VERSION
 
 from optimum.nvidia import LIBRARY_NAME
-from optimum.nvidia.export import PATH_FOLDER_CHECKPOINTS, PATH_FOLDER_ENGINES, PATH_FILE_CHECKPOINTS, PATH_FILE_ENGINES
+from optimum.nvidia.export import (
+    PATH_FILE_CHECKPOINTS,
+    PATH_FILE_ENGINES,
+    PATH_FOLDER_CHECKPOINTS,
+    PATH_FOLDER_ENGINES,
+)
 from optimum.nvidia.utils.nvml import get_device_name
-from tensorrt_llm import __version__ as TRTLLM_VERSION
 
 
 @dataclass

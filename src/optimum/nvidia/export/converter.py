@@ -3,13 +3,14 @@ from enum import Enum
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import Optional, Union, Type
+from typing import Optional, Type, Union
 
-from tensorrt_llm import Mapping, BuildConfig
+from tensorrt_llm import BuildConfig, Mapping
 from tensorrt_llm.builder import build
 from tensorrt_llm.models import PretrainedModel
 
 from optimum.nvidia.export import Workspace
+
 
 LOGGER = getLogger()
 
@@ -65,7 +66,7 @@ class TensorRTModelConverter(ABC):
     ) -> TensorRTArtifact:
         """
         Take a local model and create the intermediate TRTLLM checkpoint
-        :param local_path_to_model
+        :param model
         :param mapping
         :return:
         """

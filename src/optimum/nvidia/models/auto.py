@@ -17,19 +17,20 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Type, Union
 
 from huggingface_hub import ModelHubMixin
+from optimum.nvidia.models.gemma import GemmaForCausalLM
+# from tensorrt_llm.models.gemma.model import GemmaForCausalLM
+# from tensorrt_llm.models.llama.model import LLaMAForCausalLM
+# from tensorrt_llm.models.phi.model import PhiForCausalLM
 
 from optimum.nvidia.errors import UnsupportedModelException
-from tensorrt_llm.models.gemma.model import GemmaForCausalLM
-from tensorrt_llm.models.llama.model import LLaMAForCausalLM
-from tensorrt_llm.models.phi.model import PhiForCausalLM
 
 
 _SUPPORTED_MODEL_CLASS = {
-    "llama": LLaMAForCausalLM,
-    "mistral": LLaMAForCausalLM,
-    "mixtral": LLaMAForCausalLM,
+    # "llama": LLaMAForCausalLM,
+    # "mistral": LLaMAForCausalLM,
+    # "mixtral": LLaMAForCausalLM,
     "gemma": GemmaForCausalLM,
-    "phi": PhiForCausalLM
+    # "phi": PhiForCausalLM
 }
 
 
