@@ -1,9 +1,18 @@
 from os import PathLike
-from typing import Protocol, runtime_checkable, Type, TYPE_CHECKING, Optional, Mapping, Union
+from typing import (
+    TYPE_CHECKING,
+    Mapping,
+    Optional,
+    Protocol,
+    Type,
+    Union,
+    runtime_checkable,
+)
+
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedModel as TransformersPreTrainedModel
     from tensorrt_llm.top_model_mixin import TopModelMixin
+    from transformers import PreTrainedModel as TransformersPreTrainedModel
 
 
 @runtime_checkable

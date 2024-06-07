@@ -17,18 +17,17 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Type, Union
 
 from huggingface_hub import ModelHubMixin
-from optimum.nvidia.models.gemma import GemmaForCausalLM
-# from tensorrt_llm.models.gemma.model import GemmaForCausalLM
-# from tensorrt_llm.models.llama.model import LLaMAForCausalLM
-# from tensorrt_llm.models.phi.model import PhiForCausalLM
 
+from optimum.nvidia import ExportConfig
 from optimum.nvidia.errors import UnsupportedModelException
+from optimum.nvidia.models.gemma import GemmaForCausalLM
+from optimum.nvidia.models.llama import LlamaForCausalLM
 
 
 _SUPPORTED_MODEL_CLASS = {
-    # "llama": LLaMAForCausalLM,
-    # "mistral": LLaMAForCausalLM,
-    # "mixtral": LLaMAForCausalLM,
+    "llama": LlamaForCausalLM,
+    "mistral": LlamaForCausalLM,
+    "mixtral": LlamaForCausalLM,
     "gemma": GemmaForCausalLM,
     # "phi": PhiForCausalLM
 }
@@ -54,6 +53,9 @@ class AutoModelForCausalLM(ModelHubMixin):
         local_files_only: bool,
         token: Optional[Union[str, bool]],
         config: Optional[Dict[str, Any]] = None,
+        export_config: Optional[ExportConfig] = None,
+        force_export: bool = False,
+        use_cuda_graph: bool = False,
         **model_kwargs,
     ):
         if config is None:
@@ -74,6 +76,9 @@ class AutoModelForCausalLM(ModelHubMixin):
             resume_download=resume_download,
             local_files_only=local_files_only,
             token=token,
+            export_config=export_config,
+            force_export=force_export,
+            use_cuda_graph=use_cuda_graph,
             **model_kwargs,
         )
 

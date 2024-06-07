@@ -1,19 +1,21 @@
 from dataclasses import dataclass
 from logging import getLogger
-from typing import Optional, TYPE_CHECKING, NamedTuple, Union
+from typing import TYPE_CHECKING, Optional, Union
 from warnings import warn
 
-from optimum.utils import NormalizedConfig
 from tensorrt_llm import BuildConfig, Mapping
 from tensorrt_llm.plugin import PluginConfig
 
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.quantization import Float8QuantizationConfig
+from optimum.utils import NormalizedConfig
+
 
 if TYPE_CHECKING:
     from datasets import Dataset
-    from optimum.nvidia.quantization import AmmoQuantizationConfig
     from transformers import PretrainedConfig
+
+    from optimum.nvidia.quantization import AmmoQuantizationConfig
 
 INFER_NUM_LOCAL_GPUS = -1
 LOGGER = getLogger()

@@ -25,7 +25,6 @@ from typing import (
 
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
-from tensorrt_llm import BuildConfig
 from tensorrt_llm import __version__ as trtllm_version
 from transformers import AutoConfig, GenerationConfig
 from transformers.utils import (
@@ -41,7 +40,10 @@ from optimum.nvidia.export import (
     TensorRTModelConverter,
 )
 from optimum.nvidia.lang import DataType
-from optimum.nvidia.models import SupportsTransformersConversion, SupportsFromHuggingFace
+from optimum.nvidia.models import (
+    SupportsFromHuggingFace,
+    SupportsTransformersConversion,
+)
 from optimum.nvidia.utils import get_user_agent
 from optimum.nvidia.utils.nvml import get_device_count, get_device_name
 from optimum.utils import NormalizedConfig

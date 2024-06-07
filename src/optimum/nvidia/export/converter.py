@@ -3,7 +3,7 @@ from enum import Enum
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import Optional, Type, Union
+from typing import Optional, Sequence, Type, Union
 
 from tensorrt_llm import BuildConfig, Mapping
 from tensorrt_llm.builder import build
@@ -61,28 +61,37 @@ class TensorRTModelConverter(ABC):
 
     def convert(
         self,
-        model: PretrainedModel,
+        models: Union[PretrainedModel, Sequence[PretrainedModel]],
         mapping: Optional[Mapping] = None
     ) -> TensorRTArtifact:
         """
         Take a local model and create the intermediate TRTLLM checkpoint
-        :param model
+        :param models
         :param mapping
         :return:
         """
-        LOGGER.info(f"Converting {model.config.architecture} model to TRTLLM")
-        model.save_checkpoint(str(self._workspace.checkpoints_path))
+        if isinstance(models, PretrainedModel):
+            models = [models]
+
+        for (rank, model) in enumerate(models):
+            LOGGER.info(f"Converting {models[0].config.architecture} model for rank {rank} to TRTLLM")
+            model.save_checkpoint(str(self._workspace.checkpoints_path))
+
         return TensorRTArtifact.checkpoints(str(self._workspace.checkpoints_path))
 
-    def build(self, model: PretrainedModel, config: BuildConfig) -> TensorRTArtifact:
+    def build(self, models: Union[PretrainedModel, Sequence[PretrainedModel]], config: BuildConfig) -> TensorRTArtifact:
         """
-        :param model
+        :param models
         :param config
         :return:
         """
-        LOGGER.info(f"Building TRTLLM engine from checkpoint {self._workspace.checkpoints_path}")
+        if isinstance(models, PretrainedModel):
+            models = [models]
 
-        engine = build(model, config)
-        engine.save(str(self._workspace.engines_path))
+        for (rank, model) in enumerate(models):
+            LOGGER.info(f"Building TRTLLM engine for rank {rank}")
+
+            engine = build(model, config)
+            engine.save(str(self._workspace.engines_path))
 
         return TensorRTArtifact.engines(str(self._workspace.engines_path))
