@@ -4,6 +4,7 @@ from typing import (
     Mapping,
     Optional,
     Protocol,
+    Sequence,
     Type,
     Union,
     runtime_checkable,
@@ -32,6 +33,6 @@ class SupportsFromHuggingFace(Protocol):
 @runtime_checkable
 class SupportsTransformersConversion(Protocol):
     HF_LIBRARY_TARGET_MODEL_CLASS: Type["TransformersPreTrainedModel"]
-    TRT_LLM_TARGET_MODEL_CLASS: Type["TopModelMixin"]
+    TRT_LLM_TARGET_MODEL_CLASSES: Union[Type["TopModelMixin"], Sequence[Type["TopModelMixin"]]]
 
 
