@@ -28,7 +28,6 @@ from typing import (
     Union,
     runtime_checkable,
 )
-from warnings import warn
 
 import numpy as np
 import torch
@@ -38,14 +37,14 @@ from safetensors.torch import save_file as to_safetensors
 from tensorrt_llm import Mapping
 from tensorrt_llm._utils import numpy_to_torch
 from tensorrt_llm.models.modeling_utils import PretrainedConfig, PretrainedModel
-from transformers import AutoConfig, AutoTokenizer, GenerationConfig
+from transformers import AutoConfig, GenerationConfig
 from transformers import PreTrainedModel as TransformersPretrainedModel
 from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
 
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.builder import LocalEngineBuilder
 from optimum.nvidia.builder.config import EngineConfigBuilder
-from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
+from optimum.nvidia.utils import get_user_agent
 
 
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
@@ -238,7 +237,7 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 device_map="cpu",
                 local_files_only=True,
             )
-            
+
         # Disable quantization for the time being while we move to ModelOpt
         # else:
         #     if not isinstance(hf_model, cls.HF_LIBRARY_TARGET_MODEL_CLASS):
