@@ -16,5 +16,6 @@
 from .config import TensorRTConfig
 from .logging import DEFAULT_LOGGING_FMT, setup_logging
 from .models import AutoModelForCausalLM
+from .optimizations import IntoModelOptQuantConfig
 from .pipelines import pipeline
 from .version import VERSION, __version__

@@ -19,9 +19,8 @@ from pathlib import Path
 from typing import Union
 
 import torch
-from ammo.torch import export as ate
-from ammo.torch import quantization as atq
 from tensorrt_llm.quantization import QuantMode
+from tensorrt_llm.quantization.quantize_by_modelopt import quantize_and_export
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import PreTrainedModel
@@ -102,27 +101,29 @@ class AmmoQuantizer(HfQuantizer):
         assert isinstance(self.quantization_config, AmmoQuantizationConfig)
         qconfig = self.quantization_config
 
-        if qconfig.requires_calibration:
-            if not qconfig.has_calibration_dataset:
-                raise ValueError("Float8 quantization requires a calibration dataset")
+        quantize_and_export()
 
-            with torch.inference_mode():
-
-                def _loop():
-                    data = DataLoader(
-                        qconfig.calibration_dataset,
-                        batch_size=batch_size,
-                        pin_memory=True,
-                        pin_memory_device="cuda:0",
-                    )
-
-                    for sample in tqdm(data):
-                        inputs = {
-                            name: tensor.to("cuda:0") for name, tensor in sample.items()
-                        }
-                        model(**inputs)
-
-                atq.quantize(model, config=qconfig.as_ammo_config(), forward_loop=_loop)
+        # if qconfig.requires_calibration:
+        #     if not qconfig.has_calibration_dataset:
+        #         raise ValueError("Float8 quantization requires a calibration dataset")
+        #
+        #     with torch.inference_mode():
+        #
+        #         def _loop():
+        #             data = DataLoader(
+        #                 qconfig.calibration_dataset,
+        #                 batch_size=batch_size,
+        #                 pin_memory=True,
+        #                 pin_memory_device="cuda:0",
+        #             )
+        #
+        #             for sample in tqdm(data):
+        #                 inputs = {
+        #                     name: tensor.to("cuda:0") for name, tensor in sample.items()
+        #                 }
+        #                 model(**inputs)
+        #
+        #         quantize(model, quant_config=qconfig.as_ammo_config(), forward_loop=_loop)
 
     def _process_model_after_weight_loading(self, model, **kwargs):
         assert isinstance(self.quantization_config, AmmoQuantizationConfig)
