@@ -45,8 +45,6 @@ from transformers.utils import SAFE_WEIGHTS_INDEX_NAME
 from optimum.nvidia import TensorRTConfig
 from optimum.nvidia.builder import LocalEngineBuilder
 from optimum.nvidia.builder.config import EngineConfigBuilder
-from optimum.nvidia.quantization import AutoQuantizationConfig
-from optimum.nvidia.quantization.ammo import AmmoQuantizer
 from optimum.nvidia.utils import get_user_agent, maybe_offload_weights_to_cpu
 
 
@@ -240,67 +238,69 @@ class HuggingFaceHubModel(ModelHubMixin, SupportsTensorrtConversion):
                 device_map="cpu",
                 local_files_only=True,
             )
-        else:
-            if not isinstance(hf_model, cls.HF_LIBRARY_TARGET_MODEL_CLASS):
-                raise ValueError(
-                    f"Expected a {cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__} model to be provided, but the argument `hf_model` is a {hf_model.__class__.__name__}."
-                )
+            
+        # Disable quantization for the time being while we move to ModelOpt
+        # else:
+        #     if not isinstance(hf_model, cls.HF_LIBRARY_TARGET_MODEL_CLASS):
+        #         raise ValueError(
+        #             f"Expected a {cls.HF_LIBRARY_TARGET_MODEL_CLASS.__name__} model to be provided, but the argument `hf_model` is a {hf_model.__class__.__name__}."
+        #         )
 
-        hf_model = hf_model.eval()
-        hf_model = maybe_offload_weights_to_cpu(hf_model)
-
-        # Retrieve potential quantization config (If provided) - follow the transformers parameter's name
-        has_qconfig = "quantization_config" in model_kwargs
-        use_fp8 = model_kwargs.get("use_fp8", False)
-
-        if has_qconfig or use_fp8:
-            LOGGER.debug("About to quantize Hugging Face model")
-
-            if has_qconfig:
-                qconfig = model_kwargs.pop("quantization_config")
-            elif use_fp8:
-                if (
-                    candidate_tokenizer_path := engines_folder.parent.joinpath(
-                        "tokenizer.json"
-                    )
-                ).exists():
-                    tokenizer_path = candidate_tokenizer_path.parent
-                elif "_model_id" in hf_model_config:
-                    tokenizer_path = hf_model_config["_model_id"]
-                else:
-                    raise ValueError(
-                        "Unable to determine the tokenizer to use to quantize this model. "
-                        "Please provide a complete QuantizationConfig using "
-                        "from_pretrained(..., quantization_config=AutoQuantizationConfig.from_description())"
-                    )
-
-                tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-                qconfig = AutoQuantizationConfig.from_description(
-                    weight="float8",
-                    activation="float8",
-                    tokenizer=tokenizer,
-                    dataset="c4-new",
-                )
-
-                warn(
-                    "Converting model to support float8 inference.\n"
-                    f"Calibrating model with dataset='c4', split='train', samples={len(qconfig.calibration_dataset)}.\n"
-                    "Note: if text generation doesn't meet your expectations, "
-                    "you can control the quantization process manually with this API: "
-                    "qconfig = AutoQuantizationConfig.from_description(weight='float8', activation='float8', ...) "
-                    "forwarding the configuration to .from_pretrained(..., quantization_config=qconfig)"
-                )
-
-            hf_quantizer = AmmoQuantizer(
-                quantization_config=qconfig,
-                artifact_path=checkpoint_folder,
-                tensor_parallel_degree=engine_config.sharding_profile.tensor_parallelism,
-                pipeline_parallel_degree=engine_config.sharding_profile.pipeline_parallelism,
-                export_tensorrt_llm_config=True,
-            )
-
-            hf_quantizer.preprocess_model(hf_model, batch_size=1)
-            hf_quantizer.postprocess_model(hf_model)
+        # hf_model = hf_model.eval()
+        # hf_model = maybe_offload_weights_to_cpu(hf_model)
+        #
+        # # Retrieve potential quantization config (If provided) - follow the transformers parameter's name
+        # has_qconfig = "quantization_config" in model_kwargs
+        # use_fp8 = model_kwargs.get("use_fp8", False)
+        #
+        # if has_qconfig or use_fp8:
+        #     LOGGER.debug("About to quantize Hugging Face model")
+        #
+        #     if has_qconfig:
+        #         qconfig = model_kwargs.pop("quantization_config")
+        #     elif use_fp8:
+        #         if (
+        #             candidate_tokenizer_path := engines_folder.parent.joinpath(
+        #                 "tokenizer.json"
+        #             )
+        #         ).exists():
+        #             tokenizer_path = candidate_tokenizer_path.parent
+        #         elif "_model_id" in hf_model_config:
+        #             tokenizer_path = hf_model_config["_model_id"]
+        #         else:
+        #             raise ValueError(
+        #                 "Unable to determine the tokenizer to use to quantize this model. "
+        #                 "Please provide a complete QuantizationConfig using "
+        #                 "from_pretrained(..., quantization_config=AutoQuantizationConfig.from_description())"
+        #             )
+        #
+        #         tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+        #         qconfig = AutoQuantizationConfig.from_description(
+        #             weight="float8",
+        #             activation="float8",
+        #             tokenizer=tokenizer,
+        #             dataset="c4-new",
+        #         )
+        #
+        #         warn(
+        #             "Converting model to support float8 inference.\n"
+        #             f"Calibrating model with dataset='c4', split='train', samples={len(qconfig.calibration_dataset)}.\n"
+        #             "Note: if text generation doesn't meet your expectations, "
+        #             "you can control the quantization process manually with this API: "
+        #             "qconfig = AutoQuantizationConfig.from_description(weight='float8', activation='float8', ...) "
+        #             "forwarding the configuration to .from_pretrained(..., quantization_config=qconfig)"
+        #         )
+        #
+        #     hf_quantizer = AmmoQuantizer(
+        #         quantization_config=qconfig,
+        #         artifact_path=checkpoint_folder,
+        #         tensor_parallel_degree=engine_config.sharding_profile.tensor_parallelism,
+        #         pipeline_parallel_degree=engine_config.sharding_profile.pipeline_parallelism,
+        #         export_tensorrt_llm_config=True,
+        #     )
+        #
+        #     hf_quantizer.preprocess_model(hf_model, batch_size=1)
+        #     hf_quantizer.postprocess_model(hf_model)
 
         else:
             # Apply the conversion from Hugging Face weights to TRTLLM
