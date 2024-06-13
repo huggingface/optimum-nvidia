@@ -37,7 +37,7 @@ from optimum.nvidia import LIBRARY_NAME, ExportConfig
 from optimum.nvidia.export import (
     PATH_FOLDER_CHECKPOINTS,
     PATH_FOLDER_ENGINES,
-    TensorRTModelConverter,
+    TensorRTModelConverter, auto_parallel,
 )
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import (
@@ -56,21 +56,23 @@ HUB_SNAPSHOT_ALLOW_PATTERNS = [
     CONFIG_NAME,
     GENERATION_CONFIG_NAME,
     SAFE_WEIGHTS_INDEX_NAME,
-    "*.safetensors"
+    "*.safetensors",
 ]
 
 LOGGER = getLogger()
 
 
 def get_trtllm_artifact(model_id: str, patterns: List[str]) -> Path:
-    return Path(snapshot_download(
-        repo_id=model_id,
-        repo_type="model",
-        library_name=LIBRARY_NAME,
-        library_version=trtllm_version,
-        user_agent=get_user_agent(),
-        allow_patterns=patterns
-    ))
+    return Path(
+        snapshot_download(
+            repo_id=model_id,
+            repo_type="model",
+            library_name=LIBRARY_NAME,
+            library_version=trtllm_version,
+            user_agent=get_user_agent(),
+            allow_patterns=patterns,
+        )
+    )
 
 
 class HuggingFaceHubModel(
@@ -81,7 +83,6 @@ class HuggingFaceHubModel(
     repo_url="https://github.com/huggingface/optimum-nvidia",
     docs_url="https://huggingface.co/docs/optimum/nvidia_overview",
 ):
-
     def __init__(self):
         super().__init__()
 
@@ -100,7 +101,8 @@ class HuggingFaceHubModel(
         token: Optional[Union[str, bool]],
         export_config: Optional[ExportConfig] = None,
         force_export: bool = False,
-        use_cuda_graph: bool = False
+        use_cuda_graph: bool = False,
+        device_map: Optional[str] = None,
     ) -> T:
         if get_device_count() < 1:
             raise ValueError("No GPU detected on this platform")
@@ -111,25 +113,41 @@ class HuggingFaceHubModel(
         # Look for prebuild TRTLLM Engine
         engine_files = checkpoint_files = []
         if not force_export:
-            LOGGER.debug(f"Attempt to retrieve prebuild engine(s) for device {device_name}")
-            cached_path = get_trtllm_artifact(model_id, [f"{common_hub_path}/**/{PATH_FOLDER_ENGINES}/*.engine"])
+            LOGGER.debug(f"Retrieving prebuild engine(s) for device {device_name}")
+            cached_path = get_trtllm_artifact(
+                model_id, [f"{common_hub_path}/**/{PATH_FOLDER_ENGINES}/*.engine"]
+            )
 
-            if (engines_config_path := (cached_path / PATH_FOLDER_ENGINES / "config.json")).exists():
-                LOGGER.info(f"Found prebuild engines at {engines_config_path.parent}")
-                engine_files = engines_config_path.parent.glob(FILE_TRTLLM_ENGINE_PATTERN)
+            if (
+                engines_config_path := (
+                    cached_path / PATH_FOLDER_ENGINES / "config.json"
+                )
+            ).exists():
+                LOGGER.info(f"Found engines at {engines_config_path.parent}")
+                engine_files = engines_config_path.parent.glob(
+                    FILE_TRTLLM_ENGINE_PATTERN
+                )
 
         # if no engine is found, then just try to locate a checkpoint
         if not engine_files:
-            LOGGER.debug(f"Attempt to retrieve preconverted checkpoint(s) for device {device_name}")
-            cached_path = get_trtllm_artifact(model_id, [f"{common_hub_path}/**/*.safetensors"])
+            LOGGER.debug(f"Retrieving checkpoint(s) for {device_name}")
+            cached_path = get_trtllm_artifact(
+                model_id, [f"{common_hub_path}/**/*.safetensors"]
+            )
 
-            if (checkpoints_config_path := (cached_path / PATH_FOLDER_CHECKPOINTS / "config.json")).exists():
-                LOGGER.info(f"Found preconverted checkpoints at {checkpoints_config_path.parent}")
-                checkpoint_files = checkpoints_config_path.parent.glob(FILE_TRTLLM_CHECKPOINT_PATTERN)
+            if (
+                checkpoints_config_path := (
+                    cached_path / PATH_FOLDER_CHECKPOINTS / "config.json"
+                )
+            ).exists():
+                LOGGER.info(f"Found checkpoints at {checkpoints_config_path.parent}")
+                checkpoint_files = checkpoints_config_path.parent.glob(
+                    FILE_TRTLLM_CHECKPOINT_PATTERN
+                )
 
         # If no checkpoint available, we are good for a full export from the Hugging Face Hub
         if not checkpoint_files:
-            LOGGER.info(f"No prebuild engines nor checkpoint were found, starting from scratch with {model_id}")
+            LOGGER.info(f"No prebuild engines nor checkpoint were found for {model_id}")
 
             # Retrieve the snapshot if needed
             original_checkpoints_path_for_conversion = snapshot_download(
@@ -142,28 +160,38 @@ class HuggingFaceHubModel(
                 resume_download=resume_download,
                 local_files_only=local_files_only,
                 token=token,
-                allow_patterns=HUB_SNAPSHOT_ALLOW_PATTERNS
+                allow_patterns=HUB_SNAPSHOT_ALLOW_PATTERNS,
             )
 
             # Retrieve a proper transformers' config
             config = NormalizedConfig(AutoConfig.for_model(**config))
-            generation_config = GenerationConfig.from_pretrained(original_checkpoints_path_for_conversion)
+            generation_config = GenerationConfig.from_pretrained(
+                original_checkpoints_path_for_conversion
+            )
 
             # If no export config, let's grab a default one
             export_config = export_config or ExportConfig.from_config(config)
 
-            # Forward everything to the exporter
-            if isinstance(cls, SupportsTransformersConversion) and isinstance(cls.TRT_LLM_TARGET_MODEL_CLASS, SupportsFromHuggingFace):
-                model = cls.TRT_LLM_TARGET_MODEL_CLASS.from_hugging_face(
-                    original_checkpoints_path_for_conversion,
-                    dtype=DataType.from_torch(config.torch_dtype).value,
-                    mapping=export_config.sharding.to_mapping(),
-                )
-                converter = TensorRTModelConverter()
-                build_config = export_config.to_builder_config()
+            if device_map == "auto":
+                LOGGER.info("Auto-parallel we will be used")
+                export_config = auto_parallel(export_config)
 
-                # checkpoints = converter.convert(model)
-                engines = converter.build(model, build_config)
+            # Forward everything to the exporter
+            if isinstance(cls, SupportsTransformersConversion):
+                for clazz in cls.TRT_LLM_TARGET_MODEL_CLASSES:
+                    if not isinstance(clazz, SupportsFromHuggingFace):
+                        raise TypeError(f"{clazz} can't convert from HF checkpoint")
+
+                    model = clazz.from_hugging_face(
+                        original_checkpoints_path_for_conversion,
+                        dtype=DataType.from_torch(config.torch_dtype).value,
+                        mapping=export_config.sharding.to_mapping(),
+                    )
+                    converter = TensorRTModelConverter()
+                    build_config = export_config.to_builder_config()
+
+                    # checkpoints = converter.convert(model)
+                    engines = converter.build(model, build_config)
 
             return cls(
                 engines if isinstance(engines, list) else [engines.root],
