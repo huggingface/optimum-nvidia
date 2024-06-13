@@ -172,6 +172,7 @@ class HuggingFaceHubModel(
             # If no export config, let's grab a default one
             export_config = export_config or ExportConfig.from_config(config)
 
+            # Handle the device_map
             if device_map == "auto":
                 LOGGER.info("Auto-parallel we will be used")
                 export_config = auto_parallel(export_config)
