@@ -28,4 +28,3 @@ LOGGER = getLogger(__name__)
 class GemmaForCausalLM(CausalLM, HuggingFaceHubModel, SupportsTransformersConversion):
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersGemmaForCausalLM
     TRT_LLM_TARGET_MODEL_CLASS = TrtGemmaForCausalLM
-

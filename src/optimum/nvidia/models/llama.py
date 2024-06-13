@@ -28,4 +28,3 @@ LOGGER = getLogger(__name__)
 class LlamaForCausalLM(CausalLM, HuggingFaceHubModel, SupportsTransformersConversion):
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersLlamaForCausalLM
     TRT_LLM_TARGET_MODEL_CLASS = LLaMAForCausalLM
-

@@ -58,7 +58,9 @@ class ExportConfig:
             raise ValueError(f"max_batch_size should >= 1, got {self.max_batch_size}")
 
     @staticmethod
-    def from_config(config: Union[NormalizedConfig, "PretrainedConfig"], max_batch_size: int = 32) -> "ExportConfig":
+    def from_config(
+        config: Union[NormalizedConfig, "PretrainedConfig"], max_batch_size: int = 32
+    ) -> "ExportConfig":
         if not isinstance(config, NormalizedConfig):
             config = NormalizedConfig(config)
 
@@ -70,18 +72,22 @@ class ExportConfig:
             dtype=dtype,
             max_input_len=max_input_len,
             max_output_len=max_output_len,
-            max_batch_size=max_batch_size
+            max_batch_size=max_batch_size,
         )
 
     def validate(self):
         if self.optimization_level < 0:
-            raise ValueError(f"optimization_level should be >= 0, got {self.optimization_level}")
+            raise ValueError(
+                f"optimization_level should be >= 0, got {self.optimization_level}"
+            )
 
         if self.max_num_tokens == -1:
             if self.enabled_chunked_context:
                 # Should be N * tokens_per_block
                 self.max_num_tokens = 128  # hardcode for now
-                warn(f"max_num_tokens set to {self.max_num_tokens} with chunked context enabled might not be optimal.")
+                warn(
+                    f"max_num_tokens set to {self.max_num_tokens} with chunked context enabled might not be optimal."
+                )
             else:
                 self.max_num_tokens = 2 * self.max_input_len
 
@@ -98,7 +104,9 @@ class ExportConfig:
         config.moe_plugin = self.dtype
         return config
 
-    def to_builder_config(self, plugin_config: Optional[PluginConfig] = None) -> "BuildConfig":
+    def to_builder_config(
+        self, plugin_config: Optional[PluginConfig] = None
+    ) -> "BuildConfig":
         self.validate()
 
         return BuildConfig(
@@ -108,11 +116,15 @@ class ExportConfig:
             max_beam_width=self.max_beam_width,
             max_num_tokens=self.max_num_tokens,
             builder_opt=self.optimization_level,
-            plugin_config=plugin_config or self.plugin_config
+            plugin_config=plugin_config or self.plugin_config,
         )
 
-    def with_sharding(self, tp: int = 1, pp: int = 1, sharding: Optional[ShardingInfo] = None) -> "ExportConfig":
-        self.sharding = sharding or ShardingInfo(auto_parallel=False, tp=tp, pp=pp, world_size=tp * pp)
+    def with_sharding(
+        self, tp: int = 1, pp: int = 1, sharding: Optional[ShardingInfo] = None
+    ) -> "ExportConfig":
+        self.sharding = sharding or ShardingInfo(
+            auto_parallel=False, tp=tp, pp=pp, world_size=tp * pp
+        )
         return self
 
     def with_quantization(self, qconfig: "AmmoQuantizationConfig") -> "ExportConfig":
@@ -120,7 +132,9 @@ class ExportConfig:
         return self
 
 
-def auto_parallel(config: "ExportConfig", world_size: int = INFER_NUM_LOCAL_GPUS) -> "ExportConfig":
+def auto_parallel(
+    config: "ExportConfig", world_size: int = INFER_NUM_LOCAL_GPUS
+) -> "ExportConfig":
     """
     Helper to infer the most suitable parallelization strategy to apply to the model with respect to the local hardware.
     :param config: `ExportConfig` the quantization process should be added to
@@ -130,10 +144,13 @@ def auto_parallel(config: "ExportConfig", world_size: int = INFER_NUM_LOCAL_GPUS
 
     if world_size < 1:
         from optimum.nvidia.utils.nvml import get_device_count
+
         world_size = get_device_count()
 
     LOGGER.info(f"Creating auto-parallelization strategy on {world_size}-GPUs")
-    return config.with_sharding(sharding=ShardingInfo(auto_parallel=True, tp=1, pp=1, world_size=world_size))
+    return config.with_sharding(
+        sharding=ShardingInfo(auto_parallel=True, tp=1, pp=1, world_size=world_size)
+    )
 
 
 def sharded(config: "ExportConfig", tp: int = 1, pp: int = 1) -> "ExportConfig":
@@ -172,6 +189,6 @@ def float8(
     qconfig = Float8QuantizationConfig(
         with_quantized_kv_cache=kv_cache,
         with_quantized_lm_head=quantize_lm_head,
-        calibration_data=calibration_dataset
+        calibration_data=calibration_dataset,
     )
     return config.with_quantization(qconfig)

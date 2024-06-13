@@ -21,6 +21,7 @@ from transformers import AutoTokenizer
 
 from optimum.nvidia import AutoModelForCausalLM, ExportConfig, setup_logging
 
+
 # Setup logging needs to happen before importing TRT ...
 setup_logging(True)
 
@@ -65,7 +66,9 @@ if __name__ == "__main__":
     # Create the model
     ExportConfig().with_sharding(tp=1, pp=1)
 
-    model = AutoModelForCausalLM.from_pretrained(args.model, use_fp8=args.fp8, tp=args.tp, pp=args.pp)
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model, use_fp8=args.fp8, tp=args.tp, pp=args.pp
+    )
     model.save_pretrained(args.output)
 
     prompt = "What is the latest generation of Nvidia GPUs?"

@@ -25,8 +25,7 @@ from optimum.nvidia.models.llama import LlamaForCausalLM
 
 
 class AutoModelForCausalLM(ModelHubMixin):
-    """
-    """
+    """ """
 
     _SUPPORTED_MODEL_CLASS = {
         "llama": LlamaForCausalLM,
@@ -35,7 +34,6 @@ class AutoModelForCausalLM(ModelHubMixin):
         "gemma": GemmaForCausalLM,
         # "phi": PhiForCausalLM
     }
-
 
     def __init__(self):
         super().__init__()

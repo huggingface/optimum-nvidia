@@ -21,7 +21,6 @@ class TensorRTArtifactKind(Enum):
 
 
 class TensorRTArtifact:
-
     @staticmethod
     def checkpoints(root: Union[str, PathLike]) -> "TensorRTArtifact":
         return TensorRTArtifact(TensorRTArtifactKind.CHECKPOINTS, root)
@@ -62,7 +61,7 @@ class TensorRTModelConverter(ABC):
     def convert(
         self,
         models: Union[PretrainedModel, Sequence[PretrainedModel]],
-        mapping: Optional[Mapping] = None
+        mapping: Optional[Mapping] = None,
     ) -> TensorRTArtifact:
         """
         Take a local model and create the intermediate TRTLLM checkpoint
@@ -73,13 +72,19 @@ class TensorRTModelConverter(ABC):
         if isinstance(models, PretrainedModel):
             models = [models]
 
-        for (rank, model) in enumerate(models):
-            LOGGER.info(f"Converting {models[0].config.architecture} model for rank {rank} to TRTLLM")
+        for rank, model in enumerate(models):
+            LOGGER.info(
+                f"Converting {models[0].config.architecture} model for rank {rank} to TRTLLM"
+            )
             model.save_checkpoint(str(self._workspace.checkpoints_path))
 
         return TensorRTArtifact.checkpoints(str(self._workspace.checkpoints_path))
 
-    def build(self, models: Union[PretrainedModel, Sequence[PretrainedModel]], config: BuildConfig) -> TensorRTArtifact:
+    def build(
+        self,
+        models: Union[PretrainedModel, Sequence[PretrainedModel]],
+        config: BuildConfig,
+    ) -> TensorRTArtifact:
         """
         :param models
         :param config
@@ -88,7 +93,7 @@ class TensorRTModelConverter(ABC):
         if isinstance(models, PretrainedModel):
             models = [models]
 
-        for (rank, model) in enumerate(models):
+        for rank, model in enumerate(models):
             LOGGER.info(f"Building TRTLLM engine for rank {rank}")
 
             engine = build(model, config)

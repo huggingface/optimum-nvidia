@@ -20,9 +20,13 @@ class Workspace:
     root: Path
 
     @staticmethod
-    def from_hub_cache(namespace: str = LIBRARY_NAME, version: str = TRTLLM_VERSION) -> "Workspace":
+    def from_hub_cache(
+        namespace: str = LIBRARY_NAME, version: str = TRTLLM_VERSION
+    ) -> "Workspace":
         device_name = get_device_name(0)[-1]
-        return Workspace(cached_assets_path(namespace, namespace=version, subfolder=device_name))
+        return Workspace(
+            cached_assets_path(namespace, namespace=version, subfolder=device_name)
+        )
 
     def __post_init__(self):
         if not self.checkpoints_path.exists():

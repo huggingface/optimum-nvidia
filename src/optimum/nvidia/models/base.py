@@ -18,21 +18,19 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class SupportsFromHuggingFace(Protocol):
-
     @classmethod
     def from_hugging_face(
         cls,
         hf_model_dir: Union[str, bytes, PathLike],
-        dtype: str = 'float16',
+        dtype: str = "float16",
         mapping: Optional[Mapping] = None,
-        **kwargs
-    ):
-        ...
+        **kwargs,
+    ): ...
 
 
 @runtime_checkable
 class SupportsTransformersConversion(Protocol):
     HF_LIBRARY_TARGET_MODEL_CLASS: Type["TransformersPreTrainedModel"]
-    TRT_LLM_TARGET_MODEL_CLASSES: Union[Type["TopModelMixin"], Sequence[Type["TopModelMixin"]]]
-
-
+    TRT_LLM_TARGET_MODEL_CLASSES: Union[
+        Type["TopModelMixin"], Sequence[Type["TopModelMixin"]]
+    ]
