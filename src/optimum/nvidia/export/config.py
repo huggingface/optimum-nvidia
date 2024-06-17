@@ -3,37 +3,19 @@ from logging import getLogger
 from typing import TYPE_CHECKING, Optional, Union
 from warnings import warn
 
-from tensorrt_llm import BuildConfig, Mapping
+from tensorrt_llm import BuildConfig, Mapping as ShardingInfo
 from tensorrt_llm.plugin import PluginConfig
 
 from optimum.nvidia.lang import DataType
-from optimum.nvidia.quantization import Float8QuantizationConfig
 from optimum.utils import NormalizedConfig
 
 
 if TYPE_CHECKING:
-    from datasets import Dataset
     from transformers import PretrainedConfig
 
-    from optimum.nvidia.quantization import AmmoQuantizationConfig
 
 INFER_NUM_LOCAL_GPUS = -1
 LOGGER = getLogger()
-
-
-@dataclass
-class ShardingInfo:
-    auto_parallel: bool
-    tp: int
-    pp: int
-    world_size: int
-
-    def to_mapping(self) -> Mapping:
-        if self.auto_parallel:
-            # auto-parallel is run at build time and requires a single shard export
-            return Mapping(tp_size=1, pp_size=1, world_size=1)
-        else:
-            return Mapping(tp_size=self.tp, pp_size=self.pp, world_size=self.world_size)
 
 
 @dataclass
@@ -49,7 +31,6 @@ class ExportConfig:
     enabled_chunked_context: int = False
 
     sharding: Optional[ShardingInfo] = None
-    quantization: Optional["AmmoQuantizationConfig"] = None
 
     optimization_level: int = 3
 
@@ -123,12 +104,8 @@ class ExportConfig:
         self, tp: int = 1, pp: int = 1, sharding: Optional[ShardingInfo] = None
     ) -> "ExportConfig":
         self.sharding = sharding or ShardingInfo(
-            auto_parallel=False, tp=tp, pp=pp, world_size=tp * pp
+            tp_size=tp, pp_size=pp, world_size=tp * pp
         )
-        return self
-
-    def with_quantization(self, qconfig: "AmmoQuantizationConfig") -> "ExportConfig":
-        self.quantization = qconfig
         return self
 
 
@@ -141,16 +118,34 @@ def auto_parallel(
     :param world_size: Number of GPUs to consider when discovering automatic parallelization strategies
     :return: `ExportConfig`
     """
-
+    # Infer number of GPUs on the system
     if world_size < 1:
         from optimum.nvidia.utils.nvml import get_device_count
-
         world_size = get_device_count()
 
-    LOGGER.info(f"Creating auto-parallelization strategy on {world_size}-GPUs")
-    return config.with_sharding(
-        sharding=ShardingInfo(auto_parallel=True, tp=1, pp=1, world_size=world_size)
-    )
+        LOGGER.info(f"Found {world_size} GPUs on the system")
+
+    # Handle all the different cases (0, 1, N > 1)
+    if world_size == 0:
+        raise ValueError("No GPU found")
+    elif world_size == 1:
+        return config.with_sharding(sharding=ShardingInfo(tp_size=1, pp_size=1, world_size=world_size))
+    else:
+        LOGGER.info(f"Creating auto-parallelization strategy on {world_size}-GPUs")
+        LOGGER.warning("Auto-parallelization strategy is currently in beta and might not be optimal")
+
+        if world_size == 2:
+            return config.with_sharding(tp=2, pp=1)
+        elif world_size == 4:
+            return config.with_sharding(tp=2, pp=2)
+        elif world_size == 8:
+            return config.with_sharding(tp=4, pp=2)
+        else:
+            raise ValueError(
+                f"Unsupported number of GPUs: {world_size}. "
+                "Please open-up and issue on the optimum-nvidia repository: "
+                "https://github.com/huggingface/optimum-nvidia"
+            )
 
 
 def sharded(config: "ExportConfig", tp: int = 1, pp: int = 1) -> "ExportConfig":
@@ -168,27 +163,5 @@ def sharded(config: "ExportConfig", tp: int = 1, pp: int = 1) -> "ExportConfig":
         raise ValueError(f"Pipeline Parallelism (pp) should be >= 1 (got: pp={pp})")
 
     return config.with_sharding(
-        sharding=ShardingInfo(auto_parallel=False, tp=tp, pp=pp, world_size=tp * pp)
+        sharding=ShardingInfo(tp_size=tp, pp_size=pp, world_size=tp * pp)
     )
-
-
-def float8(
-    config: "ExportConfig",
-    kv_cache: bool = True,
-    quantize_lm_head: bool = False,
-    calibration_dataset: Optional["Dataset"] = None,
-):
-    """
-    Define a float8 quantization step to apply to the model when building TRTLLM checkpoints
-    :param config: `ExportConfig` the quantization process should be added to
-    :param kv_cache: Flag indicating the KV cache will store values in float8 precision
-    :param quantize_lm_head: Flag indicating if the final language model head should also be quantized to float8
-    :param  calibration_dataset : Optional preprocessed dataset used to calibrate activations during quantization
-    :return: `ExportConfig`
-    """
-    qconfig = Float8QuantizationConfig(
-        with_quantized_kv_cache=kv_cache,
-        with_quantized_lm_head=quantize_lm_head,
-        calibration_data=calibration_dataset,
-    )
-    return config.with_quantization(qconfig)

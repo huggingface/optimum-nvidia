@@ -186,7 +186,7 @@ class HuggingFaceHubModel(
                     model = clazz.from_hugging_face(
                         original_checkpoints_path_for_conversion,
                         dtype=DataType.from_torch(config.torch_dtype).value,
-                        mapping=export_config.sharding.to_mapping(),
+                        mapping=export_config.sharding,
                     )
                     converter = TensorRTModelConverter()
                     build_config = export_config.to_builder_config()
