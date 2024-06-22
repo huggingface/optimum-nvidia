@@ -3,7 +3,8 @@ from logging import getLogger
 from typing import TYPE_CHECKING, Optional, Union
 from warnings import warn
 
-from tensorrt_llm import BuildConfig, Mapping as ShardingInfo
+from tensorrt_llm import BuildConfig
+from tensorrt_llm import Mapping as ShardingInfo
 from tensorrt_llm.plugin import PluginConfig
 
 from optimum.nvidia.lang import DataType
@@ -54,9 +55,9 @@ class ExportConfig:
             max_input_len=max_input_len,
             max_output_len=max_output_len,
             max_batch_size=max_batch_size,
-        )
+        ).validate()
 
-    def validate(self):
+    def validate(self) -> "ExportConfig":
         if self.optimization_level < 0:
             raise ValueError(
                 f"optimization_level should be >= 0, got {self.optimization_level}"
@@ -73,6 +74,8 @@ class ExportConfig:
                 self.max_num_tokens = 2 * self.max_input_len
 
             LOGGER.debug(f"Inferred max_num_tokens={self.max_num_tokens}")
+
+        return self
 
     @property
     def plugin_config(self) -> "PluginConfig":
@@ -101,10 +104,14 @@ class ExportConfig:
         )
 
     def with_sharding(
-        self, tp: int = 1, pp: int = 1, sharding: Optional[ShardingInfo] = None
+        self,
+        tp: int = 1,
+        pp: int = 1,
+        gpus_per_node: int = 8,
+        sharding: Optional[ShardingInfo] = None,
     ) -> "ExportConfig":
         self.sharding = sharding or ShardingInfo(
-            tp_size=tp, pp_size=pp, world_size=tp * pp
+            tp_size=tp, pp_size=pp, world_size=tp * pp, gpus_per_node=gpus_per_node
         )
         return self
 
@@ -121,6 +128,7 @@ def auto_parallel(
     # Infer number of GPUs on the system
     if world_size < 1:
         from optimum.nvidia.utils.nvml import get_device_count
+
         world_size = get_device_count()
 
         LOGGER.info(f"Found {world_size} GPUs on the system")
@@ -129,17 +137,19 @@ def auto_parallel(
     if world_size == 0:
         raise ValueError("No GPU found")
     elif world_size == 1:
-        return config.with_sharding(sharding=ShardingInfo(tp_size=1, pp_size=1, world_size=world_size))
+        return config.with_sharding(tp=1, pp=1, gpus_per_node=world_size)
     else:
         LOGGER.info(f"Creating auto-parallelization strategy on {world_size}-GPUs")
-        LOGGER.warning("Auto-parallelization strategy is currently in beta and might not be optimal")
+        LOGGER.warning(
+            "Auto-parallelization strategy is currently in beta and might not be optimal"
+        )
 
         if world_size == 2:
-            return config.with_sharding(tp=2, pp=1)
+            return config.with_sharding(tp=2, pp=1, gpus_per_node=world_size)
         elif world_size == 4:
-            return config.with_sharding(tp=2, pp=2)
+            return config.with_sharding(tp=2, pp=2, gpus_per_node=world_size)
         elif world_size == 8:
-            return config.with_sharding(tp=4, pp=2)
+            return config.with_sharding(tp=4, pp=2, gpus_per_node=world_size)
         else:
             raise ValueError(
                 f"Unsupported number of GPUs: {world_size}. "

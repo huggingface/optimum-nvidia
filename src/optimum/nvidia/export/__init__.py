@@ -4,5 +4,5 @@ PATH_FILE_CHECKPOINTS = "rank*.safetensors"
 PATH_FILE_ENGINES = "rank*.engine"
 
 from .workspace import Workspace  # noqa
-from .config import ExportConfig, auto_parallel, float8
+from .config import ExportConfig, auto_parallel
 from .converter import TensorRTArtifact, TensorRTArtifactKind, TensorRTModelConverter

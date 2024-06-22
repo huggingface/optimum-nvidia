@@ -10,6 +10,7 @@ from tensorrt_llm.builder import build
 from tensorrt_llm.models import PretrainedModel
 
 from optimum.nvidia.export import Workspace
+from optimum.nvidia.utils.nvml import get_device_name
 
 
 LOGGER = getLogger()
@@ -49,14 +50,29 @@ class TensorRTModelConverter(ABC):
     CONFIG_CLASS: Type
     MODEL_CLASS: Type
 
-    def __init__(self, workspace: Optional[Union[Workspace, str, bytes, Path]] = None):
+    def __init__(
+        self,
+        subpart: str = "",
+        workspace: Optional[Union[Workspace, str, bytes, Path]] = None,
+    ):
+        LOGGER.info(f"Creating a model converter for {subpart}")
         if not workspace:
-            workspace = Workspace.from_hub_cache()
+            target_device = get_device_name(0)[-1]
+            workspace = Workspace.from_hub_cache(target_device, subpart=subpart)
 
         if isinstance(workspace, (str, bytes, Path)):
             workspace = Workspace(Path(workspace))
 
+        LOGGER.debug(f"Initializing model converter workspace at {workspace.root}")
+
         self._workspace = workspace
+
+    @property
+    def workspace(self) -> Workspace:
+        return self._workspace
+
+    def quantize(self):
+        raise NotImplementedError()
 
     def convert(
         self,
@@ -90,6 +106,7 @@ class TensorRTModelConverter(ABC):
         :param config
         :return:
         """
+
         if isinstance(models, PretrainedModel):
             models = [models]
 

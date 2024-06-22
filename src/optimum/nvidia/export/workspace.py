@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional
 
 from huggingface_hub import cached_assets_path
 from tensorrt_llm import __version__ as TRTLLM_VERSION
@@ -12,7 +12,6 @@ from optimum.nvidia.export import (
     PATH_FOLDER_CHECKPOINTS,
     PATH_FOLDER_ENGINES,
 )
-from optimum.nvidia.utils.nvml import get_device_name
 
 
 @dataclass
@@ -21,12 +20,17 @@ class Workspace:
 
     @staticmethod
     def from_hub_cache(
-        namespace: str = LIBRARY_NAME, version: str = TRTLLM_VERSION
+        device: str,
+        namespace: str = LIBRARY_NAME,
+        version: str = TRTLLM_VERSION,
+        subpart: Optional[str] = None,
     ) -> "Workspace":
-        device_name = get_device_name(0)[-1]
-        return Workspace(
-            cached_assets_path(namespace, namespace=version, subfolder=device_name)
-        )
+        assets_path = cached_assets_path(namespace, namespace=version, subfolder=device)
+
+        if subpart:
+            assets_path = assets_path.joinpath(subpart)
+
+        return Workspace(assets_path)
 
     def __post_init__(self):
         if not self.checkpoints_path.exists():

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class IntoModelOptQuantizeConfig(Protocol):
-    def into_model_opt_qconfig(self) -> QuantizeConfig: ...
+    def into_model_opt_qconfig(self) -> "QuantizeConfig": ...
 
 
 from .datasets import get_dataset, load_dataset, prepare_dataset

@@ -19,7 +19,7 @@ from pathlib import Path
 
 from transformers import AutoTokenizer
 
-from optimum.nvidia import AutoModelForCausalLM, ExportConfig, setup_logging
+from optimum.nvidia import AutoModelForCausalLM, setup_logging
 
 
 # Setup logging needs to happen before importing TRT ...
@@ -63,12 +63,7 @@ if __name__ == "__main__":
     if not tokenizer.pad_token:
         tokenizer.pad_token = tokenizer.eos_token
 
-    # Create the model
-    ExportConfig().with_sharding(tp=1, pp=1)
-
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model, use_fp8=args.fp8, tp=args.tp, pp=args.pp
-    )
+    model = AutoModelForCausalLM.from_pretrained(args.model, device_map="auto")
     model.save_pretrained(args.output)
 
     prompt = "What is the latest generation of Nvidia GPUs?"

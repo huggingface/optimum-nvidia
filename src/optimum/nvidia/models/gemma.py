@@ -27,4 +27,6 @@ LOGGER = getLogger(__name__)
 
 class GemmaForCausalLM(CausalLM, HuggingFaceHubModel, SupportsTransformersConversion):
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersGemmaForCausalLM
-    TRT_LLM_TARGET_MODEL_CLASS = TrtGemmaForCausalLM
+    TRT_LLM_TARGET_MODEL_CLASSES = TrtGemmaForCausalLM
+
+    TRT_LLM_MANDATORY_CONVERSION_PARAMS = {"share_embedding_table": True}

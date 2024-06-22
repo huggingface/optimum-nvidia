@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import (
     Dict,
     List,
+    Mapping,
     Optional,
     Type,
     Union,
@@ -37,7 +38,8 @@ from optimum.nvidia import LIBRARY_NAME, ExportConfig
 from optimum.nvidia.export import (
     PATH_FOLDER_CHECKPOINTS,
     PATH_FOLDER_ENGINES,
-    TensorRTModelConverter, auto_parallel,
+    TensorRTModelConverter,
+    auto_parallel,
 )
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import (
@@ -99,10 +101,11 @@ class HuggingFaceHubModel(
         resume_download: bool,
         local_files_only: bool,
         token: Optional[Union[str, bool]],
-        export_config: Optional[ExportConfig] = None,
-        force_export: bool = False,
         use_cuda_graph: bool = False,
         device_map: Optional[str] = None,
+        export_config: Optional[ExportConfig] = None,
+        force_export: bool = False,
+        save_intermediate_checkpoints: bool = False,
     ) -> T:
         if get_device_count() < 1:
             raise ValueError("No GPU detected on this platform")
@@ -179,20 +182,56 @@ class HuggingFaceHubModel(
 
             # Forward everything to the exporter
             if isinstance(cls, SupportsTransformersConversion):
-                for clazz in cls.TRT_LLM_TARGET_MODEL_CLASSES:
-                    if not isinstance(clazz, SupportsFromHuggingFace):
-                        raise TypeError(f"{clazz} can't convert from HF checkpoint")
+                targets = cls.TRT_LLM_TARGET_MODEL_CLASSES
 
-                    model = clazz.from_hugging_face(
-                        original_checkpoints_path_for_conversion,
-                        dtype=DataType.from_torch(config.torch_dtype).value,
-                        mapping=export_config.sharding,
+                if not isinstance(targets, Mapping):
+                    targets = {"": targets}
+
+                for idx, (subpart, clazz) in enumerate(targets.items()):
+                    LOGGER.info(
+                        f"Building {model_id} {subpart} ({idx + 1} / {len(targets)})"
                     )
-                    converter = TensorRTModelConverter()
-                    build_config = export_config.to_builder_config()
 
-                    # checkpoints = converter.convert(model)
-                    engines = converter.build(model, build_config)
+                    converter = TensorRTModelConverter(subpart)
+
+                    # Artifacts resulting from a build are not stored in the location `snapshot_download`
+                    # would use. Instead, it uses `cached_assets_path` to create a specific location which
+                    # doesn't mess up with the HF caching system. Use can use `save_pretrained` to store
+                    # the build artifact into a snapshot friendly place
+                    # If this specific location is found, we don't necessary need to rebuild
+
+                    if force_export or not len(
+                        list(converter.workspace.engines_path.glob("*.engine"))
+                    ):
+                        if not isinstance(clazz, SupportsFromHuggingFace):
+                            raise TypeError(f"{clazz} can't convert from HF checkpoint")
+
+                        model = clazz.from_hugging_face(
+                            original_checkpoints_path_for_conversion,
+                            dtype=DataType.from_torch(config.torch_dtype).value,
+                            mapping=export_config.sharding,
+                        )
+
+                        build_config = export_config.to_builder_config()
+
+                        if save_intermediate_checkpoints:
+                            _ = converter.convert(model)
+                            LOGGER.info(
+                                f"Saved intermediate checkpoints at {converter.workspace.checkpoints_path}"
+                            )
+
+                        engines = converter.build(model, build_config)
+                        LOGGER.info(
+                            f"Saved TensorRT-LLM engines at {converter.workspace.engines_path}"
+                        )
+                    else:
+                        LOGGER.info(
+                            f"Found existing engines at {converter.workspace.engines_path}"
+                        )
+            else:
+                raise ValueError(
+                    "Model doesn't support Hugging Face transformers conversion, aborting."
+                )
 
             return cls(
                 engines if isinstance(engines, list) else [engines.root],

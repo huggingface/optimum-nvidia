@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from torch import Tensor
     from transformers import PreTrainedModel as TransformersPreTrainedModel
 
-    from optimum.nvidia import IntoModelOptQuantConfig
+    from optimum.nvidia import IntoModelOptQuantizeConfig
 
 
 LOGGER = getLogger()
@@ -27,7 +27,7 @@ LOGGER = getLogger()
 
 def quantize(
     model: "TransformersPreTrainedModel",
-    qconfig: Union["QuantizeConfig", "IntoModelOptQuantConfig"],
+    qconfig: Union["QuantizeConfig", "IntoModelOptQuantizeConfig"],
     dataset: Union[Dataset, DataLoader],
     mapping: Optional["Mapping"] = None,
     seed: int = 2014,
@@ -35,8 +35,8 @@ def quantize(
     if isinstance(dataset, Dataset):
         dataset = DataLoader(dataset)
 
-    if isinstance(qconfig, IntoModelOptQuantConfig):
-        LOGGER.info(f"Converting {qconfig} to TensorRT-LLM QuantConfig")
+    if isinstance(qconfig, IntoModelOptQuantizeConfig):
+        LOGGER.info(f"Converting {qconfig} to TensorRT-LLM quantization config")
         qconfig = qconfig.into_model_opt_qconfig()
 
     # Seed everything

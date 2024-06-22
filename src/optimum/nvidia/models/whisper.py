@@ -35,4 +35,7 @@ LOGGER = getLogger(__name__)
 
 class WhisperForConditionalGeneration(SupportsTransformersConversion):
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersWhisperForConditionalGeneration
-    TRT_LLM_TARGET_MODEL_CLASSES = [TrtWhisperEncoder, TrtDecoderModel]
+    TRT_LLM_TARGET_MODEL_CLASSES = {
+        "encoder": TrtWhisperEncoder,
+        "decoder": TrtDecoderModel,
+    }

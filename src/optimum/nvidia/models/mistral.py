@@ -27,4 +27,4 @@ LOGGER = getLogger(__name__)
 
 class MistralForCausalLM(CausalLM, HuggingFaceHubModel, SupportsTransformersConversion):
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersMistralForCausalLM
-    TRT_LLM_TARGET_MODEL_CLASS = LLaMAForCausalLM
+    TRT_LLM_TARGET_MODEL_CLASSES = LLaMAForCausalLM
