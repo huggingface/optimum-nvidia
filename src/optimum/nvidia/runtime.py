@@ -1,4 +1,5 @@
 import json
+import math
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
@@ -50,9 +51,10 @@ def default_executor_config(config: Dict[str, Any]) -> "ExecutorConfig":
     build_config = config["build_config"]
     plugin_config = config["build_config"]["plugin_config"]
 
-    max_blocks_per_sequence = (
-        build_config["max_seq_len"] // plugin_config["tokens_per_block"]
+    max_blocks_per_sequence = math.floor(
+        build_config["max_seq_len"] / plugin_config["tokens_per_block"]
     )
+
     return ExecutorConfig(
         enable_chunked_context=is_post_ampere(),
         kv_cache_config=KvCacheConfig(
