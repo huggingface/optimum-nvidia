@@ -3,17 +3,28 @@ from enum import Enum
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import Optional, Sequence, Type, Union
+from typing import TYPE_CHECKING, Optional, Sequence, Type, Union
 
-from tensorrt_llm import BuildConfig, Mapping
 from tensorrt_llm.builder import build
-from tensorrt_llm.models import PretrainedModel
 
 from optimum.nvidia.export import Workspace
-from optimum.nvidia.utils.nvml import get_device_name
+from optimum.nvidia.utils.nvml import get_device_name, is_post_ampere
 
+
+if TYPE_CHECKING:
+    from tensorrt_llm import BuildConfig, Mapping
+    from tensorrt_llm.models import PretrainedModel
 
 LOGGER = getLogger()
+
+
+def infer_plugin_from_build_config(config: "BuildConfig") -> "BuildConfig":
+    if is_post_ampere():
+        # Required for Chunk Context
+        LOGGER.debug("Enabling Paged Context FMHA plugin")
+        config.plugin_config.update_from_dict({"use_paged_context_fmha": True})
+
+    return config
 
 
 class TensorRTArtifactKind(Enum):
@@ -52,13 +63,16 @@ class TensorRTModelConverter(ABC):
 
     def __init__(
         self,
+        model_id: str,
         subpart: str = "",
-        workspace: Optional[Union[Workspace, str, bytes, Path]] = None,
+        workspace: Optional[Union["Workspace", str, bytes, Path]] = None,
     ):
         LOGGER.info(f"Creating a model converter for {subpart}")
         if not workspace:
             target_device = get_device_name(0)[-1]
-            workspace = Workspace.from_hub_cache(target_device, subpart=subpart)
+            workspace = Workspace.from_hub_cache(
+                model_id, target_device, subpart=subpart
+            )
 
         if isinstance(workspace, (str, bytes, Path)):
             workspace = Workspace(Path(workspace))
@@ -76,8 +90,8 @@ class TensorRTModelConverter(ABC):
 
     def convert(
         self,
-        models: Union[PretrainedModel, Sequence[PretrainedModel]],
-        mapping: Optional[Mapping] = None,
+        models: Union["PretrainedModel", Sequence["PretrainedModel"]],
+        mapping: Optional["Mapping"] = None,
     ) -> TensorRTArtifact:
         """
         Take a local model and create the intermediate TRTLLM checkpoint
@@ -98,8 +112,8 @@ class TensorRTModelConverter(ABC):
 
     def build(
         self,
-        models: Union[PretrainedModel, Sequence[PretrainedModel]],
-        config: BuildConfig,
+        models: Union["PretrainedModel", Sequence["PretrainedModel"]],
+        config: "BuildConfig",
     ) -> TensorRTArtifact:
         """
         :param models
@@ -107,8 +121,10 @@ class TensorRTModelConverter(ABC):
         :return:
         """
 
-        if isinstance(models, PretrainedModel):
+        if not isinstance(models, Sequence):
             models = [models]
+
+        config = infer_plugin_from_build_config(config)
 
         for rank, model in enumerate(models):
             LOGGER.info(f"Building TRTLLM engine for rank {rank}")

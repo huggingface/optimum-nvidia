@@ -18,8 +18,8 @@ from typing import Any, Dict, Optional, Type, Union
 
 from huggingface_hub import ModelHubMixin
 
-from optimum.nvidia import ExportConfig
 from optimum.nvidia.errors import UnsupportedModelException
+from optimum.nvidia.export import ExportConfig
 from optimum.nvidia.models.gemma import GemmaForCausalLM
 from optimum.nvidia.models.llama import LlamaForCausalLM
 

@@ -20,16 +20,21 @@ class Workspace:
 
     @staticmethod
     def from_hub_cache(
+        model_id: str,
         device: str,
         namespace: str = LIBRARY_NAME,
         version: str = TRTLLM_VERSION,
         subpart: Optional[str] = None,
     ) -> "Workspace":
-        assets_path = cached_assets_path(namespace, namespace=version, subfolder=device)
+        assets_path = cached_assets_path(
+            namespace, namespace=version, subfolder=model_id
+        )
+        assets_path = assets_path.joinpath(device)
 
         if subpart:
             assets_path = assets_path.joinpath(subpart)
 
+        assets_path.mkdir(exist_ok=True, parents=True)
         return Workspace(assets_path)
 
     def __post_init__(self):

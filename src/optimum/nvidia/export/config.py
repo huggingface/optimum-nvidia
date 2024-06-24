@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 from logging import getLogger
+from os import PathLike
 from typing import TYPE_CHECKING, Optional, Union
 from warnings import warn
 
 from tensorrt_llm import BuildConfig
 from tensorrt_llm import Mapping as ShardingInfo
 from tensorrt_llm.plugin import PluginConfig
+from transformers import AutoConfig
 
 from optimum.nvidia.lang import DataType
 from optimum.utils import NormalizedConfig
@@ -13,7 +15,6 @@ from optimum.utils import NormalizedConfig
 
 if TYPE_CHECKING:
     from transformers import PretrainedConfig
-
 
 INFER_NUM_LOCAL_GPUS = -1
 LOGGER = getLogger()
@@ -40,8 +41,16 @@ class ExportConfig:
             raise ValueError(f"max_batch_size should >= 1, got {self.max_batch_size}")
 
     @staticmethod
+    def from_pretrained(
+        model_id_or_path: Union[str, PathLike], max_batch_size: int = 1
+    ) -> "ExportConfig":
+        return ExportConfig.from_config(
+            AutoConfig.from_pretrained(model_id_or_path), max_batch_size
+        )
+
+    @staticmethod
     def from_config(
-        config: Union[NormalizedConfig, "PretrainedConfig"], max_batch_size: int = 32
+        config: Union[NormalizedConfig, "PretrainedConfig"], max_batch_size: int = 1
     ) -> "ExportConfig":
         if not isinstance(config, NormalizedConfig):
             config = NormalizedConfig(config)
@@ -95,7 +104,7 @@ class ExportConfig:
 
         return BuildConfig(
             max_input_len=self.max_input_len,
-            max_output_len=self.max_output_len,
+            max_seq_len=self.max_output_len,
             max_batch_size=self.max_batch_size,
             max_beam_width=self.max_beam_width,
             max_num_tokens=self.max_num_tokens,

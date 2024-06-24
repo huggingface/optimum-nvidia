@@ -34,10 +34,11 @@ from transformers.utils import (
     SAFE_WEIGHTS_INDEX_NAME,
 )
 
-from optimum.nvidia import LIBRARY_NAME, ExportConfig
+from optimum.nvidia import LIBRARY_NAME
 from optimum.nvidia.export import (
     PATH_FOLDER_CHECKPOINTS,
     PATH_FOLDER_ENGINES,
+    ExportConfig,
     TensorRTModelConverter,
     auto_parallel,
 )
@@ -192,7 +193,7 @@ class HuggingFaceHubModel(
                         f"Building {model_id} {subpart} ({idx + 1} / {len(targets)})"
                     )
 
-                    converter = TensorRTModelConverter(subpart)
+                    converter = TensorRTModelConverter(model_id, subpart)
 
                     # Artifacts resulting from a build are not stored in the location `snapshot_download`
                     # would use. Instead, it uses `cached_assets_path` to create a specific location which
@@ -220,7 +221,7 @@ class HuggingFaceHubModel(
                                 f"Saved intermediate checkpoints at {converter.workspace.checkpoints_path}"
                             )
 
-                        engines = converter.build(model, build_config)
+                        _ = converter.build(model, build_config)
                         LOGGER.info(
                             f"Saved TensorRT-LLM engines at {converter.workspace.engines_path}"
                         )
@@ -233,11 +234,15 @@ class HuggingFaceHubModel(
                     "Model doesn't support Hugging Face transformers conversion, aborting."
                 )
 
+            # return cls(
+            #     engines if isinstance(engines, list) else [engines.root],
+            #     gpus_per_node=get_device_count(),
+            #     transformers_config=config,
+            #     use_cuda_graph=use_cuda_graph,
+            #     generation_config=generation_config,
+            # )
             return cls(
-                engines if isinstance(engines, list) else [engines.root],
-                gpus_per_node=get_device_count(),
-                transformers_config=config,
-                use_cuda_graph=use_cuda_graph,
+                engines_path=converter.workspace.engines_path,
                 generation_config=generation_config,
             )
 

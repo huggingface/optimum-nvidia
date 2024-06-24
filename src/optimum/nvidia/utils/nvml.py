@@ -33,6 +33,9 @@ LOGGER = getLogger()
 
 _NVML_INITIALIZED = False
 
+CUDA_ARCH_VOLTA = 7
+CUDA_ARCH_AMPERE = 8
+CUDA_ARCH_HOPPER = 9
 SM_FP8_SUPPORTED = {89, 90}
 
 
@@ -106,6 +109,27 @@ def has_float8_support() -> bool:
             "Failed to retrieve the proper compute capabilities on the device"
         )
         return False
+
+
+@functools.cache
+@nvml_guard
+def is_post_volta() -> bool:
+    major, _ = get_device_compute_capabilities(0)
+    return major >= CUDA_ARCH_VOLTA
+
+
+@functools.cache
+@nvml_guard
+def is_post_ampere() -> bool:
+    major, _ = get_device_compute_capabilities(0)
+    return major >= CUDA_ARCH_AMPERE
+
+
+@functools.cache
+@nvml_guard
+def is_post_hopper() -> bool:
+    major, _ = get_device_compute_capabilities(0)
+    return major >= CUDA_ARCH_HOPPER
 
 
 def get_max_memory():

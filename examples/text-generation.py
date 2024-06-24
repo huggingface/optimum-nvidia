@@ -19,7 +19,7 @@ from pathlib import Path
 
 from transformers import AutoTokenizer
 
-from optimum.nvidia import AutoModelForCausalLM, setup_logging
+from optimum.nvidia import AutoModelForCausalLM, ExportConfig, setup_logging
 
 
 # Setup logging needs to happen before importing TRT ...
@@ -63,20 +63,21 @@ if __name__ == "__main__":
     if not tokenizer.pad_token:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained(args.model, device_map="auto")
-    model.save_pretrained(args.output)
+    export = ExportConfig.from_pretrained(args.model)
+    export.max_input_len = 1024
+    export.max_output_len = 256
+    export.max_num_tokens = 256
+    export.max_beam_width = 1
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model, device_map="auto", export_config=export
+    )
+    # model.save_pretrained(args.output)
 
     prompt = "What is the latest generation of Nvidia GPUs?"
-    tokens = tokenizer(prompt, padding=True, return_tensors="pt")
-    generated, lengths = model.generate(
-        **tokens,
-        top_k=40,
-        top_p=0.95,
-        repetition_penalty=10,
-        pad_token_id=tokenizer.eos_token_id,
-        eos_token_id=tokenizer.eos_token_id,
-        max_new_tokens=args.max_new_tokens,
+    tokens = tokenizer(prompt, return_tensors="pt")
+    generated = model.generate(
+        tokens["input_ids"],
     )
 
-    generated_text = tokenizer.batch_decode(generated, skip_special_tokens=True)
+    generated_text = tokenizer.decode(generated, skip_special_tokens=True)
     print(generated_text)
