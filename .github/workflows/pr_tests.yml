@@ -14,7 +14,6 @@ concurrency:
 
 env:
   OPTIMUM_NVIDIA_IS_CI: ON
-  RUN_CPU_ONLY: OFF
   RUN_NIGHTLY: OFF
   RUN_SLOW: ON
   HF_HUB_ENABLE_HF_TRANSFER: ON
@@ -27,10 +26,11 @@ jobs:
         config:
           - name: GPU-enabled Optimum-Nvidia Integration Test Suite
             image: nvidia/cuda:12.1.0-devel-ubuntu22.04
-        cuda_arch: [sm_86, sm_89]
+        gpu_target: ["nvidia-multi-gpu-l4-runners", "nvidia-multi-gpu-a10-runners"]
 
     name: ${{ matrix.config.name }}
-    runs-on: [ci, nvidia-gpu, multi-gpu, "${{ matrix.cuda_arch }}"]
+    runs-on:
+      group: "${{matrix.gpu_target}}"
 
     container:
       image: ${{ matrix.config.image }}
