@@ -29,14 +29,14 @@ except Exception as error:
 INSTALL_REQUIRES = [
     "accelerate == 0.25",
     "datasets >= 2.14",
-    "huggingface-hub >= 0.22.0",
-    "hf-transfer",
+    "huggingface-hub >= 0.23",
+    "hf-transfer==0.1.6",
     "mpmath == 1.3.0",
     "numpy >= 1.26.0",
     "onnx >= 1.12.0",
     "optimum >= 1.13.0",
     "setuptools",
-    "tensorrt-llm == 0.9.0",
+    "tensorrt-llm > 0.10.0",
     "torch>=2.2.0a,<=2.3.0a",
     "transformers >= 4.38.2",
     "pynvml"
