@@ -37,7 +37,7 @@ LOGGER = getLogger(__name__)
 
 
 async def infer():
-    tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
     if not tokenizer.pad_token:
         tokenizer.pad_token = tokenizer.eos_token
 

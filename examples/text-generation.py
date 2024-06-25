@@ -59,7 +59,7 @@ if __name__ == "__main__":
 
         login(args.hub_token)
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
     if not tokenizer.pad_token:
         tokenizer.pad_token = tokenizer.eos_token
 
