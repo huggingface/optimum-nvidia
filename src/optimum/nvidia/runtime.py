@@ -1,5 +1,7 @@
+import asyncio
 import json
 import math
+from asyncio import Future, gather
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
@@ -7,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
 
 import torch
 from tensorrt_llm.bindings.executor import ExecutorConfig, KvCacheConfig
-from tensorrt_llm.executor import GenerationExecutor
+from tensorrt_llm.executor import GenerationExecutor, GenerationRequest
 from tensorrt_llm.hlapi import SamplingParams
 
 from optimum.nvidia.utils.nvml import is_post_ampere
@@ -107,6 +109,29 @@ class InferenceRuntimeBase:
 
         result = self._executor.generate(inputs, sampling_params=sampling)
         return result[0].token_ids
+
+    async def agenerate(
+        self,
+        inputs: Union[List[int], "torch.IntTensor"],
+        generation_config: Optional["GenerationConfig"] = None
+    ) -> List[int]:
+        # Retrieve the sampling config
+        sampling = (
+            convert_generation_config(generation_config)
+            if generation_config
+            else self._sampling_config
+        )
+
+        if isinstance(inputs, torch.Tensor):
+            inputs = inputs.tolist()
+
+        futures = self._executor.generate_async(inputs, streaming=False, sampling_params=sampling)
+        if isinstance(futures, GenerationRequest):
+            results = await futures.aresult()
+            return results.token_ids
+        else:
+            results = await asyncio.gather(*[f.aresult() for f in futures])
+            return [r.token_ids for r in results]
 
 
 class CausalLM(InferenceRuntimeBase):
