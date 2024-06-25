@@ -1,7 +1,6 @@
 import asyncio
 import json
 import math
-from asyncio import Future, gather
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
@@ -113,7 +112,7 @@ class InferenceRuntimeBase:
     async def agenerate(
         self,
         inputs: Union[List[int], "torch.IntTensor"],
-        generation_config: Optional["GenerationConfig"] = None
+        generation_config: Optional["GenerationConfig"] = None,
     ) -> List[int]:
         # Retrieve the sampling config
         sampling = (
@@ -125,7 +124,9 @@ class InferenceRuntimeBase:
         if isinstance(inputs, torch.Tensor):
             inputs = inputs.tolist()
 
-        futures = self._executor.generate_async(inputs, streaming=False, sampling_params=sampling)
+        futures = self._executor.generate_async(
+            inputs, streaming=False, sampling_params=sampling
+        )
         if isinstance(futures, GenerationRequest):
             results = await futures.aresult()
             return results.token_ids
