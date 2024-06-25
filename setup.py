@@ -37,7 +37,7 @@ INSTALL_REQUIRES = [
     "optimum >= 1.13.0",
     "setuptools",
     "tensorrt-llm == 0.11.0.dev2024062500",
-    "torch>=2.2.0a,<=2.3.0a",
+    "torch >= 2.3.0",
     "transformers >= 4.38.2",
     "pynvml"
 ]
