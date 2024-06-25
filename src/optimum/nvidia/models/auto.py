@@ -14,14 +14,18 @@
 #  limitations under the License.
 
 from pathlib import Path
-from typing import Any, Dict, Optional, Type, Union
+from typing import Any, Dict, Optional, Type, Union, TYPE_CHECKING
 
 from huggingface_hub import ModelHubMixin
 
 from optimum.nvidia.errors import UnsupportedModelException
-from optimum.nvidia.export import ExportConfig
 from optimum.nvidia.models.gemma import GemmaForCausalLM
 from optimum.nvidia.models.llama import LlamaForCausalLM
+
+
+if TYPE_CHECKING:
+    from optimum.nvidia.export import ExportConfig
+    from optimum.nvidia.runtime import CausalLM
 
 
 class AutoModelForCausalLM(ModelHubMixin):
@@ -51,11 +55,11 @@ class AutoModelForCausalLM(ModelHubMixin):
         local_files_only: bool,
         token: Optional[Union[str, bool]],
         config: Optional[Dict[str, Any]] = None,
-        export_config: Optional[ExportConfig] = None,
+        export_config: Optional["ExportConfig"] = None,
         force_export: bool = False,
         use_cuda_graph: bool = False,
         **model_kwargs,
-    ):
+    ) -> "CausalLM":
         if config is None:
             raise ValueError("Unable to determine the model type with config = None")
 
