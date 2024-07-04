@@ -207,21 +207,27 @@ class HuggingFaceHubModel(
                         if not isinstance(clazz, SupportsFromHuggingFace):
                             raise TypeError(f"{clazz} can't convert from HF checkpoint")
 
-                        model = clazz.from_hugging_face(
-                            original_checkpoints_path_for_conversion,
-                            dtype=DataType.from_torch(config.torch_dtype).value,
-                            mapping=export_config.sharding,
-                        )
+                        for rank in range(export_config.sharding.world_size):
+                            # Specify the current model's rank
+                            export_config.sharding.rank = rank
 
-                        build_config = export_config.to_builder_config()
-
-                        if save_intermediate_checkpoints:
-                            _ = converter.convert(model)
-                            LOGGER.info(
-                                f"Saved intermediate checkpoints at {converter.workspace.checkpoints_path}"
+                            ranked_model = clazz.from_hugging_face(
+                                original_checkpoints_path_for_conversion,
+                                dtype=DataType.from_torch(config.torch_dtype).value,
+                                mapping=export_config.sharding,
+                                load_by_shard=True
                             )
 
-                        _ = converter.build(model, build_config)
+                            build_config = export_config.to_builder_config()
+
+                            if save_intermediate_checkpoints:
+                                _ = converter.convert(ranked_model)
+                                LOGGER.info(
+                                    f"Saved intermediate checkpoints at {converter.workspace.checkpoints_path}"
+                                )
+
+                            _ = converter.build(ranked_model, build_config)
+
                         LOGGER.info(
                             f"Saved TensorRT-LLM engines at {converter.workspace.engines_path}"
                         )
