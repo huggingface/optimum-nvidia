@@ -12,6 +12,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import json
 from logging import getLogger
 from os import PathLike, symlink
 from pathlib import Path
@@ -22,7 +23,7 @@ from typing import (
     Mapping,
     Optional,
     Type,
-    Union,
+    Union, Sequence, Iterable,
 )
 
 from huggingface_hub import ModelHubMixin, snapshot_download
@@ -66,7 +67,37 @@ HUB_SNAPSHOT_ALLOW_PATTERNS = [
 LOGGER = getLogger()
 
 
+def folder_list_engines(folder: Path) -> Iterable[Path]:
+    if folder.exists():
+        engine_candidates = folder.glob("*.engine")
+
+        if (config_file := folder / "config.json").exists():
+            with open(config_file, "r", encoding="utf-8") as config_f:
+                config = json.load(config_f)
+
+                if "plugin_config" in config and "build_config" in config:
+                    return engine_candidates
+
+    return []
+
+
+def folder_list_checkpoints(folder: Path) -> Iterable[Path]:
+    if folder.exists():
+
+        # At this stage we don't know if they are checkpoints or other safetensors files
+        checkpoint_candidates = folder.glob("*.safetensors")
+
+        if (config_file := folder / "config.json").exists():
+            with open(config_file, "r", encoding="utf-8") as config_f:
+                config = json.load(config_f)
+
+    return []
+
+
 def get_trtllm_artifact(model_id: str, patterns: List[str]) -> Path:
+    if (local_path := Path(model_id)).exists():
+        return local_path
+
     return Path(
         snapshot_download(
             repo_id=model_id,
@@ -116,40 +147,46 @@ class HuggingFaceHubModel(
         device_name = get_device_name(0)[-1]
         common_hub_path = f"{device_name}/{config['torch_dtype']}"
 
-        # Look for prebuild TRTLLM Engine
-        engine_files = checkpoint_files = []
-        if not force_export:
-            LOGGER.debug(f"Retrieving prebuild engine(s) for device {device_name}")
-            cached_path = get_trtllm_artifact(
-                model_id, [f"{common_hub_path}/**/{PATH_FOLDER_ENGINES}/*.engine"]
-            )
+        # Check if the model_id is not a local path
+        local_model_id = Path(model_id)
 
-            if (
-                engines_config_path := (
-                    cached_path / PATH_FOLDER_ENGINES / "config.json"
-                )
-            ).exists():
-                LOGGER.info(f"Found engines at {engines_config_path.parent}")
-                engine_files = engines_config_path.parent.glob(
-                    FILE_TRTLLM_ENGINE_PATTERN
+        if local_model_id.exists():
+            if any(engine_files := folder_list_engines(local_model_id)):
+                checkpoint_files = []
+            else:
+                checkpoint_files = folder_list_checkpoints(local_model_id)
+
+        else:
+            # Look for prebuild TRTLLM Engine
+            engine_files = checkpoint_files = []
+            if not force_export:
+                LOGGER.debug(f"Retrieving prebuild engine(s) for device {device_name}")
+                cached_path = get_trtllm_artifact(
+                    model_id, [f"{common_hub_path}/**/{PATH_FOLDER_ENGINES}/*.engine"]
                 )
 
-        # if no engine is found, then just try to locate a checkpoint
-        if not engine_files:
-            LOGGER.debug(f"Retrieving checkpoint(s) for {device_name}")
-            cached_path = get_trtllm_artifact(
-                model_id, [f"{common_hub_path}/**/*.safetensors"]
-            )
+                if (
+                    engines_config_path := (cached_path / PATH_FOLDER_ENGINES / "config.json")
+                ).exists():
+                    LOGGER.info(f"Found engines at {engines_config_path.parent}")
+                    engine_files = engines_config_path.parent.glob(FILE_TRTLLM_ENGINE_PATTERN)
 
-            if (
-                checkpoints_config_path := (
-                    cached_path / PATH_FOLDER_CHECKPOINTS / "config.json"
+            # if no engine is found, then just try to locate a checkpoint
+            if not engine_files:
+                LOGGER.debug(f"Retrieving checkpoint(s) for {device_name}")
+                cached_path = get_trtllm_artifact(
+                    model_id, [f"{common_hub_path}/**/*.safetensors"]
                 )
-            ).exists():
-                LOGGER.info(f"Found checkpoints at {checkpoints_config_path.parent}")
-                checkpoint_files = checkpoints_config_path.parent.glob(
-                    FILE_TRTLLM_CHECKPOINT_PATTERN
-                )
+
+                if (
+                    checkpoints_config_path := (
+                        cached_path / PATH_FOLDER_CHECKPOINTS / "config.json"
+                    )
+                ).exists():
+                    LOGGER.info(f"Found checkpoints at {checkpoints_config_path.parent}")
+                    checkpoint_files = checkpoints_config_path.parent.glob(
+                        FILE_TRTLLM_CHECKPOINT_PATTERN
+                    )
 
         # If no checkpoint available, we are good for a full export from the Hugging Face Hub
         if not checkpoint_files:
@@ -229,6 +266,7 @@ class HuggingFaceHubModel(
                                 )
 
                             _ = converter.build(ranked_model, build_config)
+                            engine_files = converter.workspace.engines_path
 
                         LOGGER.info(
                             f"Saved TensorRT-LLM engines at {converter.workspace.engines_path}"
@@ -243,7 +281,7 @@ class HuggingFaceHubModel(
                 )
 
             return cls(
-                engines_path=converter.workspace.engines_path,
+                engines_path=engine_files,
                 generation_config=generation_config,
             )
 
