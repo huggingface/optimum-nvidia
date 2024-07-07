@@ -4,11 +4,15 @@ import math
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
 
 import torch
 from tensorrt_llm.bindings.executor import ExecutorConfig, KvCacheConfig
-from tensorrt_llm.executor import GenerationExecutor, GenerationRequest
+from tensorrt_llm.executor import (
+    GenerationExecutor,
+    GenerationRequest,
+    GenerationResult,
+)
 from tensorrt_llm.hlapi import SamplingParams
 
 from optimum.nvidia.utils.nvml import is_post_ampere
@@ -133,6 +137,23 @@ class InferenceRuntimeBase:
         else:
             results = await asyncio.gather(*[f.aresult() for f in futures])
             return [r.token_ids for r in results]
+
+
+class CausalLMOutput:
+    __slots__ = ("_results",)
+
+    def __init__(
+        self, results: Union["GenerationResult", Sequence["GenerationResult"]]
+    ):
+        self._results = results
+
+    @property
+    def logits(self):
+        return self._results.token_ids
+
+    @property
+    def loss(self) -> None:
+        return None
 
 
 class CausalLM(InferenceRuntimeBase):

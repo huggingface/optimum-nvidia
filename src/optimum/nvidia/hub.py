@@ -12,9 +12,10 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
 from logging import getLogger
+from os import PathLike, symlink
 from pathlib import Path
+from shutil import copytree
 from typing import (
     Dict,
     List,
@@ -86,7 +87,8 @@ class HuggingFaceHubModel(
     repo_url="https://github.com/huggingface/optimum-nvidia",
     docs_url="https://huggingface.co/docs/optimum/nvidia_overview",
 ):
-    def __init__(self):
+    def __init__(self, engines_path: Union[str, PathLike, Path]):
+        self._engines_path = Path(engines_path)
         super().__init__()
 
     @classmethod
@@ -177,7 +179,7 @@ class HuggingFaceHubModel(
             export_config = export_config or ExportConfig.from_config(config)
 
             # Handle the device_map
-            if device_map == "auto":
+            if device_map and device_map == "auto":
                 LOGGER.info("Auto-parallel we will be used")
                 export_config = auto_parallel(export_config)
 
@@ -215,7 +217,7 @@ class HuggingFaceHubModel(
                                 original_checkpoints_path_for_conversion,
                                 dtype=DataType.from_torch(config.torch_dtype).value,
                                 mapping=export_config.sharding,
-                                load_by_shard=True
+                                load_by_shard=True,
                             )
 
                             build_config = export_config.to_builder_config()
@@ -240,17 +242,21 @@ class HuggingFaceHubModel(
                     "Model doesn't support Hugging Face transformers conversion, aborting."
                 )
 
-            # return cls(
-            #     engines if isinstance(engines, list) else [engines.root],
-            #     gpus_per_node=get_device_count(),
-            #     transformers_config=config,
-            #     use_cuda_graph=use_cuda_graph,
-            #     generation_config=generation_config,
-            # )
             return cls(
                 engines_path=converter.workspace.engines_path,
                 generation_config=generation_config,
             )
 
     def _save_pretrained(self, save_directory: Path) -> None:
-        raise NotImplementedError()
+        try:
+            # Need target_is_directory on Windows
+            # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
+            # Falling back to copytree in this case
+            symlink(self._engines_path.parent, save_directory, target_is_directory=True)
+        except OSError as ose:
+            LOGGER.error(
+                f"Failed to create symlink from current engine folder {self._engines_path.parent} to {save_directory}. "
+                "Will default to copy based _save_pretrained",
+                exc_info=ose,
+            )
+            copytree(self._engines_path.parent, save_directory, symlinks=True)
