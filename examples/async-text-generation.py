@@ -12,7 +12,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
+import asyncio
 from argparse import ArgumentParser
 from logging import getLogger
 from pathlib import Path
@@ -34,6 +34,32 @@ from optimum.nvidia.utils.cli import (
 
 
 LOGGER = getLogger(__name__)
+
+
+async def infer():
+    tokenizer = AutoTokenizer.from_pretrained(args.model)
+    if not tokenizer.pad_token:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    export = ExportConfig.from_pretrained(args.model)
+    export.max_input_len = 1024
+    export.max_output_len = 256
+    export.max_num_tokens = 256
+    export.max_beam_width = 1
+
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model, device_map="auto", export_config=export
+    )
+    # model.save_pretrained(args.output)
+
+    prompt = "What is the latest generation of Nvidia GPUs?"
+    tokens = tokenizer(prompt, return_tensors="pt")
+    generated = await model.agenerate(
+        tokens["input_ids"],
+    )
+
+    generated_text = tokenizer.batch_decode(generated, skip_special_tokens=True)
+    print(generated_text)
 
 
 if __name__ == "__main__":
@@ -59,26 +85,4 @@ if __name__ == "__main__":
 
         login(args.hub_token)
 
-    tokenizer = AutoTokenizer.from_pretrained(args.model)
-    if not tokenizer.pad_token:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    export = ExportConfig.from_pretrained(args.model)
-    export.max_input_len = 1024
-    export.max_output_len = 256
-    export.max_num_tokens = 256
-    export.max_beam_width = 1
-
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model, device_map="auto", export_config=export
-    )
-    # model.save_pretrained(args.output)
-
-    prompt = "What is the latest generation of Nvidia GPUs?"
-    tokens = tokenizer(prompt, return_tensors="pt")
-    generated = model.generate(
-        tokens["input_ids"],
-    )
-
-    generated_text = tokenizer.decode(generated, skip_special_tokens=True)
-    print(generated_text)
+    asyncio.run(infer())
