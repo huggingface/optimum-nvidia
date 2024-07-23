@@ -84,7 +84,8 @@ def folder_list_checkpoints(folder: Path) -> Iterable[Path]:
             map(
                 Path,
                 filter(
-                    lambda item: re_checkpoint_filename.match(item.name), scandir(folder)
+                    lambda item: re_checkpoint_filename.match(item.name),
+                    scandir(folder),
                 ),
             )
         )
