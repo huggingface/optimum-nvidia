@@ -19,11 +19,12 @@ from pathlib import Path
 from shutil import copytree
 from typing import (
     Dict,
+    Iterable,
     List,
     Mapping,
     Optional,
     Type,
-    Union, Sequence, Iterable,
+    Union,
 )
 
 from huggingface_hub import ModelHubMixin, snapshot_download
@@ -91,6 +92,7 @@ def folder_list_checkpoints(folder: Path) -> Iterable[Path]:
             with open(config_file, "r", encoding="utf-8") as config_f:
                 config = json.load(config_f)
 
+
     return []
 
 
@@ -150,6 +152,7 @@ class HuggingFaceHubModel(
         # Check if the model_id is not a local path
         local_model_id = Path(model_id)
 
+        # Check if we have a local path to a model OR a model_id on the hub
         if local_model_id.exists():
             if any(engine_files := folder_list_engines(local_model_id)):
                 checkpoint_files = []
@@ -257,6 +260,7 @@ class HuggingFaceHubModel(
                                 load_by_shard=True,
                             )
 
+                            ranked_model.config.mapping.rank = rank
                             build_config = export_config.to_builder_config()
 
                             if save_intermediate_checkpoints:
