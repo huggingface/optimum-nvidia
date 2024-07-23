@@ -8,6 +8,49 @@ from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 
 import optimum.nvidia.hub
 from optimum.nvidia import AutoModelForCausalLM
+from optimum.nvidia.hub import folder_list_checkpoints, folder_list_engines
+
+
+def create_fake_checkpoints_and_engines(root: str, rank: int):
+    root = Path(root)
+    for i in range(rank):
+        with open(root.joinpath(f"rank{i}.safetensors"), "wb") as f:
+            f.write(b"abcd")
+
+        with open(root.joinpath(f"rank{i}.engine"), "wb") as f:
+            f.write(b"abcd")
+
+
+@pytest.mark.parametrize("rank", [1, 4])
+def test_folder_list_checkpoints(rank: int):
+    with TemporaryDirectory() as tmp:
+        create_fake_checkpoints_and_engines(tmp, rank)
+
+        checkpoints = list(folder_list_checkpoints(Path(tmp)))
+        assert len(checkpoints) == rank, "Wrong number of checkpoints returned"
+        assert all(
+            (
+                lambda checkpoint: checkpoint.name.endswith("safetensors")
+                and checkpoint.startswith("rank"),
+                checkpoints,
+            )
+        ), "Invalid checkpoint name detected in the output"
+
+
+@pytest.mark.parametrize("rank", [1, 4])
+def test_folder_list_engines(rank: int):
+    with TemporaryDirectory() as tmp:
+        create_fake_checkpoints_and_engines(tmp, rank)
+
+        engines = list(folder_list_engines(Path(tmp)))
+        assert len(engines) == rank, "Wrong number of engines returned"
+        assert all(
+            (
+                lambda engine: engine.name.endswith("engine")
+                and engine.startswith("rank"),
+                engines,
+            )
+        ), "Invalid engine name detected in the output"
 
 
 @pytest.mark.parametrize(

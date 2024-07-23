@@ -12,9 +12,9 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-import json
+import re
 from logging import getLogger
-from os import PathLike, symlink
+from os import PathLike, scandir, symlink
 from pathlib import Path
 from shutil import copytree
 from typing import (
@@ -70,30 +70,26 @@ LOGGER = getLogger()
 
 def folder_list_engines(folder: Path) -> Iterable[Path]:
     if folder.exists():
-        engine_candidates = folder.glob("*.engine")
-
-        if (config_file := folder / "config.json").exists():
-            with open(config_file, "r", encoding="utf-8") as config_f:
-                config = json.load(config_f)
-
-                if "plugin_config" in config and "build_config" in config:
-                    return engine_candidates
+        return folder.glob("*.engine")
 
     return []
 
 
 def folder_list_checkpoints(folder: Path) -> Iterable[Path]:
+    checkpoint_candidates = []
     if folder.exists():
-
         # At this stage we don't know if they are checkpoints or other safetensors files
-        checkpoint_candidates = folder.glob("*.safetensors")
+        re_checkpoint_filename = re.compile("rank{0-9}+\\.safetensors")
+        checkpoint_candidates = list(
+            map(
+                Path,
+                filter(
+                    lambda item: re_checkpoint_filename.match(item), scandir(folder)
+                ),
+            )
+        )
 
-        if (config_file := folder / "config.json").exists():
-            with open(config_file, "r", encoding="utf-8") as config_f:
-                config = json.load(config_f)
-
-
-    return []
+    return checkpoint_candidates
 
 
 def get_trtllm_artifact(model_id: str, patterns: List[str]) -> Path:
@@ -169,10 +165,14 @@ class HuggingFaceHubModel(
                 )
 
                 if (
-                    engines_config_path := (cached_path / PATH_FOLDER_ENGINES / "config.json")
+                    engines_config_path := (
+                        cached_path / PATH_FOLDER_ENGINES / "config.json"
+                    )
                 ).exists():
                     LOGGER.info(f"Found engines at {engines_config_path.parent}")
-                    engine_files = engines_config_path.parent.glob(FILE_TRTLLM_ENGINE_PATTERN)
+                    engine_files = engines_config_path.parent.glob(
+                        FILE_TRTLLM_ENGINE_PATTERN
+                    )
 
             # if no engine is found, then just try to locate a checkpoint
             if not engine_files:
@@ -186,7 +186,9 @@ class HuggingFaceHubModel(
                         cached_path / PATH_FOLDER_CHECKPOINTS / "config.json"
                     )
                 ).exists():
-                    LOGGER.info(f"Found checkpoints at {checkpoints_config_path.parent}")
+                    LOGGER.info(
+                        f"Found checkpoints at {checkpoints_config_path.parent}"
+                    )
                     checkpoint_files = checkpoints_config_path.parent.glob(
                         FILE_TRTLLM_CHECKPOINT_PATTERN
                     )
