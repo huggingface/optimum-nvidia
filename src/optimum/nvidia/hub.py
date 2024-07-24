@@ -236,7 +236,9 @@ class HuggingFaceHubModel(
             else:
                 model_type = model_type_from_known_config(config)
                 if not model_type:
-                    raise RuntimeError("Unable to determine model_type to get the right configuration format.")
+                    raise RuntimeError(
+                        "Unable to determine model_type to get the right configuration format."
+                    )
 
             config = NormalizedConfig(AutoConfig.for_model(model_type, **config))
             generation_config = GenerationConfig.from_pretrained(

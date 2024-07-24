@@ -12,7 +12,6 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
@@ -22,6 +21,7 @@ from optimum.nvidia.errors import UnsupportedModelException
 from optimum.nvidia.models.gemma import GemmaForCausalLM
 from optimum.nvidia.models.llama import LlamaForCausalLM
 from optimum.nvidia.utils import model_type_from_known_config
+
 
 if TYPE_CHECKING:
     from optimum.nvidia.export import ExportConfig
