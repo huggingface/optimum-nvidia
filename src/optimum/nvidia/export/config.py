@@ -59,12 +59,17 @@ class ExportConfig:
         max_input_len = config.max_position_embeddings
         max_output_len = config.max_position_embeddings
 
-        return ExportConfig(
+        econfig = ExportConfig(
             dtype=dtype,
             max_input_len=max_input_len,
             max_output_len=max_output_len,
             max_batch_size=max_batch_size,
-        ).validate()
+        )
+
+        # Initialize sharing information with single shard
+        econfig.with_sharding()
+        econfig.validate()
+        return econfig
 
     def validate(self) -> "ExportConfig":
         if self.optimization_level < 0:
