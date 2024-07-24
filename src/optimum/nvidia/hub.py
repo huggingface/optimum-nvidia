@@ -306,11 +306,13 @@ class HuggingFaceHubModel(
             # Need target_is_directory on Windows
             # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
             # Falling back to copytree in this case
-            symlink(self._engines_path.parent, save_directory, target_is_directory=True)
+            for file in self._engines_path.glob("*"):
+                symlink(file, save_directory.joinpath(file.relative_to(self._engines_path)))
         except OSError as ose:
             LOGGER.error(
                 f"Failed to create symlink from current engine folder {self._engines_path.parent} to {save_directory}. "
                 "Will default to copy based _save_pretrained",
                 exc_info=ose,
             )
-            copytree(self._engines_path.parent, save_directory, symlinks=True)
+            for file in self._engines_path.glob("*"):
+                copytree(file, save_directory.joinpath(file.relative_to(self._engines_path)), symlinks=True)
