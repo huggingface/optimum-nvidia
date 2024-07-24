@@ -23,7 +23,7 @@ from .constants import (
     TENSORRT_TIMINGS_FILE,
 )
 from .env import parse_flag_from_env
-from .hub import get_user_agent
+from .hub import get_user_agent, model_type_from_known_config
 from .nvml import has_float8_support
 from .offload import maybe_offload_weights_to_cpu
 from .onnx import to_onnx

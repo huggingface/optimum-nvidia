@@ -21,7 +21,7 @@ from huggingface_hub import ModelHubMixin
 from optimum.nvidia.errors import UnsupportedModelException
 from optimum.nvidia.models.gemma import GemmaForCausalLM
 from optimum.nvidia.models.llama import LlamaForCausalLM
-
+from optimum.nvidia.utils import model_type_from_known_config
 
 if TYPE_CHECKING:
     from optimum.nvidia.export import ExportConfig
@@ -63,22 +63,7 @@ class AutoModelForCausalLM(ModelHubMixin):
         if config is None:
             raise ValueError("Unable to determine the model type with config = None")
 
-        model_type = None
-        if "model_type" in config:
-            model_type = config["model_type"]
-        elif (
-            "pretrained_config" in config
-            and "architecture" in config["pretrained_config"]
-        ):
-            # Attempt to exactrat model_type from info in engine's config
-            model_type = str(config["pretrained_config"]["architecture"])
-
-            if len(model_type) > 0:
-                # Find first upper case letter (excluding leading char)
-                if match := re.match(
-                    "([A-Z][a-z]+)+?([a-zA-Z]+)", model_type
-                ):  # Extracting (Llama)(ForCausalLM)
-                    model_type = match.group(1).lower()
+        model_type = model_type_from_known_config(config)
 
         if (
             not model_type

@@ -51,7 +51,7 @@ from optimum.nvidia.models import (
     SupportsFromHuggingFace,
     SupportsTransformersConversion,
 )
-from optimum.nvidia.utils import get_user_agent
+from optimum.nvidia.utils import get_user_agent, model_type_from_known_config
 from optimum.nvidia.utils.nvml import get_device_count, get_device_name
 from optimum.utils import NormalizedConfig
 
@@ -231,7 +231,14 @@ class HuggingFaceHubModel(
                 workspace = None
 
             # Retrieve a proper transformers' config
-            config = NormalizedConfig(AutoConfig.for_model(**config))
+            if "model_type" in config:
+                model_type = config["model_type"]
+            else:
+                model_type = model_type_from_known_config(config)
+                if not model_type:
+                    raise RuntimeError("Unable to determine model_type to get the right configuration format.")
+
+            config = NormalizedConfig(AutoConfig.for_model(model_type, **config))
             generation_config = GenerationConfig.from_pretrained(
                 original_checkpoints_path_for_conversion
             )
