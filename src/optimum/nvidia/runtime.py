@@ -15,6 +15,7 @@ from tensorrt_llm.executor import (
 )
 from tensorrt_llm.hlapi import SamplingParams
 
+from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.utils.nvml import is_post_ampere
 
 
@@ -155,5 +156,19 @@ class CausalLMOutput:
         return None
 
 
-class CausalLM(InferenceRuntimeBase):
-    pass
+class CausalLM(HuggingFaceHubModel, InferenceRuntimeBase):
+    def __init__(
+        self,
+        engines_path: Union[str, PathLike, Path],
+        generation_config: "GenerationConfig",
+        executor_config: Optional["ExecutorConfig"] = None,
+    ):
+        InferenceRuntimeBase.__init__(
+            self, engines_path, generation_config, executor_config
+        )
+        HuggingFaceHubModel.__init__(self, engines_path)
+
+    def _save_additional_parcels(self, save_directory: Path):
+        self._generation_config.save_pretrained(
+            save_directory, "generation_config.json"
+        )

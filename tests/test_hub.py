@@ -4,6 +4,8 @@ from typing import Tuple
 
 import mock
 import pytest
+import torch.cuda
+from huggingface_hub import login
 from transformers import AutoConfig as HfAutoConfig
 from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 
@@ -70,9 +72,13 @@ def test_save_engine_locally_and_reload(model_id: str):
 
                 model = HfAutoModelForCausalLM.from_config(config)
                 model.save_pretrained(hf_out)
+                del model
+                torch.cuda.empty_cache()
 
                 model = AutoModelForCausalLM.from_pretrained(hf_out)
                 model.save_pretrained(trtllm_out)
+                del model
+                torch.cuda.empty_cache()
 
                 assert trtllm_out.exists()
                 assert (trtllm_out / "rank0.engine").exists()
@@ -85,6 +91,9 @@ def test_save_engine_locally_and_reload(model_id: str):
                         optimum.nvidia.export.TensorRTModelConverter.build.call_count
                         == 0
                     )
+
+                    del model
+                    torch.cuda.empty_cache()
 
             _save()
             _reload()

@@ -13,6 +13,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 import re
+from abc import ABCMeta, abstractmethod
 from logging import getLogger
 from os import PathLike, scandir, symlink
 from pathlib import Path
@@ -51,7 +52,7 @@ from optimum.nvidia.models import (
     SupportsFromHuggingFace,
     SupportsTransformersConversion,
 )
-from optimum.nvidia.utils import get_user_agent, model_type_from_known_config
+from optimum.nvidia.utils import get_user_agent
 from optimum.nvidia.utils.nvml import get_device_count, get_device_name
 from optimum.utils import NormalizedConfig
 
@@ -94,7 +95,9 @@ def folder_list_checkpoints(folder: Path) -> Iterable[Path]:
     return checkpoint_candidates
 
 
-def get_trtllm_artifact(model_id: str, patterns: List[str], add_default_allow_patterns: bool = True) -> Path:
+def get_trtllm_artifact(
+    model_id: str, patterns: List[str], add_default_allow_patterns: bool = True
+) -> Path:
     if (local_path := Path(model_id)).exists():
         return local_path
 
@@ -105,7 +108,9 @@ def get_trtllm_artifact(model_id: str, patterns: List[str], add_default_allow_pa
             library_name=LIBRARY_NAME,
             library_version=trtllm_version,
             user_agent=get_user_agent(),
-            allow_patterns=patterns + HUB_SNAPSHOT_ALLOW_PATTERNS if add_default_allow_patterns else patterns,
+            allow_patterns=patterns + HUB_SNAPSHOT_ALLOW_PATTERNS
+            if add_default_allow_patterns
+            else patterns,
         )
     )
 
@@ -117,10 +122,10 @@ class HuggingFaceHubModel(
     tags=["optimum-nvidia", "trtllm"],
     repo_url="https://github.com/huggingface/optimum-nvidia",
     docs_url="https://huggingface.co/docs/optimum/nvidia_overview",
+    metaclass=ABCMeta,
 ):
     def __init__(self, engines_path: Union[str, PathLike, Path]):
         self._engines_path = Path(engines_path)
-        super().__init__()
 
     @classmethod
     def _from_pretrained(
@@ -158,22 +163,32 @@ class HuggingFaceHubModel(
         # Check if the model_id is not a local path
         local_model_id = Path(model_id)
 
+        engines_folder = checkpoints_folder = None
+        engine_files = checkpoint_files = []
+
         # Check if we have a local path to a model OR a model_id on the hub
         if local_model_id.exists() and local_model_id.is_dir():
-            if any(engine_files := folder_list_engines(local_model_id)):
-                checkpoint_files = []
+            if any(engine_files := list(folder_list_engines(local_model_id))):
+                engines_folder = engine_files[
+                    0
+                ].parent  # Looking for parent folder not actual specific engine file
+                checkpoints_folder = None
             else:
-                checkpoint_files = folder_list_checkpoints(local_model_id)
+                checkpoint_files = list(folder_list_checkpoints(local_model_id))
+
+                if checkpoint_files:
+                    checkpoints_folder = checkpoint_files[0].parent
+
         else:
             # Look for prebuild TRTLLM Engine
-            engine_files = checkpoint_files = []
             if not force_export:
                 LOGGER.debug(f"Retrieving prebuild engine(s) for device {device_name}")
                 cached_path = get_trtllm_artifact(
                     model_id, [f"{common_hub_path}/**/{PATH_FOLDER_ENGINES}/*.engine"]
                 )
 
-                engine_files = folder_list_engines(cached_path / PATH_FOLDER_ENGINES)
+                engines_folder = cached_path / PATH_FOLDER_ENGINES
+                engine_files = folder_list_engines(engines_folder)
 
             # if no engine is found, then just try to locate a checkpoint
             if not engine_files:
@@ -182,10 +197,11 @@ class HuggingFaceHubModel(
                     model_id, [f"{common_hub_path}/**/*.safetensors"]
                 )
 
-                checkpoint_files = folder_list_checkpoints(cached_path / PATH_FOLDER_CHECKPOINTS)
+                checkpoints_folder = cached_path / PATH_FOLDER_CHECKPOINTS
+                checkpoint_files = folder_list_checkpoints(checkpoints_folder)
 
         # If no checkpoint available, we are good for a full export from the Hugging Face Hub
-        if not checkpoint_files:
+        if not engine_files:
             LOGGER.info(f"No prebuild engines nor checkpoint were found for {model_id}")
 
             # Retrieve the snapshot if needed
@@ -272,7 +288,7 @@ class HuggingFaceHubModel(
                                 )
 
                             _ = converter.build(ranked_model, build_config)
-                            engine_files = converter.workspace.engines_path
+                            engines_folder = converter.workspace.engines_path
 
                         LOGGER.info(
                             f"Saved TensorRT-LLM engines at {converter.workspace.engines_path}"
@@ -285,11 +301,17 @@ class HuggingFaceHubModel(
                 raise ValueError(
                     "Model doesn't support Hugging Face transformers conversion, aborting."
                 )
+        else:
+            generation_config = GenerationConfig.from_pretrained(engines_folder)
 
-            return cls(
-                engines_path=engine_files,
-                generation_config=generation_config,
-            )
+        return cls(
+            engines_path=engines_folder,
+            generation_config=generation_config,
+        )
+
+    @abstractmethod
+    def _save_additional_parcels(self, save_directory: Path):
+        raise NotImplementedError()
 
     def _save_pretrained(self, save_directory: Path) -> None:
         try:
@@ -312,3 +334,5 @@ class HuggingFaceHubModel(
                     save_directory.joinpath(file.relative_to(self._engines_path)),
                     symlinks=True,
                 )
+        finally:
+            self._save_additional_parcels(save_directory)
