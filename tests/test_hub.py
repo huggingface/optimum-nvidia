@@ -1,5 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Tuple
 
 import mock
 import pytest
@@ -9,6 +10,7 @@ from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 import optimum.nvidia.hub
 from optimum.nvidia import AutoModelForCausalLM
 from optimum.nvidia.hub import folder_list_checkpoints, folder_list_engines
+from optimum.nvidia.utils import model_type_from_known_config
 
 
 def create_fake_checkpoints_and_engines(root: str, rank: int):
@@ -86,3 +88,38 @@ def test_save_engine_locally_and_reload(model_id: str):
 
             _save()
             _reload()
+
+
+@pytest.mark.parametrize(
+    "type",
+    (
+        ("llama", "LlamaForCausalLM"),
+        ("gemma", "GemmaForCausalLM"),
+        ("mistral", "MistralForCausalLM"),
+        ("mixtral", "MixtralForCausalLM"),
+    )
+)
+def test_model_type_from_known_config(type: Tuple[str, str]):
+    transformers_type, trtllm_type = type
+
+    # transformers config
+    transformers_config = {"model_type": transformers_type}
+    assert model_type_from_known_config(transformers_config) == transformers_type
+
+    # trtllm engine config
+    tensorrt_llm_config = {"pretrained_config": {"architecture": trtllm_type}}
+    assert model_type_from_known_config(tensorrt_llm_config) == trtllm_type
+
+
+def test_model_type_from_known_config_fail():
+    assert model_type_from_known_config({"": ""}) is None
+
+    with pytest.raises(RuntimeError):
+        model_type_from_known_config({"pretrained_config": {"architecture": "_LlamaForCausaLM"}})
+        model_type_from_known_config({"pretrained_config": {"architecture": "Llama_ForCausaLM"}})
+        model_type_from_known_config({"pretrained_config": {"architecture": "_llamaForCausaLM"}})
+        model_type_from_known_config({"pretrained_config": {"architecture": "llama_ForCausaLM"}})
+        model_type_from_known_config({"pretrained_config": {"architecture": "_lLamaForCausaLM"}})
+        model_type_from_known_config({"pretrained_config": {"architecture": "llamaforcausalm"}})
+        model_type_from_known_config({"pretrained_config": {"architecture": "123llamaforcausalm"}})
+        model_type_from_known_config({"pretrained_config": {"architecture": "llama123forcausalm"}})
