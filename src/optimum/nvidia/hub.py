@@ -203,7 +203,9 @@ class HuggingFaceHubModel(
                 LOGGER.debug(f"Retrieving model from local folder: {local_model_id}")
                 original_checkpoints_path_for_conversion = local_model_id
             else:
-                LOGGER.debug(f"Retrieving model from snapshot {model_id} on the Hugging Face Hub")
+                LOGGER.debug(
+                    f"Retrieving model from snapshot {model_id} on the Hugging Face Hub"
+                )
                 original_checkpoints_path_for_conversion = snapshot_download(
                     model_id,
                     repo_type="model",
