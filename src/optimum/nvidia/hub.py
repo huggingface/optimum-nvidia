@@ -145,7 +145,15 @@ class HuggingFaceHubModel(
             raise ValueError("No GPU detected on this platform")
 
         device_name = get_device_name(0)[-1]
-        common_hub_path = f"{device_name}/{config['torch_dtype']}"
+
+        if "torch_dtype" in config:
+            dtype = config["torch_dtype"]
+        elif "pretrained_config" in config and "dtype" in config["pretrained_config"]:
+            dtype = config["pretrained_config"]["dtype"]
+        else:
+            raise RuntimeError("Failed to detect model's dtype")
+
+        common_hub_path = f"{device_name}/{dtype}"
 
         # Check if the model_id is not a local path
         local_model_id = Path(model_id)
