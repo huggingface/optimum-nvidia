@@ -94,7 +94,7 @@ def folder_list_checkpoints(folder: Path) -> Iterable[Path]:
     return checkpoint_candidates
 
 
-def get_trtllm_artifact(model_id: str, patterns: List[str]) -> Path:
+def get_trtllm_artifact(model_id: str, patterns: List[str], add_default_allow_patterns: bool = True) -> Path:
     if (local_path := Path(model_id)).exists():
         return local_path
 
@@ -105,7 +105,7 @@ def get_trtllm_artifact(model_id: str, patterns: List[str]) -> Path:
             library_name=LIBRARY_NAME,
             library_version=trtllm_version,
             user_agent=get_user_agent(),
-            allow_patterns=patterns,
+            allow_patterns=patterns + HUB_SNAPSHOT_ALLOW_PATTERNS if add_default_allow_patterns else patterns,
         )
     )
 
@@ -164,7 +164,6 @@ class HuggingFaceHubModel(
                 checkpoint_files = []
             else:
                 checkpoint_files = folder_list_checkpoints(local_model_id)
-
         else:
             # Look for prebuild TRTLLM Engine
             engine_files = checkpoint_files = []
@@ -174,15 +173,7 @@ class HuggingFaceHubModel(
                     model_id, [f"{common_hub_path}/**/{PATH_FOLDER_ENGINES}/*.engine"]
                 )
 
-                if (
-                    engines_config_path := (
-                        cached_path / PATH_FOLDER_ENGINES / "config.json"
-                    )
-                ).exists():
-                    LOGGER.info(f"Found engines at {engines_config_path.parent}")
-                    engine_files = engines_config_path.parent.glob(
-                        FILE_TRTLLM_ENGINE_PATTERN
-                    )
+                engine_files = folder_list_engines(cached_path / PATH_FOLDER_ENGINES)
 
             # if no engine is found, then just try to locate a checkpoint
             if not engine_files:
@@ -191,17 +182,7 @@ class HuggingFaceHubModel(
                     model_id, [f"{common_hub_path}/**/*.safetensors"]
                 )
 
-                if (
-                    checkpoints_config_path := (
-                        cached_path / PATH_FOLDER_CHECKPOINTS / "config.json"
-                    )
-                ).exists():
-                    LOGGER.info(
-                        f"Found checkpoints at {checkpoints_config_path.parent}"
-                    )
-                    checkpoint_files = checkpoints_config_path.parent.glob(
-                        FILE_TRTLLM_CHECKPOINT_PATTERN
-                    )
+                checkpoint_files = folder_list_checkpoints(cached_path / PATH_FOLDER_CHECKPOINTS)
 
         # If no checkpoint available, we are good for a full export from the Hugging Face Hub
         if not checkpoint_files:
@@ -231,16 +212,7 @@ class HuggingFaceHubModel(
                 workspace = None
 
             # Retrieve a proper transformers' config
-            if "model_type" in config:
-                model_type = config["model_type"]
-            else:
-                model_type = model_type_from_known_config(config)
-                if not model_type:
-                    raise RuntimeError(
-                        "Unable to determine model_type to get the right configuration format."
-                    )
-
-            config = NormalizedConfig(AutoConfig.for_model(model_type, **config))
+            config = NormalizedConfig(AutoConfig.for_model(**config))
             generation_config = GenerationConfig.from_pretrained(
                 original_checkpoints_path_for_conversion
             )
