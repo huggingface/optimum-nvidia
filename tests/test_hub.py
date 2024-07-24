@@ -127,21 +127,28 @@ def test_model_type_from_known_config_fail():
         model_type_from_known_config(
             {"pretrained_config": {"architecture": "_LlamaForCausaLM"}}
         )
-        model_type_from_known_config(
-            {"pretrained_config": {"architecture": "Llama_ForCausaLM"}}
-        )
+
+    with pytest.raises(RuntimeError):
         model_type_from_known_config(
             {"pretrained_config": {"architecture": "_llamaForCausaLM"}}
         )
+
+    with pytest.raises(RuntimeError):
         model_type_from_known_config(
             {"pretrained_config": {"architecture": "llama_ForCausaLM"}}
         )
+
+    with pytest.raises(RuntimeError):
         model_type_from_known_config(
             {"pretrained_config": {"architecture": "_lLamaForCausaLM"}}
         )
+
+    with pytest.raises(RuntimeError):
         model_type_from_known_config(
             {"pretrained_config": {"architecture": "llamaforcausalm"}}
         )
+
+    with pytest.raises(RuntimeError):
         model_type_from_known_config(
             {"pretrained_config": {"architecture": "123llamaforcausalm"}}
         )

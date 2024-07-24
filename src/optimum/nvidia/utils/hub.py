@@ -98,7 +98,7 @@ def model_type_from_known_config(config: Dict[str, Any]) -> Optional[str]:
     elif (
         "pretrained_config" in config and "architecture" in config["pretrained_config"]
     ):
-        # Attempt to exactrat model_type from info in engine's config
+        # Attempt to extract model_type from info in engine's config
         model_type = str(config["pretrained_config"]["architecture"])
 
         if len(model_type) > 0:
@@ -107,6 +107,8 @@ def model_type_from_known_config(config: Dict[str, Any]) -> Optional[str]:
                 "([A-Z][a-z]+)+?([a-zA-Z]+)", model_type
             ):  # Extracting (Llama)(ForCausalLM)
                 return match.group(1).lower()
+            else:
+                raise RuntimeError(f"model_type {model_type} is not a valid model_type format")
         else:
             raise RuntimeError(f"Unable to process model_type: {model_type}")
     else:
