@@ -79,7 +79,7 @@ def folder_list_checkpoints(folder: Path) -> Iterable[Path]:
     checkpoint_candidates = []
     if folder.exists():
         # At this stage we don't know if they are checkpoints or other safetensors files
-        re_checkpoint_filename = re.compile("rank{0-9}+\\.safetensors")
+        re_checkpoint_filename = re.compile(r"rank[0-9]+\.safetensors")
         checkpoint_candidates = list(
             map(
                 Path,
