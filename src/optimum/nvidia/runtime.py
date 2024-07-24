@@ -39,7 +39,6 @@ def convert_generation_config(config: "GenerationConfig") -> "SamplingParams":
         top_p=config.top_p,
         temperature=config.temperature,
         beam_width=config.num_beams if config.do_sample else 1,
-        bad_words=config.bad_words_ids,
         length_penalty=config.length_penalty,
         repetition_penalty=config.repetition_penalty,
         no_repeat_ngram_size=config.no_repeat_ngram_size
