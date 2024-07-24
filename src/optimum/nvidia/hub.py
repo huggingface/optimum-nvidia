@@ -43,7 +43,8 @@ from optimum.nvidia.export import (
     PATH_FOLDER_ENGINES,
     ExportConfig,
     TensorRTModelConverter,
-    auto_parallel, Workspace,
+    Workspace,
+    auto_parallel,
 )
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import (
@@ -307,7 +308,9 @@ class HuggingFaceHubModel(
             # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
             # Falling back to copytree in this case
             for file in self._engines_path.glob("*"):
-                symlink(file, save_directory.joinpath(file.relative_to(self._engines_path)))
+                symlink(
+                    file, save_directory.joinpath(file.relative_to(self._engines_path))
+                )
         except OSError as ose:
             LOGGER.error(
                 f"Failed to create symlink from current engine folder {self._engines_path.parent} to {save_directory}. "
@@ -315,4 +318,8 @@ class HuggingFaceHubModel(
                 exc_info=ose,
             )
             for file in self._engines_path.glob("*"):
-                copytree(file, save_directory.joinpath(file.relative_to(self._engines_path)), symlinks=True)
+                copytree(
+                    file,
+                    save_directory.joinpath(file.relative_to(self._engines_path)),
+                    symlinks=True,
+                )

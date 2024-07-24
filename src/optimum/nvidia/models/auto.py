@@ -66,16 +66,24 @@ class AutoModelForCausalLM(ModelHubMixin):
         model_type = None
         if "model_type" in config:
             model_type = config["model_type"]
-        elif "pretrained_config" in config and "architecture" in config["pretrained_config"]:
+        elif (
+            "pretrained_config" in config
+            and "architecture" in config["pretrained_config"]
+        ):
             # Attempt to exactrat model_type from info in engine's config
             model_type = str(config["pretrained_config"]["architecture"])
 
             if len(model_type) > 0:
                 # Find first upper case letter (excluding leading char)
-                if match := re.match("([A-Z][a-z]+)+?([a-zA-Z]+)", model_type):  # Extracting (Llama)(ForCausalLM)
+                if match := re.match(
+                    "([A-Z][a-z]+)+?([a-zA-Z]+)", model_type
+                ):  # Extracting (Llama)(ForCausalLM)
                     model_type = match.group(1).lower()
 
-        if not model_type or model_type not in AutoModelForCausalLM._SUPPORTED_MODEL_CLASS:
+        if (
+            not model_type
+            or model_type not in AutoModelForCausalLM._SUPPORTED_MODEL_CLASS
+        ):
             raise UnsupportedModelException(model_type)
 
         model_clazz = AutoModelForCausalLM._SUPPORTED_MODEL_CLASS[model_type]
