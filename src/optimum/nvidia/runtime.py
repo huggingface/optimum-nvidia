@@ -92,7 +92,6 @@ class InferenceRuntimeBase:
         self._executor = GenerationExecutor.create(
             engine_dir=engines_path,
             executor_config=executor_config or default_executor_config(self._config),
-            tokenizer=None,
         )
 
     def generate(
