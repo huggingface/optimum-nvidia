@@ -17,7 +17,6 @@ from logging import getLogger
 from tensorrt_llm.models.llama.model import LLaMAForCausalLM
 from transformers import LlamaForCausalLM as TransformersLlamaForCausalLM
 
-from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.models import SupportsTransformersConversion
 from optimum.nvidia.runtime import CausalLM
 
@@ -25,6 +24,6 @@ from optimum.nvidia.runtime import CausalLM
 LOGGER = getLogger(__name__)
 
 
-class LlamaForCausalLM(CausalLM, HuggingFaceHubModel, SupportsTransformersConversion):
+class LlamaForCausalLM(CausalLM, SupportsTransformersConversion):
     HF_LIBRARY_TARGET_MODEL_CLASS = TransformersLlamaForCausalLM
     TRT_LLM_TARGET_MODEL_CLASSES = LLaMAForCausalLM

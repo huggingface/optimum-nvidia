@@ -12,12 +12,15 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import re
+from abc import ABCMeta, abstractmethod
 from logging import getLogger
-from os import PathLike, symlink
+from os import PathLike, scandir, symlink
 from pathlib import Path
 from shutil import copytree
 from typing import (
     Dict,
+    Iterable,
     List,
     Mapping,
     Optional,
@@ -41,6 +44,7 @@ from optimum.nvidia.export import (
     PATH_FOLDER_ENGINES,
     ExportConfig,
     TensorRTModelConverter,
+    Workspace,
     auto_parallel,
 )
 from optimum.nvidia.lang import DataType
@@ -66,7 +70,37 @@ HUB_SNAPSHOT_ALLOW_PATTERNS = [
 LOGGER = getLogger()
 
 
-def get_trtllm_artifact(model_id: str, patterns: List[str]) -> Path:
+def folder_list_engines(folder: Path) -> Iterable[Path]:
+    if folder.exists():
+        return folder.glob("*.engine")
+
+    return []
+
+
+def folder_list_checkpoints(folder: Path) -> Iterable[Path]:
+    checkpoint_candidates = []
+    if folder.exists():
+        # At this stage we don't know if they are checkpoints or other safetensors files
+        re_checkpoint_filename = re.compile(r"rank[0-9]+\.safetensors")
+        checkpoint_candidates = list(
+            map(
+                Path,
+                filter(
+                    lambda item: re_checkpoint_filename.match(item.name),
+                    scandir(folder),
+                ),
+            )
+        )
+
+    return checkpoint_candidates
+
+
+def get_trtllm_artifact(
+    model_id: str, patterns: List[str], add_default_allow_patterns: bool = True
+) -> Path:
+    if (local_path := Path(model_id)).exists():
+        return local_path
+
     return Path(
         snapshot_download(
             repo_id=model_id,
@@ -74,7 +108,9 @@ def get_trtllm_artifact(model_id: str, patterns: List[str]) -> Path:
             library_name=LIBRARY_NAME,
             library_version=trtllm_version,
             user_agent=get_user_agent(),
-            allow_patterns=patterns,
+            allow_patterns=patterns + HUB_SNAPSHOT_ALLOW_PATTERNS
+            if add_default_allow_patterns
+            else patterns,
         )
     )
 
@@ -86,10 +122,10 @@ class HuggingFaceHubModel(
     tags=["optimum-nvidia", "trtllm"],
     repo_url="https://github.com/huggingface/optimum-nvidia",
     docs_url="https://huggingface.co/docs/optimum/nvidia_overview",
+    metaclass=ABCMeta,
 ):
     def __init__(self, engines_path: Union[str, PathLike, Path]):
         self._engines_path = Path(engines_path)
-        super().__init__()
 
     @classmethod
     def _from_pretrained(
@@ -114,60 +150,82 @@ class HuggingFaceHubModel(
             raise ValueError("No GPU detected on this platform")
 
         device_name = get_device_name(0)[-1]
-        common_hub_path = f"{device_name}/{config['torch_dtype']}"
 
-        # Look for prebuild TRTLLM Engine
+        if "torch_dtype" in config:
+            dtype = config["torch_dtype"]
+        elif "pretrained_config" in config and "dtype" in config["pretrained_config"]:
+            dtype = config["pretrained_config"]["dtype"]
+        else:
+            raise RuntimeError("Failed to detect model's dtype")
+
+        common_hub_path = f"{device_name}/{dtype}"
+
+        # Check if the model_id is not a local path
+        local_model_id = Path(model_id)
+
+        engines_folder = checkpoints_folder = None
         engine_files = checkpoint_files = []
-        if not force_export:
-            LOGGER.debug(f"Retrieving prebuild engine(s) for device {device_name}")
-            cached_path = get_trtllm_artifact(
-                model_id, [f"{common_hub_path}/**/{PATH_FOLDER_ENGINES}/*.engine"]
-            )
 
-            if (
-                engines_config_path := (
-                    cached_path / PATH_FOLDER_ENGINES / "config.json"
-                )
-            ).exists():
-                LOGGER.info(f"Found engines at {engines_config_path.parent}")
-                engine_files = engines_config_path.parent.glob(
-                    FILE_TRTLLM_ENGINE_PATTERN
+        # Check if we have a local path to a model OR a model_id on the hub
+        if local_model_id.exists() and local_model_id.is_dir():
+            if any(engine_files := list(folder_list_engines(local_model_id))):
+                engines_folder = engine_files[
+                    0
+                ].parent  # Looking for parent folder not actual specific engine file
+                checkpoints_folder = None
+            else:
+                checkpoint_files = list(folder_list_checkpoints(local_model_id))
+
+                if checkpoint_files:
+                    checkpoints_folder = checkpoint_files[0].parent
+
+        else:
+            # Look for prebuild TRTLLM Engine
+            if not force_export:
+                LOGGER.debug(f"Retrieving prebuild engine(s) for device {device_name}")
+                cached_path = get_trtllm_artifact(
+                    model_id, [f"{common_hub_path}/**/{PATH_FOLDER_ENGINES}/*.engine"]
                 )
 
-        # if no engine is found, then just try to locate a checkpoint
-        if not engine_files:
-            LOGGER.debug(f"Retrieving checkpoint(s) for {device_name}")
-            cached_path = get_trtllm_artifact(
-                model_id, [f"{common_hub_path}/**/*.safetensors"]
-            )
+                engines_folder = cached_path / PATH_FOLDER_ENGINES
+                engine_files = folder_list_engines(engines_folder)
 
-            if (
-                checkpoints_config_path := (
-                    cached_path / PATH_FOLDER_CHECKPOINTS / "config.json"
+            # if no engine is found, then just try to locate a checkpoint
+            if not engine_files:
+                LOGGER.debug(f"Retrieving checkpoint(s) for {device_name}")
+                cached_path = get_trtllm_artifact(
+                    model_id, [f"{common_hub_path}/**/*.safetensors"]
                 )
-            ).exists():
-                LOGGER.info(f"Found checkpoints at {checkpoints_config_path.parent}")
-                checkpoint_files = checkpoints_config_path.parent.glob(
-                    FILE_TRTLLM_CHECKPOINT_PATTERN
-                )
+
+                checkpoints_folder = cached_path / PATH_FOLDER_CHECKPOINTS
+                checkpoint_files = folder_list_checkpoints(checkpoints_folder)
 
         # If no checkpoint available, we are good for a full export from the Hugging Face Hub
-        if not checkpoint_files:
+        if not engine_files:
             LOGGER.info(f"No prebuild engines nor checkpoint were found for {model_id}")
 
             # Retrieve the snapshot if needed
-            original_checkpoints_path_for_conversion = snapshot_download(
-                model_id,
-                repo_type="model",
-                revision=revision,
-                cache_dir=cache_dir,
-                force_download=force_download,
-                proxies=proxies,
-                resume_download=resume_download,
-                local_files_only=local_files_only,
-                token=token,
-                allow_patterns=HUB_SNAPSHOT_ALLOW_PATTERNS,
-            )
+            if local_model_id.is_dir():
+                LOGGER.debug(f"Retrieving model from local folder: {local_model_id}")
+                original_checkpoints_path_for_conversion = local_model_id
+                workspace = Workspace(local_model_id)
+            else:
+                LOGGER.debug(
+                    f"Retrieving model from snapshot {model_id} on the Hugging Face Hub"
+                )
+                original_checkpoints_path_for_conversion = snapshot_download(
+                    model_id,
+                    repo_type="model",
+                    revision=revision,
+                    cache_dir=cache_dir,
+                    force_download=force_download,
+                    proxies=proxies,
+                    resume_download=resume_download,
+                    local_files_only=local_files_only,
+                    token=token,
+                    allow_patterns=HUB_SNAPSHOT_ALLOW_PATTERNS,
+                )
+                workspace = None
 
             # Retrieve a proper transformers' config
             config = NormalizedConfig(AutoConfig.for_model(**config))
@@ -195,7 +253,7 @@ class HuggingFaceHubModel(
                         f"Building {model_id} {subpart} ({idx + 1} / {len(targets)})"
                     )
 
-                    converter = TensorRTModelConverter(model_id, subpart)
+                    converter = TensorRTModelConverter(model_id, subpart, workspace)
 
                     # Artifacts resulting from a build are not stored in the location `snapshot_download`
                     # would use. Instead, it uses `cached_assets_path` to create a specific location which
@@ -220,6 +278,7 @@ class HuggingFaceHubModel(
                                 load_by_shard=True,
                             )
 
+                            ranked_model.config.mapping.rank = rank
                             build_config = export_config.to_builder_config()
 
                             if save_intermediate_checkpoints:
@@ -229,6 +288,7 @@ class HuggingFaceHubModel(
                                 )
 
                             _ = converter.build(ranked_model, build_config)
+                            engines_folder = converter.workspace.engines_path
 
                         LOGGER.info(
                             f"Saved TensorRT-LLM engines at {converter.workspace.engines_path}"
@@ -241,22 +301,38 @@ class HuggingFaceHubModel(
                 raise ValueError(
                     "Model doesn't support Hugging Face transformers conversion, aborting."
                 )
+        else:
+            generation_config = GenerationConfig.from_pretrained(engines_folder)
 
-            return cls(
-                engines_path=converter.workspace.engines_path,
-                generation_config=generation_config,
-            )
+        return cls(
+            engines_path=engines_folder,
+            generation_config=generation_config,
+        )
+
+    @abstractmethod
+    def _save_additional_parcels(self, save_directory: Path):
+        raise NotImplementedError()
 
     def _save_pretrained(self, save_directory: Path) -> None:
         try:
             # Need target_is_directory on Windows
             # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
             # Falling back to copytree in this case
-            symlink(self._engines_path.parent, save_directory, target_is_directory=True)
+            for file in self._engines_path.glob("*"):
+                symlink(
+                    file, save_directory.joinpath(file.relative_to(self._engines_path))
+                )
         except OSError as ose:
             LOGGER.error(
                 f"Failed to create symlink from current engine folder {self._engines_path.parent} to {save_directory}. "
                 "Will default to copy based _save_pretrained",
                 exc_info=ose,
             )
-            copytree(self._engines_path.parent, save_directory, symlinks=True)
+            for file in self._engines_path.glob("*"):
+                copytree(
+                    file,
+                    save_directory.joinpath(file.relative_to(self._engines_path)),
+                    symlinks=True,
+                )
+        finally:
+            self._save_additional_parcels(save_directory)

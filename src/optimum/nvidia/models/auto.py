@@ -12,7 +12,6 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Optional, Type, Union
 
@@ -21,6 +20,7 @@ from huggingface_hub import ModelHubMixin
 from optimum.nvidia.errors import UnsupportedModelException
 from optimum.nvidia.models.gemma import GemmaForCausalLM
 from optimum.nvidia.models.llama import LlamaForCausalLM
+from optimum.nvidia.utils import model_type_from_known_config
 
 
 if TYPE_CHECKING:
@@ -63,8 +63,12 @@ class AutoModelForCausalLM(ModelHubMixin):
         if config is None:
             raise ValueError("Unable to determine the model type with config = None")
 
-        model_type = config["model_type"]
-        if model_type not in AutoModelForCausalLM._SUPPORTED_MODEL_CLASS:
+        model_type = model_type_from_known_config(config)
+
+        if (
+            not model_type
+            or model_type not in AutoModelForCausalLM._SUPPORTED_MODEL_CLASS
+        ):
             raise UnsupportedModelException(model_type)
 
         model_clazz = AutoModelForCausalLM._SUPPORTED_MODEL_CLASS[model_type]

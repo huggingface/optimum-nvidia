@@ -14,7 +14,9 @@
 #  limitations under the License.
 
 import functools
+import re
 from sys import version as pyversion
+from typing import Any, Dict, Optional
 
 from pynvml import nvmlDeviceGetCount, nvmlInit, nvmlSystemGetDriverVersion
 
@@ -88,3 +90,28 @@ def get_user_agent() -> str:
         ua.append("is_ci/false")
 
     return "; ".join(ua)
+
+
+def model_type_from_known_config(config: Dict[str, Any]) -> Optional[str]:
+    if "model_type" in config:
+        return config["model_type"]
+    elif (
+        "pretrained_config" in config and "architecture" in config["pretrained_config"]
+    ):
+        # Attempt to extract model_type from info in engine's config
+        model_type = str(config["pretrained_config"]["architecture"])
+
+        if len(model_type) > 0:
+            # Find first upper case letter (excluding leading char)
+            if match := re.match(
+                "([A-Z][a-z]+)+?([a-zA-Z]+)", model_type
+            ):  # Extracting (Llama)(ForCausalLM)
+                return match.group(1).lower()
+            else:
+                raise RuntimeError(
+                    f"model_type {model_type} is not a valid model_type format"
+                )
+        else:
+            raise RuntimeError(f"Unable to process model_type: {model_type}")
+    else:
+        return None

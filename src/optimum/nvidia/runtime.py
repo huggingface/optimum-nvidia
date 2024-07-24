@@ -15,6 +15,7 @@ from tensorrt_llm.executor import (
 )
 from tensorrt_llm.hlapi import SamplingParams
 
+from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.utils.nvml import is_post_ampere
 
 
@@ -39,7 +40,7 @@ def convert_generation_config(config: "GenerationConfig") -> "SamplingParams":
         top_p=config.top_p,
         temperature=config.temperature,
         beam_width=config.num_beams if config.do_sample else 1,
-        bad_words=config.bad_words_ids,
+        bad_token_ids=config.bad_words_ids,
         length_penalty=config.length_penalty,
         repetition_penalty=config.repetition_penalty,
         no_repeat_ngram_size=config.no_repeat_ngram_size
@@ -92,7 +93,6 @@ class InferenceRuntimeBase:
         self._executor = GenerationExecutor.create(
             engine_dir=engines_path,
             executor_config=executor_config or default_executor_config(self._config),
-            tokenizer=None,
         )
 
     def generate(
@@ -156,5 +156,19 @@ class CausalLMOutput:
         return None
 
 
-class CausalLM(InferenceRuntimeBase):
-    pass
+class CausalLM(HuggingFaceHubModel, InferenceRuntimeBase):
+    def __init__(
+        self,
+        engines_path: Union[str, PathLike, Path],
+        generation_config: "GenerationConfig",
+        executor_config: Optional["ExecutorConfig"] = None,
+    ):
+        InferenceRuntimeBase.__init__(
+            self, engines_path, generation_config, executor_config
+        )
+        HuggingFaceHubModel.__init__(self, engines_path)
+
+    def _save_additional_parcels(self, save_directory: Path):
+        self._generation_config.save_pretrained(
+            save_directory, "generation_config.json"
+        )
