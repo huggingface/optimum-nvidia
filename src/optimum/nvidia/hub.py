@@ -150,7 +150,7 @@ class HuggingFaceHubModel(
         local_model_id = Path(model_id)
 
         # Check if we have a local path to a model OR a model_id on the hub
-        if local_model_id.exists():
+        if local_model_id.exists() and local_model_id.is_dir():
             if any(engine_files := folder_list_engines(local_model_id)):
                 checkpoint_files = []
             else:
@@ -199,18 +199,23 @@ class HuggingFaceHubModel(
             LOGGER.info(f"No prebuild engines nor checkpoint were found for {model_id}")
 
             # Retrieve the snapshot if needed
-            original_checkpoints_path_for_conversion = snapshot_download(
-                model_id,
-                repo_type="model",
-                revision=revision,
-                cache_dir=cache_dir,
-                force_download=force_download,
-                proxies=proxies,
-                resume_download=resume_download,
-                local_files_only=local_files_only,
-                token=token,
-                allow_patterns=HUB_SNAPSHOT_ALLOW_PATTERNS,
-            )
+            if local_model_id.is_dir():
+                LOGGER.debug(f"Retrieving model from local folder: {local_model_id}")
+                original_checkpoints_path_for_conversion = local_model_id
+            else:
+                LOGGER.debug(f"Retrieving model from snapshot {model_id} on the Hugging Face Hub")
+                original_checkpoints_path_for_conversion = snapshot_download(
+                    model_id,
+                    repo_type="model",
+                    revision=revision,
+                    cache_dir=cache_dir,
+                    force_download=force_download,
+                    proxies=proxies,
+                    resume_download=resume_download,
+                    local_files_only=local_files_only,
+                    token=token,
+                    allow_patterns=HUB_SNAPSHOT_ALLOW_PATTERNS,
+                )
 
             # Retrieve a proper transformers' config
             config = NormalizedConfig(AutoConfig.for_model(**config))
