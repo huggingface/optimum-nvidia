@@ -108,7 +108,7 @@ def test_model_type_from_known_config(type: Tuple[str, str]):
 
     # trtllm engine config
     tensorrt_llm_config = {"pretrained_config": {"architecture": trtllm_type}}
-    assert model_type_from_known_config(tensorrt_llm_config) == trtllm_type
+    assert model_type_from_known_config(tensorrt_llm_config) == transformers_type
 
 
 def test_model_type_from_known_config_fail():
