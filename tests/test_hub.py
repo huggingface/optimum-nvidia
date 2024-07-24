@@ -5,7 +5,6 @@ from typing import Tuple
 import mock
 import pytest
 import torch.cuda
-from huggingface_hub import login
 from transformers import AutoConfig as HfAutoConfig
 from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 

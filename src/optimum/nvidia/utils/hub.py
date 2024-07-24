@@ -108,7 +108,9 @@ def model_type_from_known_config(config: Dict[str, Any]) -> Optional[str]:
             ):  # Extracting (Llama)(ForCausalLM)
                 return match.group(1).lower()
             else:
-                raise RuntimeError(f"model_type {model_type} is not a valid model_type format")
+                raise RuntimeError(
+                    f"model_type {model_type} is not a valid model_type format"
+                )
         else:
             raise RuntimeError(f"Unable to process model_type: {model_type}")
     else:
