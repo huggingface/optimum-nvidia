@@ -43,7 +43,7 @@ from optimum.nvidia.export import (
     PATH_FOLDER_ENGINES,
     ExportConfig,
     TensorRTModelConverter,
-    auto_parallel,
+    auto_parallel, Workspace,
 )
 from optimum.nvidia.lang import DataType
 from optimum.nvidia.models import (
@@ -202,6 +202,7 @@ class HuggingFaceHubModel(
             if local_model_id.is_dir():
                 LOGGER.debug(f"Retrieving model from local folder: {local_model_id}")
                 original_checkpoints_path_for_conversion = local_model_id
+                workspace = Workspace(local_model_id)
             else:
                 LOGGER.debug(
                     f"Retrieving model from snapshot {model_id} on the Hugging Face Hub"
@@ -218,6 +219,7 @@ class HuggingFaceHubModel(
                     token=token,
                     allow_patterns=HUB_SNAPSHOT_ALLOW_PATTERNS,
                 )
+                workspace = None
 
             # Retrieve a proper transformers' config
             config = NormalizedConfig(AutoConfig.for_model(**config))
@@ -245,7 +247,7 @@ class HuggingFaceHubModel(
                         f"Building {model_id} {subpart} ({idx + 1} / {len(targets)})"
                     )
 
-                    converter = TensorRTModelConverter(model_id, subpart)
+                    converter = TensorRTModelConverter(model_id, subpart, workspace)
 
                     # Artifacts resulting from a build are not stored in the location `snapshot_download`
                     # would use. Instead, it uses `cached_assets_path` to create a specific location which
