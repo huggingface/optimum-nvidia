@@ -34,11 +34,11 @@ INSTALL_REQUIRES = [
     "mpmath == 1.3.0",
     "numpy >= 1.26.0",
     "onnx >= 1.12.0",
-    "optimum >= 1.13.0",
+    "optimum >= 1.21.0",
     "setuptools",
-    "tensorrt-llm == 0.12.0.dev2024072300",
-    "torch>=2.3.0a,<=2.4.0a",
-    "transformers >= 4.38.2",
+    "tensorrt-llm == 0.12.0.dev2024073000",
+    "torch>=2.3.0a,<=2.5.0a",
+    "transformers >= 4.43.2",
     "pynvml"
 ]
 
@@ -98,4 +98,9 @@ setup(
     dependency_links=["https://pypi.nvidia.com"],
     include_package_data=True,
     zip_safe=False,
+    entry_points={
+        "console_scripts": [
+            "optimum-cli=optimum.commands.optimum_cli:main",
+        ]
+    },
 )
