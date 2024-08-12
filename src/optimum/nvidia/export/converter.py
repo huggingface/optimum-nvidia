@@ -144,8 +144,10 @@ class TensorRTModelConverter(ABC):
 
         config = infer_plugin_from_build_config(config)
 
-        for rank, model in enumerate(models):
-            LOGGER.info(f"Building TRTLLM engine for rank {rank}")
+        for model in models:
+            LOGGER.info(
+                f"Building TRTLLM engine for rank {model.config.mapping.rank} ->> {config.to_dict()}"
+            )
 
             engine = build(model, config)
             engine.save(str(self._workspace.engines_path))
