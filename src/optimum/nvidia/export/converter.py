@@ -1,3 +1,4 @@
+import shutil
 from abc import ABC
 from enum import Enum
 from logging import getLogger
@@ -66,6 +67,7 @@ class TensorRTModelConverter(ABC):
         model_id: str,
         subpart: str = "",
         workspace: Optional[Union["Workspace", str, bytes, Path]] = None,
+        license_path: Optional[Union[str, bytes, Path]] = None,
     ):
         LOGGER.info(f"Creating a model converter for {subpart}")
         if not workspace:
@@ -80,10 +82,25 @@ class TensorRTModelConverter(ABC):
         LOGGER.debug(f"Initializing model converter workspace at {workspace.root}")
 
         self._workspace = workspace
+        self._license_path = license_path
 
     @property
     def workspace(self) -> Workspace:
         return self._workspace
+
+    def save_license(self, licence_filename: str = "LICENSE"):
+        """
+        Save the license if provided and if the license is not already present.
+        This method doesn't check the content of the license
+        :param licence_filename: Name of the file containing the license content
+        """
+        if (
+            not (
+                dst_licence_file_path := self.workspace.root / licence_filename
+            ).exists()
+            and self._license_path
+        ):
+            shutil.copyfile(self._license_path, dst_licence_file_path)
 
     def quantize(self):
         raise NotImplementedError()
@@ -108,6 +125,7 @@ class TensorRTModelConverter(ABC):
             )
             model.save_checkpoint(str(self._workspace.checkpoints_path))
 
+        self.save_license()
         return TensorRTArtifact.checkpoints(str(self._workspace.checkpoints_path))
 
     def build(
@@ -132,4 +150,5 @@ class TensorRTModelConverter(ABC):
             engine = build(model, config)
             engine.save(str(self._workspace.engines_path))
 
+        self.save_license()
         return TensorRTArtifact.engines(str(self._workspace.engines_path))
