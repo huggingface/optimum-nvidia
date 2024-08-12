@@ -20,7 +20,7 @@ from typing import List
 import torch
 
 
-class DataType(Enum):
+class DataType(str, Enum):
     FLOAT32 = "float32"
     FLOAT16 = "float16"
     BFLOAT16 = "bfloat16"
