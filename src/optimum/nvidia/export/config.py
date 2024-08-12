@@ -7,6 +7,7 @@ from warnings import warn
 from tensorrt_llm import BuildConfig
 from tensorrt_llm import Mapping as ShardingInfo
 from tensorrt_llm.plugin import PluginConfig
+from tensorrt_llm.plugin.plugin import ContextFMHAType
 from transformers import AutoConfig
 
 from optimum.nvidia.lang import DataType
@@ -94,12 +95,18 @@ class ExportConfig:
     @property
     def plugin_config(self) -> "PluginConfig":
         config = PluginConfig()
-        config.gemm_plugin = self.dtype
-        config.bert_attention_plugin = self.dtype
-        config.gpt_attention_plugin = self.dtype
-        config.nccl_plugin = self.dtype
-        config.mamba_conv1d_plugin = self.dtype
-        config.moe_plugin = self.dtype
+
+        config.gemm_plugin = "auto"
+        config.gpt_attention_plugin = "auto"
+        config.set_context_fmha(ContextFMHAType.enabled)
+
+        if self.sharding.world_size > 1:
+            config.lookup_plugin = "auto"
+            config.set_nccl_plugin()
+
+        if DataType(self.dtype) == DataType.FLOAT8:
+            config.gemm_swiglu_plugin = True
+
         return config
 
     def to_builder_config(
@@ -115,6 +122,7 @@ class ExportConfig:
             max_num_tokens=self.max_num_tokens,
             builder_opt=self.optimization_level,
             plugin_config=plugin_config or self.plugin_config,
+            use_fused_mlp=True,
         )
 
     def with_sharding(
