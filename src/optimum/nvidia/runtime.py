@@ -80,6 +80,7 @@ class InferenceRuntimeBase:
         engines_path: Union[str, PathLike],
         generation_config: "GenerationConfig",
         executor_config: Optional["ExecutorConfig"] = None,
+        load_engines: bool = True
     ):
         engines_path = Path(engines_path)
 
@@ -90,10 +91,11 @@ class InferenceRuntimeBase:
         self._generation_config = generation_config
         self._sampling_config = convert_generation_config(generation_config)
 
-        self._executor = GenerationExecutor.create(
-            engine_dir=engines_path,
-            executor_config=executor_config or default_executor_config(self._config),
-        )
+        if load_engines:
+            self._executor = GenerationExecutor.create(
+                engine_dir=engines_path,
+                executor_config=executor_config or default_executor_config(self._config),
+            )
 
     def generate(
         self,
@@ -162,9 +164,10 @@ class CausalLM(HuggingFaceHubModel, InferenceRuntimeBase):
         engines_path: Union[str, PathLike, Path],
         generation_config: "GenerationConfig",
         executor_config: Optional["ExecutorConfig"] = None,
+        load_engines: bool = True
     ):
         InferenceRuntimeBase.__init__(
-            self, engines_path, generation_config, executor_config
+            self, engines_path, generation_config, executor_config, load_engines
         )
         HuggingFaceHubModel.__init__(self, engines_path)
 
