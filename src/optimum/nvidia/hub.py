@@ -60,12 +60,15 @@ from optimum.utils import NormalizedConfig
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
 FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]*.engine"
 FILE_TRTLLM_CHECKPOINT_PATTERN = "rank[0-9]*.engine"
+FILE_LICENSE_NAME = "LICENSE"
 HUB_SNAPSHOT_ALLOW_PATTERNS = [
     CONFIG_NAME,
     GENERATION_CONFIG_NAME,
     SAFE_WEIGHTS_INDEX_NAME,
     "*.safetensors",
+    FILE_LICENSE_NAME,
 ]
+
 
 LOGGER = getLogger()
 
@@ -144,6 +147,7 @@ class HuggingFaceHubModel(
         device_map: Optional[str] = None,
         export_config: Optional[ExportConfig] = None,
         force_export: bool = False,
+        export_only: bool = False,
         save_intermediate_checkpoints: bool = False,
     ) -> T:
         if get_device_count() < 1:
@@ -233,6 +237,14 @@ class HuggingFaceHubModel(
                 original_checkpoints_path_for_conversion
             )
 
+            # This is required to complain with binding license for derivative work
+            if FILE_LICENSE_NAME in original_checkpoints_path_for_conversion:
+                licence_path = original_checkpoints_path_for_conversion.joinpath(
+                    FILE_LICENSE_NAME
+                )
+            else:
+                licence_path = None
+
             # If no export config, let's grab a default one
             export_config = export_config or ExportConfig.from_config(config)
 
@@ -253,14 +265,15 @@ class HuggingFaceHubModel(
                         f"Building {model_id} {subpart} ({idx + 1} / {len(targets)})"
                     )
 
-                    converter = TensorRTModelConverter(model_id, subpart, workspace)
+                    converter = TensorRTModelConverter(
+                        model_id, subpart, workspace, licence_path
+                    )
 
                     # Artifacts resulting from a build are not stored in the location `snapshot_download`
                     # would use. Instead, it uses `cached_assets_path` to create a specific location which
                     # doesn't mess up with the HF caching system. Use can use `save_pretrained` to store
                     # the build artifact into a snapshot friendly place
                     # If this specific location is found, we don't necessary need to rebuild
-
                     if force_export or not len(
                         list(converter.workspace.engines_path.glob("*.engine"))
                     ):
@@ -276,6 +289,9 @@ class HuggingFaceHubModel(
                                 dtype=DataType.from_torch(config.torch_dtype).value,
                                 mapping=export_config.sharding,
                                 load_by_shard=True,
+                                use_parallel_embedding=export_config.sharding.world_size
+                                > 1,
+                                share_embedding_table=config.tie_word_embeddings,
                             )
 
                             ranked_model.config.mapping.rank = rank
@@ -307,6 +323,7 @@ class HuggingFaceHubModel(
         return cls(
             engines_path=engines_folder,
             generation_config=generation_config,
+            load_engines=not export_only
         )
 
     @abstractmethod
@@ -314,25 +331,32 @@ class HuggingFaceHubModel(
         raise NotImplementedError()
 
     def _save_pretrained(self, save_directory: Path) -> None:
-        try:
-            # Need target_is_directory on Windows
-            # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
-            # Falling back to copytree in this case
-            for file in self._engines_path.glob("*"):
+        device_name = get_device_name(0)[-1]
+        save_directory = save_directory.joinpath(device_name)
+        save_directory.mkdir(parents=True, exist_ok=True)
+
+        src_license_file_path = self._engines_path.parent / FILE_LICENSE_NAME
+        dst_files = [src_license_file_path] if src_license_file_path.exists() else []
+        dst_files += list(self._engines_path.glob("*"))
+
+        for file in dst_files:
+            try:
+                # Need target_is_directory on Windows
+                # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
+                # Falling back to copytree in this case
                 symlink(
                     file, save_directory.joinpath(file.relative_to(self._engines_path))
                 )
-        except OSError as ose:
-            LOGGER.error(
-                f"Failed to create symlink from current engine folder {self._engines_path.parent} to {save_directory}. "
-                "Will default to copy based _save_pretrained",
-                exc_info=ose,
-            )
-            for file in self._engines_path.glob("*"):
+            except OSError as ose:
+                LOGGER.error(
+                    f"Failed to create symlink from current engine folder {self._engines_path.parent} to {save_directory}. "
+                    "Will default to copy based _save_pretrained",
+                    exc_info=ose,
+                )
                 copytree(
                     file,
                     save_directory.joinpath(file.relative_to(self._engines_path)),
                     symlinks=True,
                 )
-        finally:
-            self._save_additional_parcels(save_directory)
+
+        self._save_additional_parcels(save_directory)
