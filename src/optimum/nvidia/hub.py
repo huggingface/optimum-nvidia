@@ -43,7 +43,6 @@ from transformers.utils import (
 from optimum.nvidia import LIBRARY_NAME
 from optimum.nvidia.compression.modelopt import ModelOptRecipe
 from optimum.nvidia.export import (
-    PATH_FOLDER_CHECKPOINTS,
     PATH_FOLDER_ENGINES,
     ExportConfig,
     TensorRTModelConverter,
@@ -129,6 +128,25 @@ def get_trtllm_artifact(
         )
     )
 
+
+def get_trtllm_checkpoints(model_id: str, device: str, dtype: str):
+    if (
+        workspace := Workspace.from_hub_cache(model_id, device)
+    ).checkpoints_path.exists():
+        return workspace.checkpoints_path
+
+    return get_trtllm_artifact(model_id, [f"{device}/{dtype}/**/*.safetensors"])
+
+
+def get_trtllm_engines(model_id: str, device: str, dtype: str):
+    if (workspace := Workspace.from_hub_cache(model_id, device)).engines_path.exists():
+        return workspace.engines_path
+
+    return get_trtllm_artifact(
+        model_id, [f"{device}/{dtype}/**/{PATH_FOLDER_ENGINES}/*.engine"]
+    )
+
+
 def from_ranked_checkpoints(
     checkpoints_folder: Path,
     target_class: Type[SupportFromTrtLlmCheckpoint]
@@ -208,8 +226,6 @@ class HuggingFaceHubModel(
         else:
             raise RuntimeError("Failed to detect model's dtype")
 
-        common_hub_path = f"{device_name}/{dtype}"
-
         # Check if the model_id is not a local path
         local_model_id = Path(model_id)
 
@@ -233,21 +249,15 @@ class HuggingFaceHubModel(
             # Look for prebuild TRTLLM Engine
             if not force_export:
                 LOGGER.debug(f"Retrieving prebuild engine(s) for device {device_name}")
-                cached_path = get_trtllm_artifact(
-                    model_id, [f"{common_hub_path}/**/{PATH_FOLDER_ENGINES}/*.engine"]
-                )
-
-                engines_folder = cached_path / PATH_FOLDER_ENGINES
+                engines_folder = get_trtllm_engines(model_id, device_name, dtype)
                 engine_files = folder_list_engines(engines_folder)
 
             # if no engine is found, then just try to locate a checkpoint
             if not engine_files:
                 LOGGER.debug(f"Retrieving checkpoint(s) for {device_name}")
-                cached_path = get_trtllm_artifact(
-                    model_id, [f"{common_hub_path}/**/*.safetensors"]
+                checkpoints_folder = get_trtllm_checkpoints(
+                    model_id, device_name, dtype
                 )
-
-                checkpoints_folder = cached_path / PATH_FOLDER_CHECKPOINTS
                 checkpoint_files = folder_list_checkpoints(checkpoints_folder)
 
         # If no checkpoint available, we are good for a full export from the Hugging Face Hub
