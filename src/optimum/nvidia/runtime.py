@@ -93,7 +93,7 @@ class InferenceRuntimeBase:
 
         if load_engines:
             self._executor = GenerationExecutor.create(
-                engine_dir=engines_path,
+                engine=engines_path,
                 executor_config=executor_config or default_executor_config(self._config),
             )
 
