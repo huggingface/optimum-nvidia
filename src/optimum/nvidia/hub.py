@@ -353,6 +353,7 @@ class HuggingFaceHubModel(
                             raise TypeError(f"{clazz} can't convert from HF checkpoint")
 
                         build_config = export_config.to_builder_config()
+                        generation_config = GenerationConfig.from_pretrained(original_checkpoints_path_for_conversion)
                         for ranked_model in ranked_models:
                             if save_intermediate_checkpoints:
                                 _ = converter.convert(ranked_model)
@@ -362,6 +363,7 @@ class HuggingFaceHubModel(
 
                             _ = converter.build(ranked_model, build_config)
                             engines_folder = converter.workspace.engines_path
+                            generation_config.save_pretrained(engines_folder)
 
                         LOGGER.info(
                             f"Saved TensorRT-LLM engines at {converter.workspace.engines_path}"
