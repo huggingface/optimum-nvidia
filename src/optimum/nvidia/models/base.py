@@ -31,8 +31,12 @@ class SupportsFromHuggingFace(Protocol):
 @runtime_checkable
 class SupportFromTrtLlmCheckpoint(Protocol):
     @classmethod
-    def from_checkpoint(cls, ckpt_dir: str, rank: Optional[int] = None, config: Optional["PretrainedConfig"] = None):
-        ...
+    def from_checkpoint(
+        cls,
+        ckpt_dir: str,
+        rank: Optional[int] = None,
+        config: Optional["PretrainedConfig"] = None,
+    ): ...
 
 
 @runtime_checkable

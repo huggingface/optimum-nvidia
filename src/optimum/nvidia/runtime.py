@@ -80,7 +80,7 @@ class InferenceRuntimeBase:
         engines_path: Union[str, PathLike],
         generation_config: "GenerationConfig",
         executor_config: Optional["ExecutorConfig"] = None,
-        load_engines: bool = True
+        load_engines: bool = True,
     ):
         engines_path = Path(engines_path)
 
@@ -94,7 +94,8 @@ class InferenceRuntimeBase:
         if load_engines:
             self._executor = GenerationExecutor.create(
                 engine=engines_path,
-                executor_config=executor_config or default_executor_config(self._config),
+                executor_config=executor_config
+                or default_executor_config(self._config),
             )
 
     def generate(
@@ -113,7 +114,9 @@ class InferenceRuntimeBase:
             inputs = inputs.tolist()
 
         result = self._executor.generate(inputs, sampling_params=sampling)
-        return result[0].token_ids
+
+        # TODO: Fix this
+        return result[0].outputs[0].token_ids
 
     async def agenerate(
         self,
@@ -164,7 +167,7 @@ class CausalLM(HuggingFaceHubModel, InferenceRuntimeBase):
         engines_path: Union[str, PathLike, Path],
         generation_config: "GenerationConfig",
         executor_config: Optional["ExecutorConfig"] = None,
-        load_engines: bool = True
+        load_engines: bool = True,
     ):
         InferenceRuntimeBase.__init__(
             self, engines_path, generation_config, executor_config, load_engines

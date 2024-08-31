@@ -1,11 +1,9 @@
-from typing import TypeVar, Protocol
+from typing import Protocol, TypeVar
 
 
 C = TypeVar("C")
+
+
 class CompressionRecipe(Protocol[C]):
     @property
-    def config(self) -> C:
-        ...
-
-
-
+    def config(self) -> C: ...

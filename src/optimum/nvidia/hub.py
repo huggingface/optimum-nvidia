@@ -32,8 +32,10 @@ from typing import (
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
 from tensorrt_llm import __version__ as trtllm_version
-from tensorrt_llm.models import PretrainedConfig, PretrainedModel as TrtLlmPreTrainedModel
-from transformers import AutoConfig, PretrainedConfig as TransformersPretraineConfig, GenerationConfig
+from tensorrt_llm.models import PretrainedConfig
+from tensorrt_llm.models import PretrainedModel as TrtLlmPreTrainedModel
+from transformers import AutoConfig, GenerationConfig
+from transformers import PretrainedConfig as TransformersPretraineConfig
 from transformers.utils import (
     CONFIG_NAME,
     GENERATION_CONFIG_NAME,
@@ -78,7 +80,7 @@ LOGGER = getLogger()
 
 def folder_list_engines(folder: Path) -> Iterable[Path]:
     if folder.exists():
-        return folder.glob("*.engine")
+        return list(folder.glob("*.engine"))
 
     return []
 
@@ -99,6 +101,7 @@ def folder_list_checkpoints(folder: Path) -> Iterable[Path]:
         )
 
     return checkpoint_candidates
+
 
 def get_rank_from_filename(filename: str) -> int:
     name = filename.split(".")[0]
@@ -148,8 +151,7 @@ def get_trtllm_engines(model_id: str, device: str, dtype: str):
 
 
 def from_ranked_checkpoints(
-    checkpoints_folder: Path,
-    target_class: Type[SupportFromTrtLlmCheckpoint]
+    checkpoints_folder: Path, target_class: Type[SupportFromTrtLlmCheckpoint]
 ) -> Generator["TrtLlmPreTrainedModel", None, None]:
     root = str(checkpoints_folder)
     trtllm_config = PretrainedConfig.from_checkpoint(root)
@@ -157,11 +159,12 @@ def from_ranked_checkpoints(
     for rank in range(trtllm_config.mapping.world_size):
         yield target_class.from_checkpoint(root, rank, trtllm_config)
 
+
 def from_ranked_hf_model(
     local_hf_model_path: Path,
     config: "TransformersPretraineConfig",
     target_class: Type["TrtLlmPreTrainedModel"],
-    export_config: "ExportConfig"
+    export_config: "ExportConfig",
 ):
     root = str(local_hf_model_path)
     for rank in range(export_config.sharding.world_size):
@@ -331,7 +334,9 @@ class HuggingFaceHubModel(
                             torch_dtype="auto",
                             device_map="auto",
                         )
-                        checkpoints_folder = converter.quantize(hf_model, quantization_config)
+                        checkpoints_folder = converter.quantize(
+                            hf_model, quantization_config
+                        )
                         checkpoints_folder = checkpoints_folder.root
                         checkpoint_files = folder_list_checkpoints(checkpoints_folder)
 
@@ -343,12 +348,19 @@ class HuggingFaceHubModel(
                     if force_export or not len(
                         list(converter.workspace.engines_path.glob("*.engine"))
                     ):
-                        if checkpoint_files and isinstance(clazz, SupportFromTrtLlmCheckpoint):
-                            ranked_models = from_ranked_checkpoints(checkpoints_folder, clazz)
-
+                        if checkpoint_files and isinstance(
+                            clazz, SupportFromTrtLlmCheckpoint
+                        ):
+                            ranked_models = from_ranked_checkpoints(
+                                checkpoints_folder, clazz
+                            )
                         elif isinstance(clazz, SupportsFromHuggingFace):
-                            ranked_models = from_ranked_hf_model(original_checkpoints_path_for_conversion, config, clazz, export_config)
-
+                            ranked_models = from_ranked_hf_model(
+                                original_checkpoints_path_for_conversion,
+                                config,
+                                clazz,
+                                export_config,
+                            )
                         else:
                             raise TypeError(f"{clazz} can't convert from HF checkpoint")
 
@@ -382,7 +394,7 @@ class HuggingFaceHubModel(
         return cls(
             engines_path=engines_folder,
             generation_config=generation_config,
-            load_engines=not export_only
+            load_engines=not export_only,
         )
 
     @abstractmethod

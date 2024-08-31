@@ -1,3 +1,10 @@
+from typing import TYPE_CHECKING
+
+
+if TYPE_CHECKING:
+    from argparse import ArgumentParser
+
+
 def common_trtllm_export_args(parser: "ArgumentParser"):
     required_group = parser.add_argument_group("Required arguments")
     required_group.add_argument(
@@ -12,7 +19,7 @@ def common_trtllm_export_args(parser: "ArgumentParser"):
         type=int,
         default=1,
         help="Maximum sequence length, in number of tokens, the prompt can be. The maximum number of potential tokens "
-             "generated will be <max-output-length> - <max-input-length>.",
+        "generated will be <max-output-length> - <max-input-length>.",
     )
     required_group.add_argument(
         "--max-output-length",
