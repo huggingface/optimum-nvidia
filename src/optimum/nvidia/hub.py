@@ -328,7 +328,8 @@ class HuggingFaceHubModel(
                     if quantization_config:
                         hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
                             original_checkpoints_path_for_conversion,
-                            device_map="auto"
+                            torch_dtype="auto",
+                            device_map="auto",
                         )
                         checkpoints_folder = converter.quantize(hf_model, quantization_config)
                         checkpoints_folder = checkpoints_folder.root
