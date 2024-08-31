@@ -22,9 +22,10 @@ import numpy as np
 import torch
 from datasets import load_dataset
 from modelopt.torch.quantization import QuantizeConfig, W4A8_AWQ_BETA_CFG, FP8_DEFAULT_CFG, INT4_AWQ_REAL_QUANT_CFG
+from tqdm import tqdm
 from transformers import AutoTokenizer, PreTrainedTokenizer
 
-from optimum.nvidia import AutoModelForCausalLM, setup_logging
+from optimum.nvidia import AutoModelForCausalLM, setup_logging, ExportConfig
 from optimum.nvidia.compression.modelopt import ModelOptRecipe, ModelOptConfig, ModelOptQuantizer
 
 # Setup logging needs to happen before importing TRT ...
@@ -67,20 +68,20 @@ class ExampleC4NewModelOptRecipe(ModelOptRecipe):
     def dataset(self) -> Iterable:
         data_files = {"train": "en/c4-train.00000-of-01024.json.gz"}
         data = load_dataset("allenai/c4", split="train", data_files=data_files)
-        indexes = np.random.choice(data.num_rows["train"], size=self._nb_samples)
+        indexes = np.random.choice(data.num_rows, size=self._nb_samples)
         encodings = self._tokenizer(
             data[indexes]["text"],
+            truncation=True,
+            max_length=2048,
             return_attention_mask=False,
         )
 
         dataset = [
-            {"input_ids": torch.tensor(tokens.ids, dtype=torch.long, device="cuda")}
+            {"input_ids": torch.tensor(tokens.ids, dtype=torch.long, device="cuda")[None]}
             for tokens in encodings.encodings
         ]
 
-        return dataset
-
-
+        return tqdm(dataset, desc="Quantizing...")
 
 
 if __name__ == "__main__":
@@ -120,11 +121,11 @@ if __name__ == "__main__":
         raise ValueError(f"Invalid quantization method {args.method}. Supported methods are (awq, float8, w4a8)")
 
     quantizer = ModelOptQuantizer(qconfig)
+    export = ExportConfig.from_pretrained(args.model, args.max_batch_size)
 
     # Create the model
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        max_batch_size=args.max_batch_size,
         quantization_config=qconfig,
     )
     model.save_pretrained(args.output)
