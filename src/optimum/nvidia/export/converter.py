@@ -8,11 +8,15 @@ from typing import TYPE_CHECKING, Optional, Sequence, Type, Union
 
 from tensorrt_llm.builder import build
 
+from optimum.nvidia.compression.modelopt import ModelOptQuantizer
 from optimum.nvidia.export import Workspace
 from optimum.nvidia.utils.nvml import get_device_name, is_post_ampere
 
 
 if TYPE_CHECKING:
+    from optimum.nvidia.compression.modelopt import ModelOptRecipe
+    from transformers import PreTrainedModel as TransformersPreTrainedModel
+
     from tensorrt_llm import BuildConfig, Mapping
     from tensorrt_llm.models import PretrainedModel
 
@@ -102,8 +106,13 @@ class TensorRTModelConverter(ABC):
         ):
             shutil.copyfile(self._license_path, dst_licence_file_path)
 
-    def quantize(self):
-        raise NotImplementedError()
+    def quantize(self, model: "TransformersPreTrainedModel", qconfig: "ModelOptRecipe") -> TensorRTArtifact:
+        quantizer = ModelOptQuantizer(qconfig)
+        quantizer.preprocess_model(model, workspace=self.workspace)
+        quantizer.postprocess_model(model, workspace=self.workspace)
+
+        self.save_license()
+        return TensorRTArtifact.checkpoints(self._workspace.checkpoints_path)
 
     def convert(
         self,

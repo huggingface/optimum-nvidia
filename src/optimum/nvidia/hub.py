@@ -20,6 +20,7 @@ from pathlib import Path
 from shutil import copytree
 from typing import (
     Dict,
+    Generator,
     Iterable,
     List,
     Mapping,
@@ -31,7 +32,8 @@ from typing import (
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
 from tensorrt_llm import __version__ as trtllm_version
-from transformers import AutoConfig, GenerationConfig
+from tensorrt_llm.models import PretrainedConfig, PretrainedModel as TrtLlmPreTrainedModel
+from transformers import AutoConfig, PretrainedConfig as TransformersPretraineConfig, GenerationConfig
 from transformers.utils import (
     CONFIG_NAME,
     GENERATION_CONFIG_NAME,
@@ -39,6 +41,7 @@ from transformers.utils import (
 )
 
 from optimum.nvidia import LIBRARY_NAME
+from optimum.nvidia.compression.modelopt import ModelOptRecipe
 from optimum.nvidia.export import (
     PATH_FOLDER_CHECKPOINTS,
     PATH_FOLDER_ENGINES,
@@ -52,6 +55,7 @@ from optimum.nvidia.models import (
     SupportsFromHuggingFace,
     SupportsTransformersConversion,
 )
+from optimum.nvidia.models.base import SupportFromTrtLlmCheckpoint
 from optimum.nvidia.utils import get_user_agent
 from optimum.nvidia.utils.nvml import get_device_count, get_device_name
 from optimum.utils import NormalizedConfig
@@ -97,6 +101,14 @@ def folder_list_checkpoints(folder: Path) -> Iterable[Path]:
 
     return checkpoint_candidates
 
+def get_rank_from_filename(filename: str) -> int:
+    name = filename.split(".")[0]
+
+    if name.startswith("rank"):
+        return int(name[3:])
+    else:
+        raise ValueError(f"Unknown filename format {filename} to extract rank from")
+
 
 def get_trtllm_artifact(
     model_id: str, patterns: List[str], add_default_allow_patterns: bool = True
@@ -116,6 +128,39 @@ def get_trtllm_artifact(
             else patterns,
         )
     )
+
+def from_ranked_checkpoints(
+    checkpoints_folder: Path,
+    target_class: Type[SupportFromTrtLlmCheckpoint]
+) -> Generator["TrtLlmPreTrainedModel", None, None]:
+    root = str(checkpoints_folder)
+    trtllm_config = PretrainedConfig.from_checkpoint(root)
+
+    for rank in range(trtllm_config.mapping.world_size):
+        yield target_class.from_checkpoint(root, rank, trtllm_config)
+
+def from_ranked_hf_model(
+    local_hf_model_path: Path,
+    config: "TransformersPretraineConfig",
+    target_class: Type["TrtLlmPreTrainedModel"],
+    export_config: "ExportConfig"
+):
+    root = str(local_hf_model_path)
+    for rank in range(export_config.sharding.world_size):
+        # Specify the current model's rank
+        export_config.sharding.rank = rank
+
+        ranked_model = target_class.from_hugging_face(
+            root,
+            dtype=DataType.from_torch(config.torch_dtype).value,
+            mapping=export_config.sharding,
+            load_by_shard=True,
+            use_parallel_embedding=export_config.sharding.world_size > 1,
+            share_embedding_table=config.tie_word_embeddings,
+        )
+
+        ranked_model.config.mapping.rank = rank
+        yield ranked_model
 
 
 class HuggingFaceHubModel(
@@ -146,6 +191,7 @@ class HuggingFaceHubModel(
         use_cuda_graph: bool = False,
         device_map: Optional[str] = None,
         export_config: Optional[ExportConfig] = None,
+        quantization_config: Optional[ModelOptRecipe],
         force_export: bool = False,
         export_only: bool = False,
         save_intermediate_checkpoints: bool = False,
@@ -269,6 +315,15 @@ class HuggingFaceHubModel(
                         model_id, subpart, workspace, licence_path
                     )
 
+                    if quantization_config:
+                        hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
+                            original_checkpoints_path_for_conversion,
+                            device_map="auto"
+                        )
+                        checkpoints_folder = converter.quantize(hf_model, quantization_config)
+                        checkpoints_folder = checkpoints_folder.root
+                        checkpoint_files = folder_list_checkpoints(checkpoints_folder)
+
                     # Artifacts resulting from a build are not stored in the location `snapshot_download`
                     # would use. Instead, it uses `cached_assets_path` to create a specific location which
                     # doesn't mess up with the HF caching system. Use can use `save_pretrained` to store
@@ -277,26 +332,17 @@ class HuggingFaceHubModel(
                     if force_export or not len(
                         list(converter.workspace.engines_path.glob("*.engine"))
                     ):
-                        if not isinstance(clazz, SupportsFromHuggingFace):
+                        if checkpoint_files and isinstance(clazz, SupportFromTrtLlmCheckpoint):
+                            ranked_models = from_ranked_checkpoints(checkpoints_folder, clazz)
+
+                        elif isinstance(clazz, SupportsFromHuggingFace):
+                            ranked_models = from_ranked_hf_model(original_checkpoints_path_for_conversion, config, clazz, export_config)
+
+                        else:
                             raise TypeError(f"{clazz} can't convert from HF checkpoint")
 
-                        for rank in range(export_config.sharding.world_size):
-                            # Specify the current model's rank
-                            export_config.sharding.rank = rank
-
-                            ranked_model = clazz.from_hugging_face(
-                                original_checkpoints_path_for_conversion,
-                                dtype=DataType.from_torch(config.torch_dtype).value,
-                                mapping=export_config.sharding,
-                                load_by_shard=True,
-                                use_parallel_embedding=export_config.sharding.world_size
-                                > 1,
-                                share_embedding_table=config.tie_word_embeddings,
-                            )
-
-                            ranked_model.config.mapping.rank = rank
-                            build_config = export_config.to_builder_config()
-
+                        build_config = export_config.to_builder_config()
+                        for ranked_model in ranked_models:
                             if save_intermediate_checkpoints:
                                 _ = converter.convert(ranked_model)
                                 LOGGER.info(
