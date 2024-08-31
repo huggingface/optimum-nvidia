@@ -17,7 +17,7 @@ from abc import ABCMeta, abstractmethod
 from logging import getLogger
 from os import PathLike, scandir, symlink
 from pathlib import Path
-from shutil import copytree
+from shutil import copytree, copyfile
 from typing import (
     Dict,
     Generator,
@@ -409,10 +409,11 @@ class HuggingFaceHubModel(
                     "Will default to copy based _save_pretrained",
                     exc_info=ose,
                 )
-                copytree(
-                    file,
-                    save_directory.joinpath(file.relative_to(self._engines_path)),
-                    symlinks=True,
-                )
+
+                dst = save_directory.joinpath(file.relative_to(self._engines_path))
+                if file.is_dir():
+                    copytree(file, dst, symlinks=True)
+                elif file:
+                    copyfile(file, dst)
 
         self._save_additional_parcels(save_directory)
