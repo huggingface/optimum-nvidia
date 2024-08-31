@@ -2,12 +2,12 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING, Optional
 
-from ..base import BaseOptimumCLICommand, CommandInfo
 from ...nvidia.export.cli import common_trtllm_export_args
+from ..base import BaseOptimumCLICommand, CommandInfo
+
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser, Namespace, _SubParsersAction
-
 
 
 class TrtLlmExportCommand(BaseOptimumCLICommand):
