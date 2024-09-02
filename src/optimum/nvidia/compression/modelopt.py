@@ -93,22 +93,25 @@ class ModelOptQuantizer(HfQuantizer):
         # Retrieve the workspace where artifacts are being stored
         workspace: "Workspace" = kwargs.pop("workspace")
 
-        # Sparsify the model if requested
-        if sconfig := self._recipe.config.sparsity:
-            device = model.device
-            model = mts.sparsify(
-                model.cpu(),
-                sconfig,
-                {"data_loader": self._recipe.dataset, "collect_func": lambda x: x},
-            )
-            model.to(device)
-
-        # Quantize the model
-        qmodel = mtq.quantize(
-            model, vars(self._recipe.config.qconfig), forward_loop=self._looper
-        )
-
         with torch.inference_mode():
+
+            # Sparsify the model if requested
+            if sconfig := self._recipe.config.sparsity:
+                device = model.device
+                model = mts.sparsify(
+                    model.cpu(),
+                    sconfig,
+                    {"data_loader": self._recipe.dataset, "collect_func": lambda x: x},
+                )
+                model = mts.export(model)
+                model.to(device)
+
+            # Quantize the model
+            qmodel = mtq.quantize(
+                model, vars(self._recipe.config.qconfig), forward_loop=self._looper
+            )
+
+            # Export to TRTLLM checkpoint and return
             export_tensorrt_llm_checkpoint(
                 qmodel,
                 decoder_type=model.config.model_type,
@@ -117,6 +120,7 @@ class ModelOptQuantizer(HfQuantizer):
                 inference_tensor_parallel=1,
                 inference_pipeline_parallel=1,
                 use_nfs_workspace=False,
+                naive_fp8_quantization=False
             )
 
         return qmodel
