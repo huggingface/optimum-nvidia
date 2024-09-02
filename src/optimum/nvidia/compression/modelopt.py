@@ -56,7 +56,7 @@ class ModelOptConfig(QuantizationConfigMixin):
     @property
     def sparsity(
         self,
-    ) -> Optional[Union[mts.mode.SparseGPTConfig, mts.mode.SparseGPTConfig]]:
+    ) -> Optional[str]:
         return self._sparsity
 
 
@@ -90,7 +90,18 @@ class ModelOptQuantizer(HfQuantizer):
                 "workspace not provided but required to generate quantized model representation"
             )
 
+        # Retrieve the workspace where artifacts are being stored
         workspace: "Workspace" = kwargs.pop("workspace")
+
+        # Sparsify the model if requested
+        if sconfig := self._recipe.config.sparsity:
+            model = mts.sparsify(
+                model.cpu(),
+                sconfig,
+                {"data_loader": self._recipe.dataset, "collect_func": lambda x: x}
+            )
+
+        # Quantize the model
         qmodel = mtq.quantize(
             model, vars(self._recipe.config.qconfig), forward_loop=self._looper
         )

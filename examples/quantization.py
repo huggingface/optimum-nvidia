@@ -16,7 +16,7 @@
 from argparse import ArgumentParser
 from logging import getLogger
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Optional, Union
 
 import numpy as np
 import torch
@@ -27,6 +27,7 @@ from modelopt.torch.quantization import (
     W4A8_AWQ_BETA_CFG,
     QuantizeConfig,
 )
+from modelopt.torch.sparsity.config import SparseGPTConfig, SparseMagnitudeConfig
 from tensorrt_llm.quantization.quantize_by_modelopt import KV_CACHE_CFG
 from tqdm import tqdm
 from transformers import AutoTokenizer, PreTrainedTokenizer, GenerationConfig
@@ -48,17 +49,22 @@ LOGGER = getLogger(__name__)
 class ExampleC4NewModelOptRecipe(ModelOptRecipe):
     @staticmethod
     def awq(
-        tokenizer: PreTrainedTokenizer, num_samples: int = 512
+        tokenizer: PreTrainedTokenizer,
+        sparsity: Optional[Union[SparseGPTConfig, SparseMagnitudeConfig]] = None,
+        num_samples: int = 512
     ) -> "ExampleC4NewModelOptRecipe":
         return ExampleC4NewModelOptRecipe(
-            ModelOptConfig(QuantizeConfig(**INT4_AWQ_REAL_QUANT_CFG)),
+            ModelOptConfig(QuantizeConfig(**INT4_AWQ_REAL_QUANT_CFG), sparsity),
             tokenizer,
             num_samples,
         )
 
     @staticmethod
     def float8(
-        tokenizer: PreTrainedTokenizer, num_samples: int = 512, use_float8_kv_cache: bool = True
+        tokenizer: PreTrainedTokenizer,
+        sparsity: Optional[Union[SparseGPTConfig, SparseMagnitudeConfig]] = None,
+        num_samples: int = 512,
+        use_float8_kv_cache: bool = True
     ) -> "ExampleC4NewModelOptRecipe":
         config = FP8_WA_FP8_KV_CFG
         if use_float8_kv_cache:
@@ -68,15 +74,17 @@ class ExampleC4NewModelOptRecipe(ModelOptRecipe):
             config["quant_cfg"].update(fp8_kv_config)
 
         return ExampleC4NewModelOptRecipe(
-            ModelOptConfig(QuantizeConfig(**config)), tokenizer, num_samples
+            ModelOptConfig(QuantizeConfig(**config), sparsity), tokenizer, num_samples
         )
 
     @staticmethod
     def w4a8(
-        tokenizer: PreTrainedTokenizer, num_samples: int = 512
+        tokenizer: PreTrainedTokenizer,
+        sparsity: Optional[Union[SparseGPTConfig, SparseMagnitudeConfig]] = None,
+        num_samples: int = 512
     ) -> "ExampleC4NewModelOptRecipe":
         return ExampleC4NewModelOptRecipe(
-            ModelOptConfig(QuantizeConfig(**W4A8_AWQ_BETA_CFG)), tokenizer, num_samples
+            ModelOptConfig(QuantizeConfig(**W4A8_AWQ_BETA_CFG), sparsity), tokenizer, num_samples
         )
 
     def __init__(
@@ -101,7 +109,7 @@ class ExampleC4NewModelOptRecipe(ModelOptRecipe):
         encodings = self._tokenizer(
             data[indexes]["text"],
             truncation=True,
-            max_length=4096,
+            max_length=2048,
             return_attention_mask=False,
         )
 
@@ -114,7 +122,8 @@ class ExampleC4NewModelOptRecipe(ModelOptRecipe):
             for tokens in encodings.encodings
         ]
 
-        return tqdm(dataset, desc="Quantizing...")
+        # return tqdm(dataset, desc="Quantizing...")
+        return dataset
 
 
 if __name__ == "__main__":
@@ -127,10 +136,16 @@ if __name__ == "__main__":
 
     parser.add_argument("--method", type=str, choices=["awq", "float8", "w4a8"])
     parser.add_argument(
+        "--sparsity",
+        type=str,
+        choices=["sparsegpt", "sparse_magnitude"],
+        help="Apply 2-4 SparseGPT sparsification"
+    )
+    parser.add_argument(
         "--num-calibration-samples",
         type=int,
         default=512,
-        help="Number of samples used for calibration.",
+        help="Number of samples used for calibration",
     )
     parser.add_argument(
         "--max-batch-size",
@@ -138,9 +153,9 @@ if __name__ == "__main__":
         default=1,
         help="Maximum concurrent request for the model",
     )
-    parser.add_argument("model", type=str, help="The model's id or path to use.")
+    parser.add_argument("model", type=str, help="The model's id or path to use")
     parser.add_argument(
-        "output", type=Path, help="Path to store generated TensorRT engine."
+        "output", type=Path, help="Path to store generated TensorRT engine"
     )
     args = parser.parse_args()
 
@@ -156,15 +171,15 @@ if __name__ == "__main__":
     # Quantization Config
     if args.method == "awq":
         qconfig = ExampleC4NewModelOptRecipe.awq(
-            tokenizer, args.num_calibration_samples
+            tokenizer, args.sparsity, args.num_calibration_samples
         )
     elif args.method == "float8":
         qconfig = ExampleC4NewModelOptRecipe.float8(
-            tokenizer, args.num_calibration_samples
+            tokenizer, args.sparsity, args.num_calibration_samples
         )
     elif args.method == "w4a8":
         qconfig = ExampleC4NewModelOptRecipe.w4a8(
-            tokenizer, args.num_calibration_samples
+            tokenizer, args.sparsity, args.num_calibration_samples
         )
     else:
         raise ValueError(
