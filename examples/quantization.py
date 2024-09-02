@@ -27,6 +27,7 @@ from modelopt.torch.quantization import (
     W4A8_AWQ_BETA_CFG,
     QuantizeConfig,
 )
+from tensorrt_llm.quantization.quantize_by_modelopt import KV_CACHE_CFG
 from tqdm import tqdm
 from transformers import AutoTokenizer, PreTrainedTokenizer, GenerationConfig
 
@@ -57,10 +58,17 @@ class ExampleC4NewModelOptRecipe(ModelOptRecipe):
 
     @staticmethod
     def float8(
-        tokenizer: PreTrainedTokenizer, num_samples: int = 512
+        tokenizer: PreTrainedTokenizer, num_samples: int = 512, use_float8_kv_cache: bool = True
     ) -> "ExampleC4NewModelOptRecipe":
+        config = FP8_WA_FP8_KV_CFG
+        if use_float8_kv_cache:
+            fp8_kv_config = KV_CACHE_CFG.copy()
+            for value in fp8_kv_config.values():
+                value.update({"num_bits": (4, 3)})
+            config["quant_cfg"].update(fp8_kv_config)
+
         return ExampleC4NewModelOptRecipe(
-            ModelOptConfig(QuantizeConfig(**FP8_WA_FP8_KV_CFG)), tokenizer, num_samples
+            ModelOptConfig(QuantizeConfig(**config)), tokenizer, num_samples
         )
 
     @staticmethod
@@ -169,6 +177,7 @@ if __name__ == "__main__":
     # Create the model
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
+        export_config=export,
         quantization_config=qconfig,
     )
 
