@@ -29,8 +29,7 @@ from modelopt.torch.quantization import (
 )
 from modelopt.torch.sparsity.config import SparseGPTConfig, SparseMagnitudeConfig
 from tensorrt_llm.quantization.quantize_by_modelopt import KV_CACHE_CFG
-from tqdm import tqdm
-from transformers import AutoTokenizer, PreTrainedTokenizer, GenerationConfig
+from transformers import AutoTokenizer, GenerationConfig, PreTrainedTokenizer
 
 from optimum.nvidia import AutoModelForCausalLM, ExportConfig, setup_logging
 from optimum.nvidia.compression.modelopt import (
@@ -49,8 +48,7 @@ LOGGER = getLogger(__name__)
 class ExampleC4NewModelOptRecipe(ModelOptRecipe):
     @staticmethod
     def awq(
-        tokenizer: PreTrainedTokenizer,
-        num_samples: int = 512
+        tokenizer: PreTrainedTokenizer, num_samples: int = 512
     ) -> "ExampleC4NewModelOptRecipe":
         return ExampleC4NewModelOptRecipe(
             ModelOptConfig(QuantizeConfig(**INT4_AWQ_REAL_QUANT_CFG)),
@@ -63,7 +61,7 @@ class ExampleC4NewModelOptRecipe(ModelOptRecipe):
         tokenizer: PreTrainedTokenizer,
         sparsity: Optional[Union[SparseGPTConfig, SparseMagnitudeConfig]] = None,
         num_samples: int = 512,
-        use_float8_kv_cache: bool = True
+        use_float8_kv_cache: bool = True,
     ) -> "ExampleC4NewModelOptRecipe":
         config = FP8_WA_FP8_KV_CFG
         if use_float8_kv_cache:
@@ -78,8 +76,7 @@ class ExampleC4NewModelOptRecipe(ModelOptRecipe):
 
     @staticmethod
     def w4a8(
-        tokenizer: PreTrainedTokenizer,
-        num_samples: int = 512
+        tokenizer: PreTrainedTokenizer, num_samples: int = 512
     ) -> "ExampleC4NewModelOptRecipe":
         return ExampleC4NewModelOptRecipe(
             ModelOptConfig(QuantizeConfig(**W4A8_AWQ_BETA_CFG)), tokenizer, num_samples
@@ -137,7 +134,7 @@ if __name__ == "__main__":
         "--sparsity",
         type=str,
         choices=["sparsegpt", "sparse_magnitude"],
-        help="Apply 2-4 SparseGPT sparsification"
+        help="Apply 2-4 SparseGPT sparsification",
     )
     parser.add_argument(
         "--num-calibration-samples",
@@ -202,12 +199,7 @@ if __name__ == "__main__":
 
     prompt = "What is the latest generation of Nvidia GPUs?"
     tokens = tokenizer(prompt, padding=True, return_tensors="pt")
-    generated = model.generate(
-        tokens["input_ids"],
-        generation_config
-    )
+    generated = model.generate(tokens["input_ids"], generation_config)
 
-    generated_text = tokenizer.decode(
-        generated, skip_special_tokens=True
-    )
+    generated_text = tokenizer.decode(generated, skip_special_tokens=True)
     print(generated_text)

@@ -17,7 +17,7 @@ from abc import ABCMeta, abstractmethod
 from logging import getLogger
 from os import PathLike, scandir, symlink
 from pathlib import Path
-from shutil import copytree, copyfile
+from shutil import copyfile, copytree
 from typing import (
     Dict,
     Generator,
@@ -368,7 +368,9 @@ class HuggingFaceHubModel(
                         else:
                             raise TypeError(f"{clazz} can't convert from HF checkpoint")
 
-                        generation_config = GenerationConfig.from_pretrained(original_checkpoints_path_for_conversion)
+                        generation_config = GenerationConfig.from_pretrained(
+                            original_checkpoints_path_for_conversion
+                        )
                         for ranked_model in ranked_models:
                             if save_intermediate_checkpoints:
                                 _ = converter.convert(ranked_model)
@@ -376,7 +378,9 @@ class HuggingFaceHubModel(
                                     f"Saved intermediate checkpoints at {converter.workspace.checkpoints_path}"
                                 )
 
-                            build_config = export_config.to_builder_config(ranked_model.config.quantization.quant_mode)
+                            build_config = export_config.to_builder_config(
+                                ranked_model.config.quantization.quant_mode
+                            )
                             _ = converter.build(ranked_model, build_config)
                             engines_folder = converter.workspace.engines_path
                             generation_config.save_pretrained(engines_folder)

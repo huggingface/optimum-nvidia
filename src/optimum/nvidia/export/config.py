@@ -113,13 +113,15 @@ class ExportConfig:
     def to_builder_config(
         self,
         qmode: Optional["QuantMode"] = None,
-        plugin_config: Optional[PluginConfig] = None
+        plugin_config: Optional[PluginConfig] = None,
     ) -> "BuildConfig":
         self.validate()
 
         plugin_config = plugin_config or self.plugin_config
         if qmode:
-            plugin_config.use_fp8_context_fmha = qmode.has_fp8_qdq() or qmode.has_fp8_kv_cache()
+            plugin_config.use_fp8_context_fmha = (
+                qmode.has_fp8_qdq() or qmode.has_fp8_kv_cache()
+            )
 
             if qmode.is_weight_only():
                 plugin_config.weight_only_groupwise_quant_matmul_plugin = "auto"

@@ -98,7 +98,7 @@ class ModelOptQuantizer(HfQuantizer):
             model = mts.sparsify(
                 model.cpu(),
                 sconfig,
-                {"data_loader": self._recipe.dataset, "collect_func": lambda x: x}
+                {"data_loader": self._recipe.dataset, "collect_func": lambda x: x},
             )
 
         # Quantize the model
