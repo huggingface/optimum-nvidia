@@ -95,11 +95,13 @@ class ModelOptQuantizer(HfQuantizer):
 
         # Sparsify the model if requested
         if sconfig := self._recipe.config.sparsity:
+            device = model.device
             model = mts.sparsify(
                 model.cpu(),
                 sconfig,
                 {"data_loader": self._recipe.dataset, "collect_func": lambda x: x},
             )
+            model.to(device)
 
         # Quantize the model
         qmodel = mtq.quantize(
