@@ -29,6 +29,7 @@ from typing import (
     Union,
 )
 
+import torch.cuda
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
 from tensorrt_llm import __version__ as trtllm_version
@@ -340,6 +341,9 @@ class HuggingFaceHubModel(
                         checkpoints_folder = checkpoints_folder.root
                         checkpoint_files = folder_list_checkpoints(checkpoints_folder)
 
+                        del hf_model
+                        torch.cuda.empty_cache()
+
                     # Artifacts resulting from a build are not stored in the location `snapshot_download`
                     # would use. Instead, it uses `cached_assets_path` to create a specific location which
                     # doesn't mess up with the HF caching system. Use can use `save_pretrained` to store
@@ -364,7 +368,6 @@ class HuggingFaceHubModel(
                         else:
                             raise TypeError(f"{clazz} can't convert from HF checkpoint")
 
-                        build_config = export_config.to_builder_config()
                         generation_config = GenerationConfig.from_pretrained(original_checkpoints_path_for_conversion)
                         for ranked_model in ranked_models:
                             if save_intermediate_checkpoints:
@@ -373,6 +376,7 @@ class HuggingFaceHubModel(
                                     f"Saved intermediate checkpoints at {converter.workspace.checkpoints_path}"
                                 )
 
+                            build_config = export_config.to_builder_config(ranked_model.config.quantization.quant_mode)
                             _ = converter.build(ranked_model, build_config)
                             engines_folder = converter.workspace.engines_path
                             generation_config.save_pretrained(engines_folder)
