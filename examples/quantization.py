@@ -117,7 +117,6 @@ class ExampleC4NewModelOptRecipe(ModelOptRecipe):
             for tokens in encodings.encodings
         ]
 
-        # return tqdm(dataset, desc="Quantizing...")
         return dataset
 
 
