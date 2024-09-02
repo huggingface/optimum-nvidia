@@ -50,11 +50,10 @@ class ExampleC4NewModelOptRecipe(ModelOptRecipe):
     @staticmethod
     def awq(
         tokenizer: PreTrainedTokenizer,
-        sparsity: Optional[Union[SparseGPTConfig, SparseMagnitudeConfig]] = None,
         num_samples: int = 512
     ) -> "ExampleC4NewModelOptRecipe":
         return ExampleC4NewModelOptRecipe(
-            ModelOptConfig(QuantizeConfig(**INT4_AWQ_REAL_QUANT_CFG), sparsity),
+            ModelOptConfig(QuantizeConfig(**INT4_AWQ_REAL_QUANT_CFG)),
             tokenizer,
             num_samples,
         )
@@ -80,11 +79,10 @@ class ExampleC4NewModelOptRecipe(ModelOptRecipe):
     @staticmethod
     def w4a8(
         tokenizer: PreTrainedTokenizer,
-        sparsity: Optional[Union[SparseGPTConfig, SparseMagnitudeConfig]] = None,
         num_samples: int = 512
     ) -> "ExampleC4NewModelOptRecipe":
         return ExampleC4NewModelOptRecipe(
-            ModelOptConfig(QuantizeConfig(**W4A8_AWQ_BETA_CFG), sparsity), tokenizer, num_samples
+            ModelOptConfig(QuantizeConfig(**W4A8_AWQ_BETA_CFG)), tokenizer, num_samples
         )
 
     def __init__(
@@ -171,7 +169,7 @@ if __name__ == "__main__":
     # Quantization Config
     if args.method == "awq":
         qconfig = ExampleC4NewModelOptRecipe.awq(
-            tokenizer, args.sparsity, args.num_calibration_samples
+            tokenizer, args.num_calibration_samples
         )
     elif args.method == "float8":
         qconfig = ExampleC4NewModelOptRecipe.float8(
@@ -179,7 +177,7 @@ if __name__ == "__main__":
         )
     elif args.method == "w4a8":
         qconfig = ExampleC4NewModelOptRecipe.w4a8(
-            tokenizer, args.sparsity, args.num_calibration_samples
+            tokenizer, args.num_calibration_samples
         )
     else:
         raise ValueError(
