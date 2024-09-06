@@ -14,19 +14,6 @@ def common_trtllm_export_args(parser: "ArgumentParser"):
         required=True,
         help="Model ID on huggingface.co or path on disk to load model from.",
     )
-    required_group.add_argument(
-        "--max-input-length",
-        type=int,
-        default=1,
-        help="Maximum sequence length, in number of tokens, the prompt can be. The maximum number of potential tokens "
-        "generated will be <max-output-length> - <max-input-length>.",
-    )
-    required_group.add_argument(
-        "--max-output-length",
-        type=int,
-        default=1,
-        help="Maximum sequence length, in number of tokens, the model supports.",
-    )
 
     optional_group = parser.add_argument_group("Optional arguments")
     optional_group.add_argument(
@@ -47,4 +34,18 @@ def common_trtllm_export_args(parser: "ArgumentParser"):
         type=int,
         default=1,
         help='Maximum number of sampling paths ("beam") to evaluate when decoding new a token.',
+    )
+
+    required_group.add_argument(
+        "--max-input-length",
+        type=int,
+        default=1,
+        help="Maximum sequence length, in number of tokens, the prompt can be. The maximum number of potential tokens "
+        "generated will be <max-output-length> - <max-input-length>.",
+    )
+    required_group.add_argument(
+        "--max-output-length",
+        type=int,
+        default=1,
+        help="Maximum sequence length, in number of tokens, the model supports.",
     )
