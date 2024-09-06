@@ -213,7 +213,7 @@ class HuggingFaceHubModel(
         use_cuda_graph: bool = False,
         device_map: Optional[str] = None,
         export_config: Optional[ExportConfig] = None,
-        quantization_config: Optional[ModelOptRecipe],
+        quantization_config: Optional[ModelOptRecipe] = None,
         force_export: bool = False,
         export_only: bool = False,
         save_intermediate_checkpoints: bool = False,
