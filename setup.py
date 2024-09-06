@@ -98,9 +98,4 @@ setup(
     dependency_links=["https://pypi.nvidia.com"],
     include_package_data=True,
     zip_safe=False,
-    entry_points={
-        "console_scripts": [
-            "optimum-cli=optimum.commands.optimum_cli:main",
-        ]
-    },
 )
