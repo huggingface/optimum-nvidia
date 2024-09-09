@@ -23,7 +23,7 @@ jobs:
       matrix:
         config:
           - name: GPU-enabled Optimum-Nvidia Test Suite
-            image: nvidia/cuda:12.4.1-devel-ubuntu22.04
+            image: nvidia/cuda:12.5.1-devel-ubuntu22.04
         gpu_target: ["aws-g6-12xlarge-plus", "aws-g5-12xlarge-plus"]
 
     name: ${{ matrix.config.name }}
@@ -41,6 +41,9 @@ jobs:
         shell: bash
 
     steps:
+      - name: Change ownership of /github/home
+        run: sudo chown -R $(whoami) /github/home
+
       - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
