@@ -94,7 +94,6 @@ class ModelOptQuantizer(HfQuantizer):
         workspace: "Workspace" = kwargs.pop("workspace")
 
         with torch.inference_mode():
-
             # Sparsify the model if requested
             if sconfig := self._recipe.config.sparsity:
                 device = model.device
@@ -120,7 +119,7 @@ class ModelOptQuantizer(HfQuantizer):
                 inference_tensor_parallel=1,
                 inference_pipeline_parallel=1,
                 use_nfs_workspace=False,
-                naive_fp8_quantization=False
+                naive_fp8_quantization=False,
             )
 
         return qmodel

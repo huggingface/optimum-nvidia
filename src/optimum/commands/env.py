@@ -7,7 +7,6 @@ from tensorrt_llm import __version__ as trtllm_version
 from transformers import __version__ as transformers_version
 from transformers.utils import is_torch_available
 
-from optimum.nvidia.version import __version__ as optimum_nvidia_version
 from optimum.commands import BaseOptimumCLICommand, CommandInfo
 from optimum.version import __version__ as optimum_version
 

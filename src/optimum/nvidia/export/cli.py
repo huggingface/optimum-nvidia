@@ -46,5 +46,5 @@ def common_trtllm_export_args(parser: "ArgumentParser"):
         "--destination",
         type=str,
         default=None,
-        help="Folder where the resulting exported engines will be stored. Default to Hugging Face Hub cache."
+        help="Folder where the resulting exported engines will be stored. Default to Hugging Face Hub cache.",
     )

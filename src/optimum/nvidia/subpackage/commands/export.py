@@ -1,13 +1,14 @@
 import sys
 from typing import TYPE_CHECKING, Optional
 
+from transformers import AutoConfig
+
 from optimum.commands import optimum_cli_subcommand
 from optimum.commands.base import BaseOptimumCLICommand, CommandInfo
 from optimum.commands.export.base import ExportCommand
+from optimum.nvidia import AutoModelForCausalLM, ExportConfig
 from optimum.nvidia.export.cli import common_trtllm_export_args
-from transformers import AutoConfig
 
-from optimum.nvidia import ExportConfig, AutoModelForCausalLM
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser, Namespace, _SubParsersAction
@@ -20,12 +21,12 @@ class TrtLlmExportCommand(BaseOptimumCLICommand):
     )
 
     def __init__(
-            self,
-            subparsers: "_SubParsersAction",
-            args: Optional["Namespace"] = None,
-            command: Optional["CommandInfo"] = None,
-            from_defaults_factory: bool = False,
-            parser: Optional["ArgumentParser"] = None,
+        self,
+        subparsers: "_SubParsersAction",
+        args: Optional["Namespace"] = None,
+        command: Optional["CommandInfo"] = None,
+        from_defaults_factory: bool = False,
+        parser: Optional["ArgumentParser"] = None,
     ):
         super().__init__(
             subparsers,
