@@ -3,7 +3,6 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 import pytest
-
 from integration.utils_testing import clean_cached_engines_for_model
 from tensorrt_llm.bindings import GptJsonConfig
 
@@ -25,7 +24,7 @@ def _ensure_required_folder_and_files_exists(root: Workspace):
     assert (root.engines_path / "rank0.engine").exists()
 
 
-@pytest.mark.script_launch_mode('subprocess')
+@pytest.mark.script_launch_mode("subprocess")
 def test_optimum_export_default(runner: "ScriptRunner") -> None:
     model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
     device_id = get_device_name(0)[-1]
@@ -46,7 +45,7 @@ def test_optimum_export_default(runner: "ScriptRunner") -> None:
     clean_cached_engines_for_model(model_id)
 
 
-@pytest.mark.script_launch_mode('subprocess')
+@pytest.mark.script_launch_mode("subprocess")
 def test_optimum_export_custom_destination(runner: "ScriptRunner") -> None:
     model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
