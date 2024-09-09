@@ -6,13 +6,20 @@ if TYPE_CHECKING:
 
 
 def common_trtllm_export_args(parser: "ArgumentParser"):
+    parser.add_argument("model", type=str, help="Model to export.")
     required_group = parser.add_argument_group("Required arguments")
     required_group.add_argument(
-        "-m",
-        "--model",
-        type=str,
-        required=True,
-        help="Model ID on huggingface.co or path on disk to load model from.",
+        "--max-input-length",
+        type=int,
+        default=-1,
+        help="Maximum sequence length, in number of tokens, the prompt can be. The maximum number of potential tokens "
+        "generated will be <max-output-length> - <max-input-length>.",
+    )
+    required_group.add_argument(
+        "--max-output-length",
+        type=int,
+        default=-1,
+        help="Maximum sequence length, in number of tokens, the model supports.",
     )
 
     optional_group = parser.add_argument_group("Optional arguments")
@@ -21,31 +28,23 @@ def common_trtllm_export_args(parser: "ArgumentParser"):
         "--dtype",
         type=str,
         default="auto",
-        help="Computational data type used for the model.",
+        help="Computational data type used for the model. Default to 'auto' matching model's data type.",
     )
     optional_group.add_argument(
         "--max-batch-size",
         type=int,
         default=1,
-        help="Maximum number of concurrent requests the model can process.",
+        help="Maximum number of concurrent requests the model can process. Default to 1.",
     )
     optional_group.add_argument(
         "--max-beams-width",
         type=int,
         default=1,
-        help='Maximum number of sampling paths ("beam") to evaluate when decoding new a token.',
+        help='Maximum number of sampling paths ("beam") to evaluate when decoding new a token. Default to 1.',
     )
-
-    required_group.add_argument(
-        "--max-input-length",
-        type=int,
-        default=1,
-        help="Maximum sequence length, in number of tokens, the prompt can be. The maximum number of potential tokens "
-        "generated will be <max-output-length> - <max-input-length>.",
-    )
-    required_group.add_argument(
-        "--max-output-length",
-        type=int,
-        default=1,
-        help="Maximum sequence length, in number of tokens, the model supports.",
+    optional_group.add_argument(
+        "--destination",
+        type=str,
+        default=None,
+        help="Folder where the resulting exported engines will be stored. Default to Hugging Face Hub cache."
     )

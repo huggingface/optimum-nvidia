@@ -45,6 +45,7 @@ INSTALL_REQUIRES = [
 TESTS_REQUIRES = [
     "mock",
     "pytest",
+    "pytest-console-scripts",
     "pytest-xdist",
     "psutil",
     "parameterized",

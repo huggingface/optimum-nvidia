@@ -51,7 +51,7 @@ Issues = "https://github.com/huggingface/optimum-nvidia/issues"
 
 # List additional dependencies
 [project.optional-dependencies]
-test = ["mock", "pytest", "pytest-xdist", "psutil", "parameterized", "datasets", "safetensors",]
+test = ["mock", "pytest", "pytest-console-scripts", "pytest-xdist", "psutil", "parameterized"]
 # quality = ["black", "ruff", "isort", "hf_doc_builder @ git+https://github.com/huggingface/doc-builder.git",]
 
 # Configure build system
