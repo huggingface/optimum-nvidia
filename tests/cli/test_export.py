@@ -3,11 +3,12 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 
 import pytest
-from integration.utils_testing import clean_cached_engines_for_model
 from tensorrt_llm.bindings import GptJsonConfig
 
 from optimum.nvidia.export import Workspace
 from optimum.nvidia.utils.nvml import get_device_name
+
+from ..integration.utils_testing import clean_cached_engines_for_model
 
 
 if TYPE_CHECKING:
