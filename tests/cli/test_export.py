@@ -8,8 +8,6 @@ from tensorrt_llm.bindings import GptJsonConfig
 from optimum.nvidia.export import Workspace
 from optimum.nvidia.utils.nvml import get_device_name
 
-from ..integration.utils_testing import clean_cached_engines_for_model
-
 
 if TYPE_CHECKING:
     from pytest_console_scripts import ScriptRunner
@@ -43,7 +41,8 @@ def test_optimum_export_default(runner: "ScriptRunner") -> None:
     assert exported_config.model_config.max_beam_width == 1
     assert exported_config.model_config.max_input_len >= 1
 
-    clean_cached_engines_for_model(model_id)
+    # Clean up
+    default_dest.root.rmdir()
 
 
 @pytest.mark.script_launch_mode("subprocess")
