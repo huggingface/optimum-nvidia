@@ -55,7 +55,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt update && apt install -y libmpich-dev openmpi-bin libopenmpi-dev git
+          apt update && apt install -y openmpi-bin git python3-mpi4py
           python3 -m pip install --upgrade -e .[quality,tests]  --pre --extra-index-url https://pypi.nvidia.com
 
       - name: Run nvidia-smi
