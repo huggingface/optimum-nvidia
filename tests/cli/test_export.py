@@ -54,7 +54,7 @@ def test_optimum_export_custom_destination(script_runner: "ScriptRunner") -> Non
         default_dest = Workspace(Path(dest))
         out = script_runner.run(
             f"optimum-cli export trtllm --destination {default_dest.root} {model_id}",
-            shell=True
+            shell=True,
         )
         assert out.success
 
