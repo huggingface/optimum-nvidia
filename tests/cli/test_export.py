@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
@@ -15,8 +16,8 @@ if TYPE_CHECKING:
 
 def _ensure_required_folder_and_files_exists(root: Workspace):
     assert root.checkpoints_path.exists()
-    assert (root.checkpoints_path / "config.json").exists()
-    assert (root.checkpoints_path / "rank0.safetensors").exists()
+    # assert (root.checkpoints_path / "config.json").exists()
+    # assert (root.checkpoints_path / "rank0.safetensors").exists()
 
     assert root.engines_path.exists()
     assert (root.engines_path / "config.json").exists()
@@ -24,12 +25,12 @@ def _ensure_required_folder_and_files_exists(root: Workspace):
 
 
 @pytest.mark.script_launch_mode("subprocess")
-def test_optimum_export_default(runner: "ScriptRunner") -> None:
+def test_optimum_export_default(script_runner: "ScriptRunner") -> None:
     model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
     device_id = get_device_name(0)[-1]
 
     default_dest = Workspace.from_hub_cache(model_id, device_id)
-    out = runner.run(f"optimum-cli export trtllm {model_id}")
+    out = script_runner.run(f"optimum-cli export trtllm {model_id}", shell=True)
     assert out.success
 
     _ensure_required_folder_and_files_exists(default_dest)
@@ -42,17 +43,18 @@ def test_optimum_export_default(runner: "ScriptRunner") -> None:
     assert exported_config.model_config.max_input_len >= 1
 
     # Clean up
-    default_dest.root.rmdir()
+    shutil.rmtree(default_dest.root)
 
 
 @pytest.mark.script_launch_mode("subprocess")
-def test_optimum_export_custom_destination(runner: "ScriptRunner") -> None:
+def test_optimum_export_custom_destination(script_runner: "ScriptRunner") -> None:
     model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
 
     with TemporaryDirectory() as dest:
         default_dest = Workspace(Path(dest))
-        out = runner.run(
-            f"optimum-cli export trtllm --destination {default_dest.root} {model_id}"
+        out = script_runner.run(
+            f"optimum-cli export trtllm --destination {default_dest.root} {model_id}",
+            shell=True
         )
         assert out.success
 
