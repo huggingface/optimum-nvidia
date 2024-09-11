@@ -51,7 +51,9 @@ class TrtLlmExportCommand(BaseOptimumCLICommand):
         model = AutoModelForCausalLM.from_pretrained(
             args.model, export_config=export, export_only=True
         )
-        model.save_pretrained(args.destination)
+
+        if args.destination:
+            model.save_pretrained(args.destination)
 
         if args.push_to_hub:
             print(f"Exporting model to the Hugging Face Hub: {args.push_to_hub}")
