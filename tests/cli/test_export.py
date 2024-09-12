@@ -26,7 +26,6 @@ def _ensure_required_folder_and_files_exists(root: Union[Path, Workspace], devic
     assert (engines_path / "rank0.engine").exists()
 
 
-@pytest.mark.script_launch_mode("subprocess")
 def test_optimum_export_default(script_runner: "ScriptRunner") -> None:
     model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
     device_id = get_device_name(0)[-1]
@@ -49,7 +48,6 @@ def test_optimum_export_default(script_runner: "ScriptRunner") -> None:
     shutil.rmtree(default_dest.root)
 
 
-@pytest.mark.script_launch_mode("subprocess")
 def test_optimum_export_custom_destination(script_runner: "ScriptRunner") -> None:
     model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
     device_name = get_device_name(0)[-1]
