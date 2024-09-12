@@ -33,6 +33,7 @@ def test_optimum_export_default(script_runner: "ScriptRunner") -> None:
 
     default_dest = Workspace.from_hub_cache(model_id, device_id)
     out = script_runner.run(f"optimum-cli export trtllm {model_id}", shell=True)
+    out.print()
     assert out.success
 
     _ensure_required_folder_and_files_exists(default_dest)
@@ -59,6 +60,7 @@ def test_optimum_export_custom_destination(script_runner: "ScriptRunner") -> Non
             f"optimum-cli export trtllm --destination {default_dest} {model_id}",
             shell=True,
         )
+        out.print()
         assert out.success
 
         _ensure_required_folder_and_files_exists(default_dest, device_name)
