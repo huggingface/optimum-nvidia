@@ -121,4 +121,4 @@ jobs:
 
       - name: Run optimum-nvidia cli test-suite
         run: |
-          pytest -rx -s -vvvvv -n 4 -p no:warnings -o log_cli=true tests/cli
+          pytest -rx -s -p no:warnings tests/cli
