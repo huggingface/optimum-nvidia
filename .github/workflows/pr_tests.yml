@@ -57,6 +57,7 @@ jobs:
         run: |
           apt update && apt install -y libmpich-dev libopenmpi-dev openmpi-bin git
           python3 -m pip install --upgrade -e .[quality,tests]  --pre --extra-index-url https://pypi.nvidia.com
+          python3 -m pip install --upgrade 'transformers>=4.43.0'
 
       - name: Run nvidia-smi
         run: |
@@ -110,6 +111,7 @@ jobs:
         run: |
           apt update && apt install -y openmpi-bin libopenmpi-dev git
           python3 -m pip install --upgrade -e .[quality,tests]  --pre --extra-index-url https://pypi.nvidia.com
+          python3 -m pip install --upgrade 'transformers>=4.43.0'
 
       - name: Run nvidia-smi
         run: |
