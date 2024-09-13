@@ -29,6 +29,7 @@ def infer_plugin_from_build_config(config: "BuildConfig") -> "BuildConfig":
         LOGGER.debug("Enabling Paged Context FMHA plugin")
         config.plugin_config.update_from_dict({"use_paged_context_fmha": True})
 
+    config.plugin_config.update_from_dict({"enable_xqa": False})
     return config
 
 
