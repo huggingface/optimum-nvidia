@@ -1,3 +1,4 @@
+import os
 import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -73,20 +74,23 @@ def test_optimum_export_custom_destination(script_runner: "ScriptRunner") -> Non
 @pytest.mark.parametrize(
     "recipe",
     [
-        "tests/cli/fixtures/qfloat8_recipe.py",
-        "tests/cli/fixtures/qfloat8_and_kv_cache_recipe.py",
+        "qfloat8_recipe.py",
+        "qfloat8_and_kv_cache_recipe.py",
     ],
 )
 def test_optimum_export_with_quantization(
     script_runner: "ScriptRunner", recipe: str
 ) -> None:
+    cwd = Path(os.path.abspath(__file__)).parent
+    recipe_path = cwd.parent / "fixtures" / recipe
+
     model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
     device_name = get_device_name(0)[-1]
 
     with TemporaryDirectory() as dest:
         default_dest = Path(dest)
         out = script_runner.run(
-            f"optimum-cli export trtllm --quantization {recipe} {model_id}",
+            f"optimum-cli export trtllm --quantization {recipe_path} {model_id}",
             shell=True,
         )
         assert out.success
