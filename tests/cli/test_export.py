@@ -3,7 +3,6 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING, Optional, Union
 
-import pytest
 from tensorrt_llm.bindings import GptJsonConfig
 
 from optimum.nvidia.export import Workspace
@@ -14,7 +13,9 @@ if TYPE_CHECKING:
     from pytest_console_scripts import ScriptRunner
 
 
-def _ensure_required_folder_and_files_exists(root: Union[Path, Workspace], device_name: Optional[str] = None):
+def _ensure_required_folder_and_files_exists(
+    root: Union[Path, Workspace], device_name: Optional[str] = None
+):
     if isinstance(root, Path):
         engines_path = root.joinpath(device_name)
     else:
