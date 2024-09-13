@@ -13,8 +13,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from distutils.version import StrictVersion
+from packaging.version import Version
 
 
 __version__ = "0.1.0b7"
-VERSION = StrictVersion(__version__)
+VERSION = Version(__version__)

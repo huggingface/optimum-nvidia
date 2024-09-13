@@ -11,6 +11,7 @@ from typing import (
 
 
 if TYPE_CHECKING:
+    from tensorrt_llm.models import PretrainedConfig
     from tensorrt_llm.top_model_mixin import TopModelMixin
     from transformers import PreTrainedModel as TransformersPreTrainedModel
 
@@ -24,6 +25,17 @@ class SupportsFromHuggingFace(Protocol):
         dtype: str = "float16",
         mapping: Optional[Mapping] = None,
         **kwargs,
+    ): ...
+
+
+@runtime_checkable
+class SupportFromTrtLlmCheckpoint(Protocol):
+    @classmethod
+    def from_checkpoint(
+        cls,
+        ckpt_dir: str,
+        rank: Optional[int] = None,
+        config: Optional["PretrainedConfig"] = None,
     ): ...
 
 

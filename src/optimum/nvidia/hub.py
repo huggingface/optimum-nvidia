@@ -17,9 +17,10 @@ from abc import ABCMeta, abstractmethod
 from logging import getLogger
 from os import PathLike, scandir, symlink
 from pathlib import Path
-from shutil import copytree
+from shutil import copyfile, copytree
 from typing import (
     Dict,
+    Generator,
     Iterable,
     List,
     Mapping,
@@ -28,10 +29,14 @@ from typing import (
     Union,
 )
 
+import torch.cuda
 from huggingface_hub import ModelHubMixin, snapshot_download
 from huggingface_hub.hub_mixin import T
 from tensorrt_llm import __version__ as trtllm_version
+from tensorrt_llm.models import PretrainedConfig
+from tensorrt_llm.models import PretrainedModel as TrtLlmPreTrainedModel
 from transformers import AutoConfig, GenerationConfig
+from transformers import PretrainedConfig as TransformersPretraineConfig
 from transformers.utils import (
     CONFIG_NAME,
     GENERATION_CONFIG_NAME,
@@ -39,8 +44,8 @@ from transformers.utils import (
 )
 
 from optimum.nvidia import LIBRARY_NAME
+from optimum.nvidia.compression.modelopt import ModelOptRecipe
 from optimum.nvidia.export import (
-    PATH_FOLDER_CHECKPOINTS,
     PATH_FOLDER_ENGINES,
     ExportConfig,
     TensorRTModelConverter,
@@ -52,6 +57,7 @@ from optimum.nvidia.models import (
     SupportsFromHuggingFace,
     SupportsTransformersConversion,
 )
+from optimum.nvidia.models.base import SupportFromTrtLlmCheckpoint
 from optimum.nvidia.utils import get_user_agent
 from optimum.nvidia.utils.nvml import get_device_count, get_device_name
 from optimum.utils import NormalizedConfig
@@ -60,19 +66,22 @@ from optimum.utils import NormalizedConfig
 ATTR_TRTLLM_ENGINE_FOLDER = "__trtllm_engine_folder__"
 FILE_TRTLLM_ENGINE_PATTERN = "rank[0-9]*.engine"
 FILE_TRTLLM_CHECKPOINT_PATTERN = "rank[0-9]*.engine"
+FILE_LICENSE_NAME = "LICENSE"
 HUB_SNAPSHOT_ALLOW_PATTERNS = [
     CONFIG_NAME,
     GENERATION_CONFIG_NAME,
     SAFE_WEIGHTS_INDEX_NAME,
     "*.safetensors",
+    FILE_LICENSE_NAME,
 ]
+
 
 LOGGER = getLogger()
 
 
 def folder_list_engines(folder: Path) -> Iterable[Path]:
     if folder.exists():
-        return folder.glob("*.engine")
+        return list(folder.glob("*.engine"))
 
     return []
 
@@ -95,6 +104,15 @@ def folder_list_checkpoints(folder: Path) -> Iterable[Path]:
     return checkpoint_candidates
 
 
+def get_rank_from_filename(filename: str) -> int:
+    name = filename.split(".")[0]
+
+    if name.startswith("rank"):
+        return int(name[3:])
+    else:
+        raise ValueError(f"Unknown filename format {filename} to extract rank from")
+
+
 def get_trtllm_artifact(
     model_id: str, patterns: List[str], add_default_allow_patterns: bool = True
 ) -> Path:
@@ -113,6 +131,58 @@ def get_trtllm_artifact(
             else patterns,
         )
     )
+
+
+def get_trtllm_checkpoints(model_id: str, device: str, dtype: str):
+    if (
+        workspace := Workspace.from_hub_cache(model_id, device)
+    ).checkpoints_path.exists():
+        return workspace.checkpoints_path
+
+    return get_trtllm_artifact(model_id, [f"{device}/{dtype}/**/*.safetensors"])
+
+
+def get_trtllm_engines(model_id: str, device: str, dtype: str):
+    if (workspace := Workspace.from_hub_cache(model_id, device)).engines_path.exists():
+        return workspace.engines_path
+
+    return get_trtllm_artifact(
+        model_id, [f"{device}/{dtype}/**/{PATH_FOLDER_ENGINES}/*.engine"]
+    )
+
+
+def from_ranked_checkpoints(
+    checkpoints_folder: Path, target_class: Type[SupportFromTrtLlmCheckpoint]
+) -> Generator["TrtLlmPreTrainedModel", None, None]:
+    root = str(checkpoints_folder)
+    trtllm_config = PretrainedConfig.from_checkpoint(root)
+
+    for rank in range(trtllm_config.mapping.world_size):
+        yield target_class.from_checkpoint(root, rank, trtllm_config)
+
+
+def from_ranked_hf_model(
+    local_hf_model_path: Path,
+    config: "TransformersPretraineConfig",
+    target_class: Type["TrtLlmPreTrainedModel"],
+    export_config: "ExportConfig",
+):
+    root = str(local_hf_model_path)
+    for rank in range(export_config.sharding.world_size):
+        # Specify the current model's rank
+        export_config.sharding.rank = rank
+
+        ranked_model = target_class.from_hugging_face(
+            root,
+            dtype=DataType.from_torch(config.torch_dtype).value,
+            mapping=export_config.sharding,
+            load_by_shard=True,
+            use_parallel_embedding=export_config.sharding.world_size > 1,
+            share_embedding_table=config.tie_word_embeddings,
+        )
+
+        ranked_model.config.mapping.rank = rank
+        yield ranked_model
 
 
 class HuggingFaceHubModel(
@@ -143,7 +213,9 @@ class HuggingFaceHubModel(
         use_cuda_graph: bool = False,
         device_map: Optional[str] = None,
         export_config: Optional[ExportConfig] = None,
+        quantization_config: Optional[ModelOptRecipe] = None,
         force_export: bool = False,
+        export_only: bool = False,
         save_intermediate_checkpoints: bool = False,
     ) -> T:
         if get_device_count() < 1:
@@ -157,8 +229,6 @@ class HuggingFaceHubModel(
             dtype = config["pretrained_config"]["dtype"]
         else:
             raise RuntimeError("Failed to detect model's dtype")
-
-        common_hub_path = f"{device_name}/{dtype}"
 
         # Check if the model_id is not a local path
         local_model_id = Path(model_id)
@@ -183,21 +253,15 @@ class HuggingFaceHubModel(
             # Look for prebuild TRTLLM Engine
             if not force_export:
                 LOGGER.debug(f"Retrieving prebuild engine(s) for device {device_name}")
-                cached_path = get_trtllm_artifact(
-                    model_id, [f"{common_hub_path}/**/{PATH_FOLDER_ENGINES}/*.engine"]
-                )
-
-                engines_folder = cached_path / PATH_FOLDER_ENGINES
+                engines_folder = get_trtllm_engines(model_id, device_name, dtype)
                 engine_files = folder_list_engines(engines_folder)
 
             # if no engine is found, then just try to locate a checkpoint
             if not engine_files:
                 LOGGER.debug(f"Retrieving checkpoint(s) for {device_name}")
-                cached_path = get_trtllm_artifact(
-                    model_id, [f"{common_hub_path}/**/*.safetensors"]
+                checkpoints_folder = get_trtllm_checkpoints(
+                    model_id, device_name, dtype
                 )
-
-                checkpoints_folder = cached_path / PATH_FOLDER_CHECKPOINTS
                 checkpoint_files = folder_list_checkpoints(checkpoints_folder)
 
         # If no checkpoint available, we are good for a full export from the Hugging Face Hub
@@ -233,6 +297,14 @@ class HuggingFaceHubModel(
                 original_checkpoints_path_for_conversion
             )
 
+            # This is required to complain with binding license for derivative work
+            if FILE_LICENSE_NAME in original_checkpoints_path_for_conversion:
+                licence_path = original_checkpoints_path_for_conversion.joinpath(
+                    FILE_LICENSE_NAME
+                )
+            else:
+                licence_path = None
+
             # If no export config, let's grab a default one
             export_config = export_config or ExportConfig.from_config(config)
 
@@ -253,42 +325,65 @@ class HuggingFaceHubModel(
                         f"Building {model_id} {subpart} ({idx + 1} / {len(targets)})"
                     )
 
-                    converter = TensorRTModelConverter(model_id, subpart, workspace)
+                    converter = TensorRTModelConverter(
+                        model_id, subpart, workspace, licence_path
+                    )
+
+                    if quantization_config:
+                        hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(
+                            original_checkpoints_path_for_conversion,
+                            torch_dtype="auto",
+                            device_map="auto",
+                        )
+                        checkpoints_folder = converter.quantize(
+                            hf_model, quantization_config
+                        )
+                        checkpoints_folder = checkpoints_folder.root
+                        checkpoint_files = folder_list_checkpoints(checkpoints_folder)
+
+                        del hf_model
+                        torch.cuda.empty_cache()
 
                     # Artifacts resulting from a build are not stored in the location `snapshot_download`
                     # would use. Instead, it uses `cached_assets_path` to create a specific location which
                     # doesn't mess up with the HF caching system. Use can use `save_pretrained` to store
                     # the build artifact into a snapshot friendly place
                     # If this specific location is found, we don't necessary need to rebuild
-
                     if force_export or not len(
                         list(converter.workspace.engines_path.glob("*.engine"))
                     ):
-                        if not isinstance(clazz, SupportsFromHuggingFace):
+                        if checkpoint_files and isinstance(
+                            clazz, SupportFromTrtLlmCheckpoint
+                        ):
+                            ranked_models = from_ranked_checkpoints(
+                                checkpoints_folder, clazz
+                            )
+                        elif isinstance(clazz, SupportsFromHuggingFace):
+                            ranked_models = from_ranked_hf_model(
+                                original_checkpoints_path_for_conversion,
+                                config,
+                                clazz,
+                                export_config,
+                            )
+                        else:
                             raise TypeError(f"{clazz} can't convert from HF checkpoint")
 
-                        for rank in range(export_config.sharding.world_size):
-                            # Specify the current model's rank
-                            export_config.sharding.rank = rank
-
-                            ranked_model = clazz.from_hugging_face(
-                                original_checkpoints_path_for_conversion,
-                                dtype=DataType.from_torch(config.torch_dtype).value,
-                                mapping=export_config.sharding,
-                                load_by_shard=True,
-                            )
-
-                            ranked_model.config.mapping.rank = rank
-                            build_config = export_config.to_builder_config()
-
+                        generation_config = GenerationConfig.from_pretrained(
+                            original_checkpoints_path_for_conversion
+                        )
+                        for ranked_model in ranked_models:
                             if save_intermediate_checkpoints:
                                 _ = converter.convert(ranked_model)
                                 LOGGER.info(
                                     f"Saved intermediate checkpoints at {converter.workspace.checkpoints_path}"
                                 )
 
+                            build_config = export_config.to_builder_config(
+                                ranked_model.config.quantization.quant_mode
+                            )
                             _ = converter.build(ranked_model, build_config)
                             engines_folder = converter.workspace.engines_path
+                            generation_config.save_pretrained(engines_folder)
 
                         LOGGER.info(
                             f"Saved TensorRT-LLM engines at {converter.workspace.engines_path}"
@@ -307,6 +402,7 @@ class HuggingFaceHubModel(
         return cls(
             engines_path=engines_folder,
             generation_config=generation_config,
+            load_engines=not export_only,
         )
 
     @abstractmethod
@@ -314,25 +410,33 @@ class HuggingFaceHubModel(
         raise NotImplementedError()
 
     def _save_pretrained(self, save_directory: Path) -> None:
-        try:
-            # Need target_is_directory on Windows
-            # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
-            # Falling back to copytree in this case
-            for file in self._engines_path.glob("*"):
+        device_name = get_device_name(0)[-1]
+        save_directory = save_directory.joinpath(device_name)
+        save_directory.mkdir(parents=True, exist_ok=True)
+
+        src_license_file_path = self._engines_path.parent / FILE_LICENSE_NAME
+        dst_files = [src_license_file_path] if src_license_file_path.exists() else []
+        dst_files += list(self._engines_path.glob("*"))
+
+        for file in dst_files:
+            try:
+                # Need target_is_directory on Windows
+                # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
+                # Falling back to copytree in this case
                 symlink(
                     file, save_directory.joinpath(file.relative_to(self._engines_path))
                 )
-        except OSError as ose:
-            LOGGER.error(
-                f"Failed to create symlink from current engine folder {self._engines_path.parent} to {save_directory}. "
-                "Will default to copy based _save_pretrained",
-                exc_info=ose,
-            )
-            for file in self._engines_path.glob("*"):
-                copytree(
-                    file,
-                    save_directory.joinpath(file.relative_to(self._engines_path)),
-                    symlinks=True,
+            except OSError as ose:
+                LOGGER.error(
+                    f"Failed to create symlink from current engine folder {self._engines_path.parent} to {save_directory}. "
+                    "Will default to copy based _save_pretrained",
+                    exc_info=ose,
                 )
-        finally:
-            self._save_additional_parcels(save_directory)
+
+                dst = save_directory.joinpath(file.relative_to(self._engines_path))
+                if file.is_dir():
+                    copytree(file, dst, symlinks=True)
+                elif file:
+                    copyfile(file, dst)
+
+        self._save_additional_parcels(save_directory)

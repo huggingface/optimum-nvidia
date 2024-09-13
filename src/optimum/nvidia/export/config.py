@@ -6,7 +6,9 @@ from warnings import warn
 
 from tensorrt_llm import BuildConfig
 from tensorrt_llm import Mapping as ShardingInfo
+from tensorrt_llm.bindings import QuantMode
 from tensorrt_llm.plugin import PluginConfig
+from tensorrt_llm.plugin.plugin import ContextFMHAType
 from transformers import AutoConfig
 
 from optimum.nvidia.lang import DataType
@@ -94,18 +96,39 @@ class ExportConfig:
     @property
     def plugin_config(self) -> "PluginConfig":
         config = PluginConfig()
-        config.gemm_plugin = self.dtype
-        config.bert_attention_plugin = self.dtype
-        config.gpt_attention_plugin = self.dtype
-        config.nccl_plugin = self.dtype
-        config.mamba_conv1d_plugin = self.dtype
-        config.moe_plugin = self.dtype
+
+        config.gemm_plugin = "auto"
+        config.gpt_attention_plugin = "auto"
+        config.set_context_fmha(ContextFMHAType.enabled)
+
+        if self.sharding.world_size > 1:
+            config.lookup_plugin = "auto"
+            config.set_nccl_plugin()
+
+        if DataType(self.dtype) == DataType.FLOAT8:
+            config.gemm_swiglu_plugin = True
+
         return config
 
     def to_builder_config(
-        self, plugin_config: Optional[PluginConfig] = None
+        self,
+        qmode: Optional["QuantMode"] = None,
+        plugin_config: Optional[PluginConfig] = None,
     ) -> "BuildConfig":
         self.validate()
+
+        plugin_config = plugin_config or self.plugin_config
+        if qmode:
+            plugin_config.use_fp8_context_fmha = (
+                qmode.has_fp8_qdq() or qmode.has_fp8_kv_cache()
+            )
+
+            if qmode.is_weight_only():
+                plugin_config.weight_only_groupwise_quant_matmul_plugin = "auto"
+            # weight_sparsity = qmode.sparsity is not None
+            weight_sparsity = False
+        else:
+            weight_sparsity = False
 
         return BuildConfig(
             max_input_len=self.max_input_len,
@@ -114,7 +137,9 @@ class ExportConfig:
             max_beam_width=self.max_beam_width,
             max_num_tokens=self.max_num_tokens,
             builder_opt=self.optimization_level,
-            plugin_config=plugin_config or self.plugin_config,
+            plugin_config=plugin_config,
+            use_fused_mlp=True,
+            weight_sparsity=weight_sparsity,
         )
 
     def with_sharding(

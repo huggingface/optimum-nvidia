@@ -16,25 +16,108 @@
 from argparse import ArgumentParser
 from logging import getLogger
 from pathlib import Path
+from typing import Iterable, Optional, Union
 
-from transformers import AutoTokenizer
+import numpy as np
+import torch
+from datasets import load_dataset
+from modelopt.torch.quantization import (
+    FP8_WA_FP8_KV_CFG,
+    INT4_AWQ_REAL_QUANT_CFG,
+    W4A8_AWQ_BETA_CFG,
+    QuantizeConfig,
+)
+from modelopt.torch.sparsity.config import SparseGPTConfig, SparseMagnitudeConfig
+from tensorrt_llm.quantization.quantize_by_modelopt import KV_CACHE_CFG
+from transformers import AutoTokenizer, GenerationConfig, PreTrainedTokenizer
 
-from optimum.nvidia import AutoModelForCausalLM, setup_logging
-from optimum.nvidia.quantization import AutoQuantizationConfig
+from optimum.nvidia import AutoModelForCausalLM, ExportConfig, setup_logging
+from optimum.nvidia.compression.modelopt import (
+    ModelOptConfig,
+    ModelOptQuantizer,
+    ModelOptRecipe,
+)
 
 
 # Setup logging needs to happen before importing TRT ...
 setup_logging(True)
 
-from optimum.nvidia.utils.cli import (
-    postprocess_quantization_parameters,
-    register_common_model_topology_args,
-    register_optimization_profiles_args,
-    register_quantization_args,
-)
-
-
 LOGGER = getLogger(__name__)
+
+
+class ExampleC4NewModelOptRecipe(ModelOptRecipe):
+    @staticmethod
+    def awq(
+        tokenizer: PreTrainedTokenizer, num_samples: int = 512
+    ) -> "ExampleC4NewModelOptRecipe":
+        return ExampleC4NewModelOptRecipe(
+            ModelOptConfig(QuantizeConfig(**INT4_AWQ_REAL_QUANT_CFG)),
+            tokenizer,
+            num_samples,
+        )
+
+    @staticmethod
+    def float8(
+        tokenizer: PreTrainedTokenizer,
+        sparsity: Optional[Union[SparseGPTConfig, SparseMagnitudeConfig]] = None,
+        num_samples: int = 512,
+        use_float8_kv_cache: bool = True,
+    ) -> "ExampleC4NewModelOptRecipe":
+        config = FP8_WA_FP8_KV_CFG
+        if use_float8_kv_cache:
+            fp8_kv_config = KV_CACHE_CFG.copy()
+            for value in fp8_kv_config.values():
+                value.update({"num_bits": (4, 3)})
+            config["quant_cfg"].update(fp8_kv_config)
+
+        return ExampleC4NewModelOptRecipe(
+            ModelOptConfig(QuantizeConfig(**config), sparsity), tokenizer, num_samples
+        )
+
+    @staticmethod
+    def w4a8(
+        tokenizer: PreTrainedTokenizer, num_samples: int = 512
+    ) -> "ExampleC4NewModelOptRecipe":
+        return ExampleC4NewModelOptRecipe(
+            ModelOptConfig(QuantizeConfig(**W4A8_AWQ_BETA_CFG)), tokenizer, num_samples
+        )
+
+    def __init__(
+        self,
+        config: ModelOptConfig,
+        tokenizer: PreTrainedTokenizer,
+        num_samples: int = 512,
+    ):
+        self._config = config
+        self._tokenizer = tokenizer
+        self._nb_samples = num_samples
+
+    @property
+    def config(self) -> ModelOptConfig:
+        return self._config
+
+    @property
+    def dataset(self) -> Iterable:
+        data_files = {"train": "en/c4-train.00000-of-01024.json.gz"}
+        data = load_dataset("allenai/c4", split="train", data_files=data_files)
+        indexes = np.random.choice(data.num_rows, size=self._nb_samples)
+        encodings = self._tokenizer(
+            data[indexes]["text"],
+            truncation=True,
+            max_length=2048,
+            return_attention_mask=False,
+        )
+
+        dataset = [
+            {
+                "input_ids": torch.tensor(tokens.ids, dtype=torch.long, device="cuda")[
+                    None
+                ]
+            }
+            for tokens in encodings.encodings
+        ]
+
+        return dataset
 
 
 if __name__ == "__main__":
@@ -44,16 +127,31 @@ if __name__ == "__main__":
         type=str,
         help="Hugging Face Hub Token to retrieve private weights.",
     )
-    register_common_model_topology_args(parser)
-    register_optimization_profiles_args(parser)
-    register_quantization_args(parser)  # Inject params.quantization_config
 
-    parser.add_argument("model", type=str, help="The model's id or path to use.")
+    parser.add_argument("--method", type=str, choices=["awq", "float8", "w4a8"])
     parser.add_argument(
-        "output", type=Path, help="Path to store generated TensorRT engine."
+        "--sparsity",
+        type=str,
+        choices=["sparsegpt", "sparse_magnitude"],
+        help="Apply 2-4 SparseGPT sparsification",
+    )
+    parser.add_argument(
+        "--num-calibration-samples",
+        type=int,
+        default=512,
+        help="Number of samples used for calibration",
+    )
+    parser.add_argument(
+        "--max-batch-size",
+        type=int,
+        default=1,
+        help="Maximum concurrent request for the model",
+    )
+    parser.add_argument("model", type=str, help="The model's id or path to use")
+    parser.add_argument(
+        "output", type=Path, help="Path to store generated TensorRT engine"
     )
     args = parser.parse_args()
-    args = postprocess_quantization_parameters(args)
 
     if args.hub_token is not None:
         from huggingface_hub import login
@@ -65,38 +163,42 @@ if __name__ == "__main__":
         tokenizer.pad_token = tokenizer.eos_token
 
     # Quantization Config
-    qconfig = AutoQuantizationConfig.from_description(
-        weight="float8",
-        activation="float8",
-        tokenizer=tokenizer,
-        dataset="c4-new",
-        max_sequence_length=args.max_prompt_length,
-        num_samples=1024,
-    )
+    if args.method == "awq":
+        qconfig = ExampleC4NewModelOptRecipe.awq(
+            tokenizer, args.num_calibration_samples
+        )
+    elif args.method == "float8":
+        qconfig = ExampleC4NewModelOptRecipe.float8(
+            tokenizer, args.sparsity, args.num_calibration_samples
+        )
+    elif args.method == "w4a8":
+        qconfig = ExampleC4NewModelOptRecipe.w4a8(
+            tokenizer, args.num_calibration_samples
+        )
+    else:
+        raise ValueError(
+            f"Invalid quantization method {args.method}. Supported methods are (awq, float8, w4a8)"
+        )
+
+    quantizer = ModelOptQuantizer(qconfig)
+    export = ExportConfig.from_pretrained(args.model, args.max_batch_size)
 
     # Create the model
     model = AutoModelForCausalLM.from_pretrained(
         args.model,
-        max_batch_size=args.max_batch_size,
-        max_prompt_length=args.max_prompt_length,
-        num_beams=args.max_beam_width,
+        export_config=export,
         quantization_config=qconfig,
     )
-    model.save_pretrained(args.output)
+
+    if not Path(args.output).exists():
+        model.save_pretrained(args.output)
+
+    generation_config = GenerationConfig.from_pretrained(args.model)
+    generation_config.max_new_tokens = 256
 
     prompt = "What is the latest generation of Nvidia GPUs?"
     tokens = tokenizer(prompt, padding=True, return_tensors="pt")
-    generated, lengths = model.generate(
-        **tokens,
-        top_k=40,
-        top_p=0.95,
-        repetition_penalty=10,
-        pad_token_id=tokenizer.eos_token_id,
-        eos_token_id=tokenizer.eos_token_id,
-        max_new_tokens=256,
-    )
+    generated = model.generate(tokens["input_ids"], generation_config)
 
-    generated_text = tokenizer.batch_decode(
-        generated.flatten(0, 1), skip_special_tokens=True
-    )
+    generated_text = tokenizer.decode(generated, skip_special_tokens=True)
     print(generated_text)

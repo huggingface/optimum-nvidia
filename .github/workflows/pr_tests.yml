@@ -24,7 +24,7 @@ jobs:
         config:
           - name: GPU-enabled Optimum-Nvidia Test Suite
             image: nvidia/cuda:12.5.1-devel-ubuntu22.04
-        gpu_target: ["aws-g6-12xlarge-plus", "aws-g5-12xlarge-plus"]
+        gpu_target: ["aws-g6-12xlarge-cache", "aws-g5-12xlarge-cache"]
 
     name: ${{ matrix.config.name }}
     runs-on:
@@ -32,7 +32,7 @@ jobs:
 
     container:
       image: ${{ matrix.config.image }}
-      options: --mount type=tmpfs,destination=/tmp --shm-size 64gb --gpus all --ipc host -v /mnt/hf_cache:/mnt/cache/
+      options: --mount type=tmpfs,destination=/tmp --privileged --shm-size 64gb --gpus all --ipc host -v /mnt/hf_cache:/mnt/cache/
       env:
         HF_TOKEN: ${{ secrets.OPTIMUM_NVIDIA_HUB_READ_TOKEN }}
 
@@ -57,6 +57,61 @@ jobs:
         run: |
           apt update && apt install -y libmpich-dev libopenmpi-dev openmpi-bin git
           python3 -m pip install --upgrade -e .[quality,tests]  --pre --extra-index-url https://pypi.nvidia.com
+          python3 -m pip install --upgrade 'transformers>=4.43.0'
+
+      - name: Run nvidia-smi
+        run: |
+          nvidia-smi
+
+      - name: Print TensorRT-LLM version
+        run: |
+          python -c "from tensorrt_llm import __version__; print(__version__)"
+          
+      - name: Run optimum-nvidia test-suite
+        run: |
+          pytest -s -vvvvv -n 4 -p no:warnings -o log_cli=true --ignore=tests/integration tests/
+
+  run_optimum_cli_tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - name: GPU-enabled Optimum-Nvidia CLI Test Suite
+            image: nvidia/cuda:12.5.1-devel-ubuntu22.04
+        gpu_target: ["aws-g6-12xlarge-cache", "aws-g5-12xlarge-cache"]
+
+    name: ${{ matrix.config.name }}
+    runs-on:
+      group: "${{matrix.gpu_target}}"
+
+    container:
+      image: ${{ matrix.config.image }}
+      options: --mount type=tmpfs,destination=/tmp --privileged --shm-size 64gb --gpus all --ipc host -v /mnt/hf_cache:/mnt/cache/
+      env:
+        HF_TOKEN: ${{ secrets.OPTIMUM_NVIDIA_HUB_READ_TOKEN }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Change ownership of /github/home
+        run: chown -R $(whoami) /github/home
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Checkout optimum-nvidia
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: |
+          apt update && apt install -y openmpi-bin libopenmpi-dev git
+          python3 -m pip install --upgrade -e .[quality,tests]  --pre --extra-index-url https://pypi.nvidia.com
+          python3 -m pip install --upgrade 'transformers>=4.43.0'
 
       - name: Run nvidia-smi
         run: |
@@ -66,6 +121,15 @@ jobs:
         run: |
           python -c "from tensorrt_llm import __version__; print(__version__)"
 
-      - name: Run optimum-nvidia test-suite
+      - name: Run optimum-nvidia cli test-suite
         run: |
-          pytest -s -vvvvv -n 4 -p no:warnings -o log_cli=true --ignore=tests/integration tests/
+          pytest -rx -s -p no:warnings tests/cli
+          
+      - name: Tailscale Wait
+        if: ${{ failure() || runner.debug == '1' }}
+        uses: huggingface/tailscale-action@main
+        with:
+           waitForSSH: true
+           authkey: ${{ secrets.TAILSCALE_SSH_AUTHKEY }}
+           slackChannel: ${{ secrets.SLACK_CIFEEDBACK_CHANNEL }}
+           slackToken: ${{ secrets.SLACK_CIFEEDBACK_BOT_TOKEN }}
