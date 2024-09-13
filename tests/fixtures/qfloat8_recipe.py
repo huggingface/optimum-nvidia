@@ -48,4 +48,5 @@ class CiC4NewModelOptRecipe(ModelOptRecipe):
 
         return dataset
 
+
 TARGET_QUANTIZATION_RECIPE = CiC4NewModelOptRecipe

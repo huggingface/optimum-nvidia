@@ -18,13 +18,14 @@ if TYPE_CHECKING:
 OPTIMUM_NVIDIA_CLI_QUANTIZATION_TARGET_REF = "TARGET_QUANTIZATION_RECIPE"
 
 
-def import_source_file(fname: Union[str, "Path"], modname: str) -> "types.ModuleType":
+def import_source_file(fname: Union[str, "Path"], modname: str):
     import importlib.util
 
     spec = importlib.util.spec_from_file_location(modname, fname)
     module = importlib.util.module_from_spec(spec)
     sys.modules[modname] = module
     spec.loader.exec_module(module)
+
 
 @optimum_cli_subcommand(ExportCommand)
 class TrtLlmExportCommand(BaseOptimumCLICommand):
@@ -63,15 +64,19 @@ class TrtLlmExportCommand(BaseOptimumCLICommand):
             import_source_file(args.quantization, "recipe")
 
             from recipe import TARGET_QUANTIZATION_RECIPE
+
             qconfig = TARGET_QUANTIZATION_RECIPE(tokenizer)
         else:
-            qconfig=None
+            qconfig = None
 
-    # Allocate model and derivatives needed to export
+        # Allocate model and derivatives needed to export
         config = AutoConfig.from_pretrained(args.model)
         export = ExportConfig.from_config(config, args.max_batch_size)
         model = AutoModelForCausalLM.from_pretrained(
-            args.model, export_config=export, quantization_config=qconfig, export_only=True
+            args.model,
+            export_config=export,
+            quantization_config=qconfig,
+            export_only=True,
         )
 
         if args.destination:
