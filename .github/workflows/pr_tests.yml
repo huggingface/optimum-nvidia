@@ -24,7 +24,7 @@ jobs:
         config:
           - name: GPU-enabled Optimum-Nvidia Test Suite
             image: nvidia/cuda:12.5.1-devel-ubuntu22.04
-        gpu_target: ["aws-g6-12xlarge-plus", "aws-g5-12xlarge-plus"]
+        gpu_target: ["aws-g6-12xlarge-cache", "aws-g5-12xlarge-cache"]
 
     name: ${{ matrix.config.name }}
     runs-on:
@@ -77,7 +77,7 @@ jobs:
         config:
           - name: GPU-enabled Optimum-Nvidia CLI Test Suite
             image: nvidia/cuda:12.5.1-devel-ubuntu22.04
-        gpu_target: ["aws-g6-12xlarge-plus", "aws-g5-12xlarge-plus"]
+        gpu_target: ["aws-g6-12xlarge-cache", "aws-g5-12xlarge-cache"]
 
     name: ${{ matrix.config.name }}
     runs-on:
