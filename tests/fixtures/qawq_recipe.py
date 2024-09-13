@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Iterable
 import numpy as np
 import torch
 from datasets import load_dataset
-from modelopt.torch.quantization import FP8_WA_FP8_KV_CFG, QuantizeConfig
+from modelopt.torch.quantization import INT4_AWQ_CFG, QuantizeConfig
 
 from optimum.nvidia.compression.modelopt import ModelOptConfig, ModelOptRecipe
 
@@ -22,7 +22,7 @@ class CiC4NewModelOptRecipe(ModelOptRecipe):
 
     @property
     def config(self) -> ModelOptConfig:
-        qconfig = QuantizeConfig(**FP8_WA_FP8_KV_CFG.copy())
+        qconfig = QuantizeConfig(**INT4_AWQ_CFG.copy())
         return ModelOptConfig(qconfig, sparsity=None)
 
     @property

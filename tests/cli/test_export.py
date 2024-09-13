@@ -74,7 +74,7 @@ def test_optimum_export_custom_destination(script_runner: "ScriptRunner") -> Non
 @pytest.mark.parametrize(
     "recipe",
     [
-        "qfloat8_recipe.py",
+        "qawq_recipe.py",
         "qfloat8_and_kv_cache_recipe.py",
     ],
 )
@@ -90,7 +90,7 @@ def test_optimum_export_with_quantization(
     with TemporaryDirectory() as dest:
         default_dest = Path(dest)
         out = script_runner.run(
-            f"optimum-cli export trtllm --quantization {recipe_path} {model_id}",
+            f"optimum-cli export trtllm --quantization {recipe_path} --destination {default_dest} {model_id}",
             shell=True,
         )
         assert out.success
@@ -103,3 +103,7 @@ def test_optimum_export_with_quantization(
         assert exported_config.model_config.max_beam_width == 1
         assert exported_config.model_config.max_input_len >= 1
         assert exported_config.model_config.quant_mode != QuantMode.none()
+
+        # Prune the cache
+        default_dest = Workspace.from_hub_cache(model_id, device_name)
+        shutil.rmtree(default_dest.root)
