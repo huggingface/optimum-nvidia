@@ -65,7 +65,7 @@ jobs:
       - name: Print TensorRT-LLM version
         run: |
           python -c "from tensorrt_llm import __version__; print(__version__)"
-
+          
       - name: Run optimum-nvidia test-suite
         run: |
           pytest -s -vvvvv -n 4 -p no:warnings -o log_cli=true --ignore=tests/integration tests/
@@ -122,3 +122,12 @@ jobs:
       - name: Run optimum-nvidia cli test-suite
         run: |
           pytest -rx -s -p no:warnings tests/cli
+          
+      - name: Tailscale Wait
+        if: ${{ failure() || runner.debug == '1' }}
+        uses: huggingface/tailscale-action@main
+        with:
+           waitForSSH: true
+           authkey: ${{ secrets.TAILSCALE_SSH_AUTHKEY }}
+           slackChannel: ${{ secrets.SLACK_CIFEEDBACK_CHANNEL }}
+           slackToken: ${{ secrets.SLACK_CIFEEDBACK_BOT_TOKEN }}
