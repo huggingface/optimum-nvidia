@@ -134,3 +134,20 @@ def test_optimum_export_with_quantization(
         # Prune the cache
         default_dest = Workspace.from_hub_cache(model_id, device_name)
         shutil.rmtree(default_dest.root)
+
+
+def test_optimum_export_with_quantization_no_target_recipe(
+    script_runner: "ScriptRunner",
+):
+    cwd = Path(os.path.abspath(__file__)).parent
+    recipe_path = cwd.parent / "fixtures" / "qawq_recipe_no_target_recipe.py"
+
+    model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+
+    with TemporaryDirectory() as dest:
+        default_dest = Path(dest)
+        out = script_runner.run(
+            f"optimum-cli export trtllm --quantization {recipe_path} --destination {default_dest} {model_id}",
+            shell=True,
+        )
+        assert not out.success

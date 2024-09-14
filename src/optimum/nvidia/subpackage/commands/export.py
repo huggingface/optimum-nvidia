@@ -63,9 +63,16 @@ class TrtLlmExportCommand(BaseOptimumCLICommand):
             tokenizer = AutoTokenizer.from_pretrained(args.model)
             import_source_file(args.quantization, "recipe")
 
-            from recipe import TARGET_QUANTIZATION_RECIPE
+            try:
+                from recipe import TARGET_QUANTIZATION_RECIPE
 
-            qconfig = TARGET_QUANTIZATION_RECIPE(tokenizer)
+                qconfig = TARGET_QUANTIZATION_RECIPE(tokenizer)
+            except ImportError:
+                raise ModuleNotFoundError(
+                    f"Global variable 'TARGET_QUANTIZATION_RECIPE' was not found in {args.quantization}. "
+                    "This is required to automatically detect and allocate the right recipe for quantization."
+                )
+
         else:
             qconfig = None
 
