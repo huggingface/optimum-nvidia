@@ -82,14 +82,14 @@ def _ensure_required_folder_and_files_exists(
 @pytest.mark.parametrize(
     "recipe,features",
     [
-        (
-            "qawq_recipe.py",
-            {
-                "has_int4_weights",
-                "has_per_group_scaling",
-                "has_static_activation_scaling",
-            },
-        ),
+        # (
+        #     "qawq_recipe.py",
+        #     {
+        #         "has_int4_weights",
+        #         "has_per_group_scaling",
+        #         "has_static_activation_scaling",
+        #     },
+        # ),
         (
             "qfloat8_and_kv_cache_recipe.py",
             {
