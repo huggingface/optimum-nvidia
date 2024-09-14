@@ -8,7 +8,11 @@ import pytest
 from tensorrt_llm.bindings import GptJsonConfig
 
 from optimum.nvidia.export import Workspace
-from optimum.nvidia.utils.nvml import get_device_name, is_post_hopper, has_float8_support
+from optimum.nvidia.utils.nvml import (
+    get_device_name,
+    has_float8_support,
+)
+
 
 if TYPE_CHECKING:
     from pytest_console_scripts import ScriptRunner
