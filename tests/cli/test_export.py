@@ -103,7 +103,7 @@ def _ensure_required_folder_and_files_exists(
 def test_optimum_export_with_quantization(
     script_runner: "ScriptRunner", recipe: str, features: Iterable[str]
 ) -> None:
-    if recipe == "qfloat8_and_kv_cache_recipe" and not has_float8_support():
+    if "float8" in recipe and not has_float8_support():
         pytest.skip("float8 is not supported on this platform")
 
     cwd = Path(os.path.abspath(__file__)).parent
