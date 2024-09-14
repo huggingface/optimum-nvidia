@@ -43,12 +43,14 @@ def common_trtllm_export_args(parser: "ArgumentParser"):
         help='Maximum number of sampling paths ("beam") to evaluate when decoding new a token. Default to 1.',
     )
     optional_group.add_argument(
+        "-q", "--quantization", type=str, help="Path to a quantization recipe file."
+    )
+    optional_group.add_argument(
         "--destination",
         type=str,
         default=None,
         help="Folder where the resulting exported engines will be stored. Default to Hugging Face Hub cache.",
     )
-
     optional_group.add_argument(
         "--push-to-hub", type=str, help="Repository to push generated engines to."
     )

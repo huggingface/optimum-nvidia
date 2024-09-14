@@ -1,7 +1,7 @@
 import sys
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, Union
 
-from transformers import AutoConfig
+from transformers import AutoConfig, AutoTokenizer
 
 from optimum.commands import optimum_cli_subcommand
 from optimum.commands.base import BaseOptimumCLICommand, CommandInfo
@@ -12,6 +12,19 @@ from optimum.nvidia.export.cli import common_trtllm_export_args
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser, Namespace, _SubParsersAction
+    from pathlib import Path
+
+
+OPTIMUM_NVIDIA_CLI_QUANTIZATION_TARGET_REF = "TARGET_QUANTIZATION_RECIPE"
+
+
+def import_source_file(fname: Union[str, "Path"], modname: str):
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(modname, fname)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[modname] = module
+    spec.loader.exec_module(module)
 
 
 @optimum_cli_subcommand(ExportCommand)
@@ -45,11 +58,33 @@ class TrtLlmExportCommand(BaseOptimumCLICommand):
         # Retrieve args from CLI
         args = self.args
 
+        # Do we have quantization?
+        if args.quantization:
+            tokenizer = AutoTokenizer.from_pretrained(args.model)
+            import_source_file(args.quantization, "recipe")
+
+            try:
+                from recipe import TARGET_QUANTIZATION_RECIPE
+
+                qconfig = TARGET_QUANTIZATION_RECIPE(tokenizer)
+            except ImportError:
+                raise ModuleNotFoundError(
+                    f"Global variable 'TARGET_QUANTIZATION_RECIPE' was not found in {args.quantization}. "
+                    "This is required to automatically detect and allocate the right recipe for quantization."
+                )
+
+        else:
+            qconfig = None
+
         # Allocate model and derivatives needed to export
         config = AutoConfig.from_pretrained(args.model)
         export = ExportConfig.from_config(config, args.max_batch_size)
         model = AutoModelForCausalLM.from_pretrained(
-            args.model, export_config=export, export_only=True
+            args.model,
+            export_config=export,
+            quantization_config=qconfig,
+            export_only=True,
+            force_export=True,
         )
 
         if args.destination:
