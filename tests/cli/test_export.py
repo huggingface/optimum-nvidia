@@ -8,8 +8,7 @@ import pytest
 from tensorrt_llm.bindings import GptJsonConfig
 
 from optimum.nvidia.export import Workspace
-from optimum.nvidia.utils.nvml import get_device_name
-
+from optimum.nvidia.utils.nvml import get_device_name, is_post_hopper, has_float8_support
 
 if TYPE_CHECKING:
     from pytest_console_scripts import ScriptRunner
@@ -98,12 +97,15 @@ def _ensure_required_folder_and_files_exists(
                 "has_kv_cache_quant",
                 "has_static_activation_scaling",
             },
-        ),  # Check with Nvidia why its not set
+        ),
     ],
 )
 def test_optimum_export_with_quantization(
     script_runner: "ScriptRunner", recipe: str, features: Iterable[str]
 ) -> None:
+    if recipe == "qfloat8_and_kv_cache_recipe" and not has_float8_support():
+        pytest.skip("float8 is not supported on this platform")
+
     cwd = Path(os.path.abspath(__file__)).parent
     recipe_path = cwd.parent / "fixtures" / recipe
 
