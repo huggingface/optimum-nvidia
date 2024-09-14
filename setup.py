@@ -33,7 +33,6 @@ INSTALL_REQUIRES = [
     "hf-transfer==0.1.6",
     "mpmath == 1.3.0",
     "numpy >= 1.26.0",
-    "nvidia-modelopt[all]~=0.17.0",
     "onnx >= 1.12.0",
     "optimum >= 1.21.0",
     "setuptools",
