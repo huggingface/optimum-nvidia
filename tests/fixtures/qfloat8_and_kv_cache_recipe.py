@@ -40,7 +40,7 @@ class CiC4NewModelOptRecipe(ModelOptRecipe):
         encodings = self._tokenizer(
             data[indexes]["text"],
             truncation=True,
-            max_length=2048,
+            max_length=256,
             return_attention_mask=False,
         )
 
