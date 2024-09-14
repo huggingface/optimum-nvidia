@@ -77,6 +77,7 @@ class TrtLlmExportCommand(BaseOptimumCLICommand):
             export_config=export,
             quantization_config=qconfig,
             export_only=True,
+            force_export=True,
         )
 
         if args.destination:
