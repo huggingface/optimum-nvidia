@@ -16,7 +16,7 @@ import re
 from abc import ABCMeta, abstractmethod
 from logging import getLogger
 from os import PathLike, scandir, symlink
-from os.path import join
+from os.path import join as fjoin, exists as fexists
 from pathlib import Path
 from shutil import copyfile, copytree
 from typing import (
@@ -299,8 +299,8 @@ class HuggingFaceHubModel(
             )
 
             # This is required to complain with binding license for derivative work
-            if join(original_checkpoints_path_for_conversion, FILE_LICENSE_NAME):
-                licence_path = join(
+            if fexists(fjoin(original_checkpoints_path_for_conversion, FILE_LICENSE_NAME)):
+                licence_path = fjoin(
                     original_checkpoints_path_for_conversion, FILE_LICENSE_NAME
                 )
             else:
