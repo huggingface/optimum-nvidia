@@ -424,12 +424,15 @@ class HuggingFaceHubModel(
 
         for file in dst_files:
             try:
-                # Need target_is_directory on Windows
-                # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
-                # Falling back to copytree in this case
-                symlink(
-                    file, save_directory.joinpath(file.relative_to(self._engines_path.parent))
-                )
+                # Ensure target folder exists anyhow
+                save_path = save_directory.joinpath(file.relative_to(self._engines_path.parent))
+                save_path.mkdir(parents=True, exist_ok=True)
+
+                if not save_path.exists():
+                    # Need target_is_directory on Windows
+                    # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
+                    # Falling back to copytree in this case
+                    symlink(file, save_path)
             except OSError as ose:
                 LOGGER.error(
                     f"Failed to create symlink from current engine folder {self._engines_path.parent} to {save_directory}. "
