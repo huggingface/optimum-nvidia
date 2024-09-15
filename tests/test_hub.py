@@ -105,59 +105,59 @@ def test_save_engine_locally_and_reload(model_id: str):
             _reload()
 
 
-# @pytest.mark.parametrize(
-#     "type",
-#     (
-#         ("llama", "LlamaForCausalLM"),
-#         ("gemma", "GemmaForCausalLM"),
-#         ("mistral", "MistralForCausalLM"),
-#         ("mixtral", "MixtralForCausalLM"),
-#     ),
-# )
-# def test_model_type_from_known_config(type: Tuple[str, str]):
-#     transformers_type, trtllm_type = type
-#
-#     # transformers config
-#     transformers_config = {"model_type": transformers_type}
-#     assert model_type_from_known_config(transformers_config) == transformers_type
-#
-#     # trtllm engine config
-#     tensorrt_llm_config = {"pretrained_config": {"architecture": trtllm_type}}
-#     assert model_type_from_known_config(tensorrt_llm_config) == transformers_type
-#
-#
-# def test_model_type_from_known_config_fail():
-#     assert model_type_from_known_config({"": ""}) is None
-#
-#     with pytest.raises(RuntimeError):
-#         model_type_from_known_config(
-#             {"pretrained_config": {"architecture": "_LlamaForCausaLM"}}
-#         )
-#
-#     with pytest.raises(RuntimeError):
-#         model_type_from_known_config(
-#             {"pretrained_config": {"architecture": "_llamaForCausaLM"}}
-#         )
-#
-#     with pytest.raises(RuntimeError):
-#         model_type_from_known_config(
-#             {"pretrained_config": {"architecture": "llama_ForCausaLM"}}
-#         )
-#
-#     with pytest.raises(RuntimeError):
-#         model_type_from_known_config(
-#             {"pretrained_config": {"architecture": "_lLamaForCausaLM"}}
-#         )
-#
-#     with pytest.raises(RuntimeError):
-#         model_type_from_known_config(
-#             {"pretrained_config": {"architecture": "llamaforcausalm"}}
-#         )
-#
-#     with pytest.raises(RuntimeError):
-#         model_type_from_known_config(
-#             {"pretrained_config": {"architecture": "123llamaforcausalm"}}
-#         )
-#         model_type_from_known_config(
-#             {"pretrained_config": {"architecture": "llama123forcausalm"}}
-#         )
+@pytest.mark.parametrize(
+    "type",
+    (
+        ("llama", "LlamaForCausalLM"),
+        ("gemma", "GemmaForCausalLM"),
+        ("mistral", "MistralForCausalLM"),
+        ("mixtral", "MixtralForCausalLM"),
+    ),
+)
+def test_model_type_from_known_config(type: Tuple[str, str]):
+    transformers_type, trtllm_type = type
+
+    # transformers config
+    transformers_config = {"model_type": transformers_type}
+    assert model_type_from_known_config(transformers_config) == transformers_type
+
+    # trtllm engine config
+    tensorrt_llm_config = {"pretrained_config": {"architecture": trtllm_type}}
+    assert model_type_from_known_config(tensorrt_llm_config) == transformers_type
+
+
+def test_model_type_from_known_config_fail():
+    assert model_type_from_known_config({"": ""}) is None
+
+    with pytest.raises(RuntimeError):
+        model_type_from_known_config(
+            {"pretrained_config": {"architecture": "_LlamaForCausaLM"}}
+        )
+
+    with pytest.raises(RuntimeError):
+        model_type_from_known_config(
+            {"pretrained_config": {"architecture": "_llamaForCausaLM"}}
+        )
+
+    with pytest.raises(RuntimeError):
+        model_type_from_known_config(
+            {"pretrained_config": {"architecture": "llama_ForCausaLM"}}
+        )
+
+    with pytest.raises(RuntimeError):
+        model_type_from_known_config(
+            {"pretrained_config": {"architecture": "_lLamaForCausaLM"}}
+        )
+
+    with pytest.raises(RuntimeError):
+        model_type_from_known_config(
+            {"pretrained_config": {"architecture": "llamaforcausalm"}}
+        )
+
+    with pytest.raises(RuntimeError):
+        model_type_from_known_config(
+            {"pretrained_config": {"architecture": "123llamaforcausalm"}}
+        )
+        model_type_from_known_config(
+            {"pretrained_config": {"architecture": "llama123forcausalm"}}
+        )
