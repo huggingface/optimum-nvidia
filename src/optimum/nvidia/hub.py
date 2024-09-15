@@ -16,6 +16,7 @@ import re
 from abc import ABCMeta, abstractmethod
 from logging import getLogger
 from os import PathLike, scandir, symlink
+from os.path import join
 from pathlib import Path
 from shutil import copyfile, copytree
 from typing import (
@@ -298,10 +299,8 @@ class HuggingFaceHubModel(
             )
 
             # This is required to complain with binding license for derivative work
-            if original_checkpoints_path_for_conversion / FILE_LICENSE_NAME:
-                licence_path = original_checkpoints_path_for_conversion.joinpath(
-                    FILE_LICENSE_NAME
-                )
+            if join(original_checkpoints_path_for_conversion, FILE_LICENSE_NAME):
+                licence_path = join(original_checkpoints_path_for_conversion, FILE_LICENSE_NAME)
             else:
                 licence_path = None
 
