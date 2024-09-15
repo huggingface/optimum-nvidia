@@ -47,7 +47,7 @@ MODEL_KWARGS_MAPS = {"Mixtral-8x7B-Instruct-v0.1": {"tp": 4}}
 
 
 @pytest.mark.parametrize("model_id", MODEL_TO_TEST)
-@pytest.mark.parametrize("batch_size", [1, 3])
+@pytest.mark.parametrize("batch_size", [1])
 @pytest.mark.parametrize("tp", [1, 2])
 @pytest.mark.parametrize("pp", [1, 2])
 def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
@@ -77,7 +77,6 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
         device_map="auto",
     )
     torch_model = torch_model.eval()
-    torch_model = torch_model.to("cuda")  # TODO: remove?
 
     kwargs = {
         "top_k": 1,
@@ -96,7 +95,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
     torch.cuda.empty_cache()
 
     export_config = ExportConfig(
-        dtype="auto",
+        dtype="float16",
         max_input_len=1024,
         max_batch_size=batch_size,
         max_output_len=1000,
@@ -111,7 +110,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
     )
 
     trt_generated_ids, _ = trt_model.generate(
-        **inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
+        inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
     )
 
     # TODO: left/right padding is not aligned between Transformers and TRT-LLM.

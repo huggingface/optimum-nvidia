@@ -14,15 +14,10 @@ from tensorrt_llm.executor import (
     GenerationResult,
 )
 from tensorrt_llm.hlapi import SamplingParams
-
+from transformers import GenerationConfig
 from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.utils.nvml import is_post_ampere
 
-
-if TYPE_CHECKING:
-    from transformers import (
-        GenerationConfig,
-    )
 
 LOGGER = getLogger(__name__)
 
@@ -102,7 +97,11 @@ class InferenceRuntimeBase:
         self,
         inputs: Union[List[int], "torch.IntTensor"],
         generation_config: Optional["GenerationConfig"] = None,
+        **kwargs
     ):
+        if generation_config is None:
+            generation_config = GenerationConfig(**kwargs)
+
         # Retrieve the sampling config
         sampling = (
             convert_generation_config(generation_config)
@@ -122,7 +121,11 @@ class InferenceRuntimeBase:
         self,
         inputs: Union[List[int], "torch.IntTensor"],
         generation_config: Optional["GenerationConfig"] = None,
+        **kwargs
     ) -> List[int]:
+        if generation_config is None:
+            generation_config = GenerationConfig(**kwargs)
+
         # Retrieve the sampling config
         sampling = (
             convert_generation_config(generation_config)
