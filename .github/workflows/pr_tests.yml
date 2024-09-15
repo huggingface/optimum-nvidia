@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - name: GPU-enabled Optimum-Nvidia Test Suite
+          - name: Optimum-Nvidia Test Suite
             image: nvidia/cuda:12.5.1-devel-ubuntu22.04
         gpu_target: ["aws-g6-12xlarge-cache", "aws-g5-12xlarge-cache"]
 
@@ -69,14 +69,14 @@ jobs:
           
       - name: Run optimum-nvidia test-suite
         run: |
-          pytest -s -vvvvv -n 4 -p no:warnings -o log_cli=true --ignore=tests/integration tests/
+          pytest -s -v -p no:warnings -o log_cli=true --ignore=tests/cli tests/
 
   run_optimum_cli_tests:
     strategy:
       fail-fast: false
       matrix:
         config:
-          - name: GPU-enabled Optimum-Nvidia CLI Test Suite
+          - name: Optimum-Nvidia CLI Test Suite
             image: nvidia/cuda:12.5.1-devel-ubuntu22.04
         gpu_target: ["aws-g6-12xlarge-cache", "aws-g5-12xlarge-cache"]
 

@@ -16,6 +16,8 @@ import re
 from abc import ABCMeta, abstractmethod
 from logging import getLogger
 from os import PathLike, scandir, symlink
+from os.path import exists as fexists
+from os.path import join as fjoin
 from pathlib import Path
 from shutil import copyfile, copytree
 from typing import (
@@ -188,7 +190,7 @@ def from_ranked_hf_model(
 class HuggingFaceHubModel(
     ModelHubMixin,
     library_name=LIBRARY_NAME,
-    languages=["python", "c++"],
+    language=["python", "c++"],
     tags=["optimum-nvidia", "trtllm"],
     repo_url="https://github.com/huggingface/optimum-nvidia",
     docs_url="https://huggingface.co/docs/optimum/nvidia_overview",
@@ -298,9 +300,11 @@ class HuggingFaceHubModel(
             )
 
             # This is required to complain with binding license for derivative work
-            if FILE_LICENSE_NAME in original_checkpoints_path_for_conversion:
-                licence_path = original_checkpoints_path_for_conversion.joinpath(
-                    FILE_LICENSE_NAME
+            if fexists(
+                fjoin(original_checkpoints_path_for_conversion, FILE_LICENSE_NAME)
+            ):
+                licence_path = fjoin(
+                    original_checkpoints_path_for_conversion, FILE_LICENSE_NAME
                 )
             else:
                 licence_path = None
@@ -420,12 +424,17 @@ class HuggingFaceHubModel(
 
         for file in dst_files:
             try:
-                # Need target_is_directory on Windows
-                # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
-                # Falling back to copytree in this case
-                symlink(
-                    file, save_directory.joinpath(file.relative_to(self._engines_path))
+                # Ensure target folder exists anyhow
+                save_path = save_directory.joinpath(
+                    file.relative_to(self._engines_path.parent)
                 )
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+
+                if not save_path.exists():
+                    # Need target_is_directory on Windows
+                    # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
+                    # Falling back to copytree in this case
+                    symlink(file, save_path)
             except OSError as ose:
                 LOGGER.error(
                     f"Failed to create symlink from current engine folder {self._engines_path.parent} to {save_directory}. "
@@ -433,7 +442,9 @@ class HuggingFaceHubModel(
                     exc_info=ose,
                 )
 
-                dst = save_directory.joinpath(file.relative_to(self._engines_path))
+                dst = save_directory.joinpath(
+                    file.relative_to(self._engines_path.parent)
+                )
                 if file.is_dir():
                     copytree(file, dst, symlinks=True)
                 elif file:

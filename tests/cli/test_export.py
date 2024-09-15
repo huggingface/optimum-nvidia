@@ -20,16 +20,19 @@ if TYPE_CHECKING:
 
 def _ensure_required_folder_and_files_exists(
     root: Union[Path, Workspace], device_name: Optional[str] = None
-):
+) -> Workspace:
     if isinstance(root, Path):
-        engines_path = root.joinpath(device_name)
-    else:
-        engines_path = root.engines_path
+        device_path = root.joinpath(device_name)
+        root = Workspace(device_path)
+
+    engines_path = root.engines_path
 
     assert engines_path.exists()
     assert (engines_path / "config.json").exists()
     assert (engines_path / "generation_config.json").exists()
     assert (engines_path / "rank0.engine").exists()
+
+    return root
 
 
 def test_optimum_export_default(script_runner: "ScriptRunner") -> None:
@@ -41,7 +44,7 @@ def test_optimum_export_default(script_runner: "ScriptRunner") -> None:
         out = script_runner.run(f"optimum-cli export trtllm {model_id}", shell=True)
         assert out.success
 
-        _ensure_required_folder_and_files_exists(default_dest)
+        _ = _ensure_required_folder_and_files_exists(default_dest)
 
         exported_config = GptJsonConfig.parse_file(
             default_dest.engines_path / "config.json"
@@ -68,9 +71,11 @@ def test_optimum_export_custom_destination(script_runner: "ScriptRunner") -> Non
             )
             assert out.success
 
-            _ensure_required_folder_and_files_exists(default_dest, device_name)
+            workspace = _ensure_required_folder_and_files_exists(
+                default_dest, device_name
+            )
             exported_config = GptJsonConfig.parse_file(
-                default_dest / device_name / "config.json"
+                workspace.engines_path / "config.json"
             )
             assert exported_config.model_config.max_batch_size == 1
             assert exported_config.model_config.max_beam_width == 1
@@ -125,9 +130,11 @@ def test_optimum_export_with_quantization(
             )
             assert out.success
 
-            _ensure_required_folder_and_files_exists(default_dest, device_name)
+            workspace = _ensure_required_folder_and_files_exists(
+                default_dest, device_name
+            )
             exported_config = GptJsonConfig.parse_file(
-                default_dest / device_name / "config.json"
+                workspace.engines_path / "config.json"
             )
             assert exported_config.model_config.max_batch_size == 1
             assert exported_config.model_config.max_beam_width == 1
