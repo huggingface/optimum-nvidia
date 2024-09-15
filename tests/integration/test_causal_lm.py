@@ -17,21 +17,15 @@ import gc
 
 import pytest
 import torch
-from numpy import dtype
 from transformers import AutoModelForCausalLM as TransformersAutoModelForCausalLM
 from transformers import AutoTokenizer
-from transformers import pipeline as transformers_pipeline
-
-from optimum.nvidia.export.config import sharded
-from optimum.nvidia.utils.nvml import get_device_count
 from utils_testing import clean_cached_engines_for_model
 
 from optimum.nvidia import AutoModelForCausalLM, ExportConfig
-from optimum.nvidia.pipelines import pipeline
+from optimum.nvidia.export.config import sharded
+from optimum.nvidia.utils.nvml import get_device_count
 from optimum.nvidia.utils.tests import (
     assert_generated_partially_match,
-    assert_generated_text_partially_match,
-    requires_multi_gpu,
 )
 
 
@@ -99,7 +93,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
         max_input_len=1024,
         max_batch_size=batch_size,
         max_output_len=1000,
-        max_num_tokens=max_new_tokens
+        max_num_tokens=max_new_tokens,
     )
     export_config = sharded(export_config, tp, pp)
 

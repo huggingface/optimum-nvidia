@@ -4,7 +4,7 @@ import math
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 import torch
 from tensorrt_llm.bindings.executor import ExecutorConfig, KvCacheConfig
@@ -15,6 +15,7 @@ from tensorrt_llm.executor import (
 )
 from tensorrt_llm.hlapi import SamplingParams
 from transformers import GenerationConfig
+
 from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.utils.nvml import is_post_ampere
 
@@ -97,7 +98,7 @@ class InferenceRuntimeBase:
         self,
         inputs: Union[List[int], "torch.IntTensor"],
         generation_config: Optional["GenerationConfig"] = None,
-        **kwargs
+        **kwargs,
     ):
         if generation_config is None:
             generation_config = GenerationConfig(**kwargs)
@@ -121,7 +122,7 @@ class InferenceRuntimeBase:
         self,
         inputs: Union[List[int], "torch.IntTensor"],
         generation_config: Optional["GenerationConfig"] = None,
-        **kwargs
+        **kwargs,
     ) -> List[int]:
         if generation_config is None:
             generation_config = GenerationConfig(**kwargs)

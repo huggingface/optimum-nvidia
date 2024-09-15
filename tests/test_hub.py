@@ -11,7 +11,6 @@ from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 import optimum.nvidia.hub
 from optimum.nvidia import AutoModelForCausalLM
 from optimum.nvidia.export import Workspace
-from optimum.nvidia.hub import folder_list_checkpoints, folder_list_engines
 from optimum.nvidia.utils import model_type_from_known_config
 from optimum.nvidia.utils.nvml import get_device_name
 
@@ -68,7 +67,6 @@ def test_save_engine_locally_and_reload(model_id: str):
             device_name = get_device_name(0)[-1]
             trtllm_out = Path(trtllm_out)
 
-
             def _save():
                 config = HfAutoConfig.from_pretrained(model_id)
                 config.num_hidden_layers = 1
@@ -85,7 +83,9 @@ def test_save_engine_locally_and_reload(model_id: str):
 
                 assert trtllm_out.exists()
                 assert (trtllm_out / device_name / "engines" / "config.json").exists()
-                assert (trtllm_out / device_name / "engines" / "generation_config.json").exists()
+                assert (
+                    trtllm_out / device_name / "engines" / "generation_config.json"
+                ).exists()
                 assert (trtllm_out / device_name / "engines" / "rank0.engine").exists()
 
             def _reload():
