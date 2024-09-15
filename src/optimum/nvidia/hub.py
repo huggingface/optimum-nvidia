@@ -300,7 +300,9 @@ class HuggingFaceHubModel(
 
             # This is required to complain with binding license for derivative work
             if join(original_checkpoints_path_for_conversion, FILE_LICENSE_NAME):
-                licence_path = join(original_checkpoints_path_for_conversion, FILE_LICENSE_NAME)
+                licence_path = join(
+                    original_checkpoints_path_for_conversion, FILE_LICENSE_NAME
+                )
             else:
                 licence_path = None
 
