@@ -29,7 +29,7 @@ except Exception as error:
 INSTALL_REQUIRES = [
     "accelerate == 0.25",
     "datasets >= 2.14",
-    "huggingface-hub >= 0.23",
+    "huggingface-hub >= 0.24",
     "hf-transfer==0.1.6",
     "mpmath == 1.3.0",
     "numpy >= 1.26.0",
