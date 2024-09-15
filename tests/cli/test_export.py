@@ -32,54 +32,54 @@ def _ensure_required_folder_and_files_exists(
     assert (engines_path / "rank0.engine").exists()
 
 
-# def test_optimum_export_default(script_runner: "ScriptRunner") -> None:
-#     model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
-#     device_id = get_device_name(0)[-1]
-#     default_dest = Workspace.from_hub_cache(model_id, device_id)
-#
-#     try:
-#         out = script_runner.run(f"optimum-cli export trtllm {model_id}", shell=True)
-#         assert out.success
-#
-#         _ensure_required_folder_and_files_exists(default_dest)
-#
-#         exported_config = GptJsonConfig.parse_file(
-#             default_dest.engines_path / "config.json"
-#         )
-#         assert exported_config.model_config.max_batch_size == 1
-#         assert exported_config.model_config.max_beam_width == 1
-#         assert exported_config.model_config.max_input_len >= 1
-#
-#     finally:
-#         # Clean up
-#         shutil.rmtree(default_dest.root)
-#
-#
-# def test_optimum_export_custom_destination(script_runner: "ScriptRunner") -> None:
-#     model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
-#     device_name = get_device_name(0)[-1]
-#
-#     try:
-#         with TemporaryDirectory() as dest:
-#             default_dest = Path(dest)
-#             out = script_runner.run(
-#                 f"optimum-cli export trtllm --destination {default_dest} {model_id}",
-#                 shell=True,
-#             )
-#             assert out.success
-#
-#             _ensure_required_folder_and_files_exists(default_dest, device_name)
-#             exported_config = GptJsonConfig.parse_file(
-#                 default_dest / device_name / "config.json"
-#             )
-#             assert exported_config.model_config.max_batch_size == 1
-#             assert exported_config.model_config.max_beam_width == 1
-#             assert exported_config.model_config.max_input_len >= 1
-#
-#     finally:
-#         # Prune the cache
-#         default_dest = Workspace.from_hub_cache(model_id, device_name)
-#         shutil.rmtree(default_dest.root)
+def test_optimum_export_default(script_runner: "ScriptRunner") -> None:
+    model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+    device_id = get_device_name(0)[-1]
+    default_dest = Workspace.from_hub_cache(model_id, device_id)
+
+    try:
+        out = script_runner.run(f"optimum-cli export trtllm {model_id}", shell=True)
+        assert out.success
+
+        _ensure_required_folder_and_files_exists(default_dest)
+
+        exported_config = GptJsonConfig.parse_file(
+            default_dest.engines_path / "config.json"
+        )
+        assert exported_config.model_config.max_batch_size == 1
+        assert exported_config.model_config.max_beam_width == 1
+        assert exported_config.model_config.max_input_len >= 1
+
+    finally:
+        # Clean up
+        shutil.rmtree(default_dest.root)
+
+
+def test_optimum_export_custom_destination(script_runner: "ScriptRunner") -> None:
+    model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+    device_name = get_device_name(0)[-1]
+
+    try:
+        with TemporaryDirectory() as dest:
+            default_dest = Path(dest)
+            out = script_runner.run(
+                f"optimum-cli export trtllm --destination {default_dest} {model_id}",
+                shell=True,
+            )
+            assert out.success
+
+            _ensure_required_folder_and_files_exists(default_dest, device_name)
+            exported_config = GptJsonConfig.parse_file(
+                default_dest / device_name / "config.json"
+            )
+            assert exported_config.model_config.max_batch_size == 1
+            assert exported_config.model_config.max_beam_width == 1
+            assert exported_config.model_config.max_input_len >= 1
+
+    finally:
+        # Prune the cache
+        default_dest = Workspace.from_hub_cache(model_id, device_name)
+        shutil.rmtree(default_dest.root)
 
 
 @pytest.mark.parametrize(
