@@ -69,7 +69,7 @@ jobs:
           
       - name: Run optimum-nvidia test-suite
         run: |
-          pytest -s -vvvvv -n 4 -p no:warnings -o log_cli=true --ignore=tests/integration tests/
+          pytest -s -vvvvv -n 4 -p no:warnings -o log_cli=true --ignore=tests/cli tests/
 
   run_optimum_cli_tests:
     strategy:
