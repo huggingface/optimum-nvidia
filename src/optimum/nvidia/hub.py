@@ -428,7 +428,7 @@ class HuggingFaceHubModel(
                 # Windows10 needs elevated privilege for symlink which will raise OSError if not the case
                 # Falling back to copytree in this case
                 symlink(
-                    file, save_directory.joinpath(file.relative_to(self._engines_path))
+                    file, save_directory.joinpath(file.relative_to(self._engines_path.parent))
                 )
             except OSError as ose:
                 LOGGER.error(
@@ -437,7 +437,7 @@ class HuggingFaceHubModel(
                     exc_info=ose,
                 )
 
-                dst = save_directory.joinpath(file.relative_to(self._engines_path))
+                dst = save_directory.joinpath(file.relative_to(self._engines_path.parent))
                 if file.is_dir():
                     copytree(file, dst, symlinks=True)
                 elif file:
