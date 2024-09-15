@@ -298,7 +298,7 @@ class HuggingFaceHubModel(
             )
 
             # This is required to complain with binding license for derivative work
-            if  original_checkpoints_path_for_conversion / FILE_LICENSE_NAME:
+            if original_checkpoints_path_for_conversion / FILE_LICENSE_NAME:
                 licence_path = original_checkpoints_path_for_conversion.joinpath(
                     FILE_LICENSE_NAME
                 )
