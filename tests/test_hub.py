@@ -80,7 +80,9 @@ def test_save_engine_locally_and_reload(model_id: str):
                 torch.cuda.empty_cache()
 
                 assert trtllm_out.exists()
-                assert (trtllm_out / "rank0.engine").exists()
+                assert (trtllm_out / "engines" / "config.json").exists()
+                assert (trtllm_out / "engines" / "generation_config.json").exists()
+                assert (trtllm_out / "engines" / "rank0.engine").exists()
 
             def _reload():
                 with mock.patch("optimum.nvidia.export.TensorRTModelConverter.build"):
