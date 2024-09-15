@@ -425,8 +425,10 @@ class HuggingFaceHubModel(
         for file in dst_files:
             try:
                 # Ensure target folder exists anyhow
-                save_path = save_directory.joinpath(file.relative_to(self._engines_path.parent))
-                save_path.mkdir(parents=True, exist_ok=True)
+                save_path = save_directory.joinpath(
+                    file.relative_to(self._engines_path.parent)
+                )
+                save_path.parent.mkdir(parents=True, exist_ok=True)
 
                 if not save_path.exists():
                     # Need target_is_directory on Windows
@@ -440,7 +442,9 @@ class HuggingFaceHubModel(
                     exc_info=ose,
                 )
 
-                dst = save_directory.joinpath(file.relative_to(self._engines_path.parent))
+                dst = save_directory.joinpath(
+                    file.relative_to(self._engines_path.parent)
+                )
                 if file.is_dir():
                     copytree(file, dst, symlinks=True)
                 elif file:
