@@ -99,7 +99,7 @@ class InferenceRuntimeBase:
         inputs: Union[List[int], "torch.IntTensor"],
         generation_config: Optional["GenerationConfig"] = None,
         **kwargs,
-    ):
+    ) -> torch.IntTensor:
         if generation_config is None:
             generation_config = GenerationConfig(**kwargs)
 
@@ -110,20 +110,20 @@ class InferenceRuntimeBase:
             else self._sampling_config
         )
 
-        if isinstance(inputs, torch.Tensor):
-            inputs = inputs.tolist()
+        # if isinstance(inputs, torch.Tensor):
+        #     inputs = inputs.tolist()
 
         result = self._executor.generate(inputs, sampling_params=sampling)
 
         # TODO: Fix this
-        return result[0].outputs[0].token_ids
+        return torch.tensor(result[0].outputs[0].token_ids, dtype=torch.uint32)
 
     async def agenerate(
         self,
         inputs: Union[List[int], "torch.IntTensor"],
         generation_config: Optional["GenerationConfig"] = None,
         **kwargs,
-    ) -> List[int]:
+    ) -> torch.IntTensor:
         if generation_config is None:
             generation_config = GenerationConfig(**kwargs)
 
@@ -134,8 +134,8 @@ class InferenceRuntimeBase:
             else self._sampling_config
         )
 
-        if isinstance(inputs, torch.Tensor):
-            inputs = inputs.tolist()
+        # if isinstance(inputs, torch.Tensor):
+        #     inputs = inputs.tolist()
 
         futures = self._executor.generate_async(
             inputs, streaming=False, sampling_params=sampling
