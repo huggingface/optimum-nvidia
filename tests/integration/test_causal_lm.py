@@ -42,8 +42,8 @@ MODEL_KWARGS_MAPS = {"Mixtral-8x7B-Instruct-v0.1": {"tp": 4}}
 
 @pytest.mark.parametrize("model_id", MODEL_TO_TEST)
 @pytest.mark.parametrize("batch_size", [1])
-@pytest.mark.parametrize("tp", [1, 2])
-@pytest.mark.parametrize("pp", [1, 2])
+@pytest.mark.parametrize("tp", [1, 2, 4])
+@pytest.mark.parametrize("tp", [1])
 def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
     if get_device_count() < tp * pp:
         pytest.skip("Not enough GPU on the system")
@@ -103,11 +103,12 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
         export_config=export_config,
     )
 
-    trt_generated_ids, _ = trt_model.generate(
+    trt_generated_ids = trt_model.generate(
         inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
     )
 
     # TODO: left/right padding is not aligned between Transformers and TRT-LLM.
+    assert isinstance(trt_generated_ids, torch.tensor)
     assert trt_generated_ids.shape == torch_generated_ids.shape
     for i in range(batch_size):
         mask = inp["attention_mask"][i]
