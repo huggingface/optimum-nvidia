@@ -46,6 +46,7 @@ def convert_generation_config(config: "GenerationConfig") -> "SamplingParams":
         else 1,
         min_length=config.min_length if config.min_length > 0 else 1,
         max_new_tokens=config.max_new_tokens,
+        max_tokens=config.max_new_tokens,
         return_generation_logits=config.output_logits,
         return_log_probs=not config.renormalize_logits,
     )
@@ -111,6 +112,8 @@ class InferenceRuntimeBase:
             if generation_config
             else self._sampling_config
         )
+
+        print(sampling)
 
         if isinstance(inputs, torch.Tensor):
             inputs = inputs.tolist()
