@@ -1,28 +1,26 @@
 import asyncio
 import json
 import math
+from copy import deepcopy
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 from tensorrt_llm.bindings.executor import ExecutorConfig, KvCacheConfig
-from tensorrt_llm.executor import (
-    GenerationExecutor,
-    GenerationRequest,
-    GenerationResult,
-)
-from tensorrt_llm.hlapi import SamplingParams
+
+# from tensorrt_llm.executor import (
+#     GenerationExecutor,
+#     GenerationRequest,
+#     GenerationResult,
+# )
+from tensorrt_llm.hlapi import LLM, SamplingParams
+from transformers import GenerationConfig
 
 from optimum.nvidia.hub import HuggingFaceHubModel
 from optimum.nvidia.utils.nvml import is_post_ampere
 
-
-if TYPE_CHECKING:
-    from transformers import (
-        GenerationConfig,
-    )
 
 LOGGER = getLogger(__name__)
 
@@ -34,8 +32,12 @@ def read_engine_config_file(path: Path) -> Dict[str, Any]:
 
 def convert_generation_config(config: "GenerationConfig") -> "SamplingParams":
     return SamplingParams(
-        end_id=config.eos_token_id,
-        pad_id=config.pad_token_id,
+        end_id=config.eos_token_id[-1]
+        if isinstance(config.eos_token_id, list)
+        else config.eos_token_id,
+        pad_id=config.pad_token_id[-1]
+        if isinstance(config.pad_token_id, list)
+        else config.pad_token_id,
         top_k=config.top_k if config.do_sample else 1,
         top_p=config.top_p,
         temperature=config.temperature,
@@ -48,6 +50,7 @@ def convert_generation_config(config: "GenerationConfig") -> "SamplingParams":
         else 1,
         min_length=config.min_length if config.min_length > 0 else 1,
         max_new_tokens=config.max_new_tokens,
+        max_tokens=config.max_new_tokens,
         return_generation_logits=config.output_logits,
         return_log_probs=not config.renormalize_logits,
     )
@@ -73,7 +76,13 @@ def default_executor_config(config: Dict[str, Any]) -> "ExecutorConfig":
 
 
 class InferenceRuntimeBase:
-    __slots__ = ("_config", "_executor", "_generation_config", "_sampling_config")
+    __slots__ = (
+        "_engines_path",
+        "_config",
+        "_executor",
+        "_generation_config",
+        "_sampling_config",
+    )
 
     def __init__(
         self,
@@ -82,27 +91,37 @@ class InferenceRuntimeBase:
         executor_config: Optional["ExecutorConfig"] = None,
         load_engines: bool = True,
     ):
-        engines_path = Path(engines_path)
+        self._engines_path = Path(engines_path)
 
-        if not engines_path.exists():
-            raise OSError(f"engine folder {engines_path} doesn't exist")
+        if not self._engines_path.exists():
+            raise OSError(f"engine folder {self._engines_path} doesn't exist")
 
-        self._config = read_engine_config_file(engines_path)
+        self._config = read_engine_config_file(self._engines_path)
         self._generation_config = generation_config
         self._sampling_config = convert_generation_config(generation_config)
 
         if load_engines:
-            self._executor = GenerationExecutor.create(
-                engine=engines_path,
-                executor_config=executor_config
-                or default_executor_config(self._config),
+            self._executor = LLM(
+                engines_path,
+                skip_tokenizer_init=True,
             )
 
     def generate(
         self,
         inputs: Union[List[int], "torch.IntTensor"],
         generation_config: Optional["GenerationConfig"] = None,
-    ):
+        **kwargs,
+    ) -> torch.IntTensor:
+        if not self._executor:
+            self._executor = LLM(
+                str(self._engines_path),
+                skip_tokenizer_init=True,
+            )
+
+        if generation_config is None and kwargs:
+            generation_config = deepcopy(self._generation_config)
+            generation_config.update(**kwargs)
+
         # Retrieve the sampling config
         sampling = (
             convert_generation_config(generation_config)
@@ -110,19 +129,35 @@ class InferenceRuntimeBase:
             else self._sampling_config
         )
 
+        print(sampling)
+
         if isinstance(inputs, torch.Tensor):
             inputs = inputs.tolist()
 
-        result = self._executor.generate(inputs, sampling_params=sampling)
+        results = self._executor.generate(inputs, sampling_params=sampling)
 
         # TODO: Fix this
-        return result[0].outputs[0].token_ids
+        return [
+            torch.tensor(result.outputs[0].token_ids, dtype=torch.uint32)
+            for result in results
+        ]
 
     async def agenerate(
         self,
         inputs: Union[List[int], "torch.IntTensor"],
         generation_config: Optional["GenerationConfig"] = None,
-    ) -> List[int]:
+        **kwargs,
+    ) -> torch.IntTensor:
+        if not self._executor:
+            self._executor = LLM(
+                str(self._engines_path),
+                skip_tokenizer_init=True,
+            )
+
+        if generation_config is None and kwargs:
+            generation_config = deepcopy(self._generation_config)
+            generation_config.update(**kwargs)
+
         # Retrieve the sampling config
         sampling = (
             convert_generation_config(generation_config)
@@ -136,29 +171,9 @@ class InferenceRuntimeBase:
         futures = self._executor.generate_async(
             inputs, streaming=False, sampling_params=sampling
         )
-        if isinstance(futures, GenerationRequest):
-            results = await futures.aresult()
-            return results.token_ids
-        else:
-            results = await asyncio.gather(*[f.aresult() for f in futures])
-            return [r.token_ids for r in results]
 
-
-class CausalLMOutput:
-    __slots__ = ("_results",)
-
-    def __init__(
-        self, results: Union["GenerationResult", Sequence["GenerationResult"]]
-    ):
-        self._results = results
-
-    @property
-    def logits(self):
-        return self._results.token_ids
-
-    @property
-    def loss(self) -> None:
-        return None
+        results = await asyncio.gather(*[f.aresult() for f in futures])
+        return [r.token_ids for r in results]
 
 
 class CausalLM(HuggingFaceHubModel, InferenceRuntimeBase):

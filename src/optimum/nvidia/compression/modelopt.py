@@ -98,7 +98,7 @@ class ModelOptQuantizer(HfQuantizer):
             if sconfig := self._recipe.config.sparsity:
                 device = model.device
                 model = mts.sparsify(
-                    model.cpu(),
+                    model,
                     sconfig,
                     {"data_loader": self._recipe.dataset, "collect_func": lambda x: x},
                 )
