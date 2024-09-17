@@ -5,17 +5,17 @@ from copy import deepcopy
 from logging import getLogger
 from os import PathLike
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Union
 
 import torch
 from tensorrt_llm.bindings.executor import ExecutorConfig, KvCacheConfig
+
 # from tensorrt_llm.executor import (
 #     GenerationExecutor,
 #     GenerationRequest,
 #     GenerationResult,
 # )
 from tensorrt_llm.hlapi import LLM, SamplingParams
-from torch.backends.quantized import engine
 from transformers import GenerationConfig
 
 from optimum.nvidia.hub import HuggingFaceHubModel
@@ -32,8 +32,12 @@ def read_engine_config_file(path: Path) -> Dict[str, Any]:
 
 def convert_generation_config(config: "GenerationConfig") -> "SamplingParams":
     return SamplingParams(
-        end_id=config.eos_token_id[-1] if isinstance(config.eos_token_id, list) else config.eos_token_id,
-        pad_id=config.pad_token_id[-1] if isinstance(config.pad_token_id, list) else config.pad_token_id,
+        end_id=config.eos_token_id[-1]
+        if isinstance(config.eos_token_id, list)
+        else config.eos_token_id,
+        pad_id=config.pad_token_id[-1]
+        if isinstance(config.pad_token_id, list)
+        else config.pad_token_id,
         top_k=config.top_k if config.do_sample else 1,
         top_p=config.top_p,
         temperature=config.temperature,
@@ -72,7 +76,13 @@ def default_executor_config(config: Dict[str, Any]) -> "ExecutorConfig":
 
 
 class InferenceRuntimeBase:
-    __slots__ = ("_engines_path", "_config", "_executor", "_generation_config", "_sampling_config")
+    __slots__ = (
+        "_engines_path",
+        "_config",
+        "_executor",
+        "_generation_config",
+        "_sampling_config",
+    )
 
     def __init__(
         self,
@@ -91,7 +101,10 @@ class InferenceRuntimeBase:
         self._sampling_config = convert_generation_config(generation_config)
 
         if load_engines:
-            self._executor = LLM(engines_path, skip_tokenizer_init=True, )
+            self._executor = LLM(
+                engines_path,
+                skip_tokenizer_init=True,
+            )
 
     def generate(
         self,
@@ -100,7 +113,10 @@ class InferenceRuntimeBase:
         **kwargs,
     ) -> torch.IntTensor:
         if not self._executor:
-            self._executor = LLM(str(self._engines_path), skip_tokenizer_init=True,)
+            self._executor = LLM(
+                str(self._engines_path),
+                skip_tokenizer_init=True,
+            )
 
         if generation_config is None and kwargs:
             generation_config = deepcopy(self._generation_config)
@@ -121,7 +137,10 @@ class InferenceRuntimeBase:
         results = self._executor.generate(inputs, sampling_params=sampling)
 
         # TODO: Fix this
-        return [torch.tensor(result.outputs[0].token_ids, dtype=torch.uint32) for result in results]
+        return [
+            torch.tensor(result.outputs[0].token_ids, dtype=torch.uint32)
+            for result in results
+        ]
 
     async def agenerate(
         self,
@@ -130,7 +149,10 @@ class InferenceRuntimeBase:
         **kwargs,
     ) -> torch.IntTensor:
         if not self._executor:
-            self._executor = LLM(str(self._engines_path), skip_tokenizer_init=True,)
+            self._executor = LLM(
+                str(self._engines_path),
+                skip_tokenizer_init=True,
+            )
 
         if generation_config is None and kwargs:
             generation_config = deepcopy(self._generation_config)
@@ -152,23 +174,6 @@ class InferenceRuntimeBase:
 
         results = await asyncio.gather(*[f.aresult() for f in futures])
         return [r.token_ids for r in results]
-
-
-class CausalLMOutput:
-    __slots__ = ("_results",)
-
-    def __init__(
-        self, results: Union["GenerationResult", Sequence["GenerationResult"]]
-    ):
-        self._results = results
-
-    @property
-    def logits(self):
-        return self._results.token_ids
-
-    @property
-    def loss(self) -> None:
-        return None
 
 
 class CausalLM(HuggingFaceHubModel, InferenceRuntimeBase):
