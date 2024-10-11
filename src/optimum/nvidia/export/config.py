@@ -14,6 +14,7 @@ from transformers import AutoConfig
 from optimum.nvidia.lang import DataType
 from optimum.utils import NormalizedConfig
 
+from optimum.nvidia.utils.nvml import is_post_hopper
 
 if TYPE_CHECKING:
     from transformers import PretrainedConfig
@@ -81,13 +82,13 @@ class ExportConfig:
 
         if self.max_num_tokens == -1:
             if self.enabled_chunked_context:
-                # Should be N * tokens_per_block
-                self.max_num_tokens = 128  # hardcode for now
+                # Should be N * tokens_per_block (8192 is the default)
+                self.max_num_tokens = 8192   # hardcode for now
                 warn(
                     f"max_num_tokens set to {self.max_num_tokens} with chunked context enabled might not be optimal."
                 )
             else:
-                self.max_num_tokens = 2 * self.max_input_len
+                self.max_num_tokens = self.max_batch_size * self.max_input_len // 2
 
             LOGGER.debug(f"Inferred max_num_tokens={self.max_num_tokens}")
 
@@ -100,6 +101,8 @@ class ExportConfig:
         config.gemm_plugin = "auto"
         config.gpt_attention_plugin = "auto"
         config.set_context_fmha(ContextFMHAType.enabled)
+        config.enable_paged_kv_cache(32)
+        config.use_paged_context_fmha = True
 
         if self.sharding.world_size > 1:
             config.lookup_plugin = "auto"
@@ -118,10 +121,15 @@ class ExportConfig:
         self.validate()
 
         plugin_config = plugin_config or self.plugin_config
+        plugin_config.multiple_profiles = True
         if qmode:
             plugin_config.use_fp8_context_fmha = (
                 qmode.has_fp8_qdq() or qmode.has_fp8_kv_cache()
             )
+
+            # Low latency GeMM plugin is only available for sm90+ and float8 weigths and activations
+            if qmode.has_fp8_qdq() and qmode.has_fp8_kv_cache() and is_post_hopper():
+                plugin_config.low_latency_gemm_plugin = "fp8"
 
             if qmode.is_weight_only():
                 plugin_config.weight_only_groupwise_quant_matmul_plugin = "auto"
