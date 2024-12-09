@@ -33,12 +33,12 @@ INSTALL_REQUIRES = [
     "hf-transfer==0.1.6",
     "mpmath == 1.3.0",
     "numpy >= 1.26.0",
-    "onnx >= 1.12.0",
+    "onnx >= 1.17.0",
     "optimum >= 1.21.0",
     "setuptools",
-    "tensorrt-llm == 0.13.0",
-    "torch>=2.3.0a,<=2.5.0a",
-    "transformers >= 4.43.2",
+    "tensorrt-llm == 0.15.0",
+    "torch>=2.3.0a,<=2.6.0a",
+    "transformers >= 4.46.0",
     "pynvml"
 ]
 

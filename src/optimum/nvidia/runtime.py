@@ -15,7 +15,7 @@ from tensorrt_llm.bindings.executor import ExecutorConfig, KvCacheConfig
 #     GenerationRequest,
 #     GenerationResult,
 # )
-from tensorrt_llm.hlapi import LLM, SamplingParams
+from tensorrt_llm import LLM, SamplingParams
 from transformers import GenerationConfig
 
 from optimum.nvidia.hub import HuggingFaceHubModel

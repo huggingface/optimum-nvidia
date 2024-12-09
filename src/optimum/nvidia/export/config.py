@@ -144,7 +144,6 @@ class ExportConfig:
             max_batch_size=self.max_batch_size,
             max_beam_width=self.max_beam_width,
             max_num_tokens=self.max_num_tokens,
-            builder_opt=self.optimization_level,
             plugin_config=plugin_config,
             use_fused_mlp=True,
             weight_sparsity=weight_sparsity,
