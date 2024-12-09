@@ -24,7 +24,7 @@ classifiers = [
 
 # List dependencies
 dependencies = [
-    "accelerate == 0.25",
+    "accelerate >= 0.26",
     "datasets >= 2.14.0",
     "huggingface-hub >= 0.24.0",
     "hf-transfer==0.1.6",

@@ -27,7 +27,7 @@ except Exception as error:
     assert False, "Error: Could not open '%s' due %s\n" % (filepath, error)
 
 INSTALL_REQUIRES = [
-    "accelerate == 0.25",
+    "accelerate >= 0.26",
     "datasets >= 2.14",
     "huggingface-hub >= 0.24",
     "hf-transfer==0.1.6",
