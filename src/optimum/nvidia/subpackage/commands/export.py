@@ -79,6 +79,20 @@ class TrtLlmExportCommand(BaseOptimumCLICommand):
         # Allocate model and derivatives needed to export
         config = AutoConfig.from_pretrained(args.model)
         export = ExportConfig.from_config(config, args.max_batch_size)
+
+        if args.max_input_length > 0:
+            export.max_input_len = args.max_input_length
+
+        if args.max_output_length > 0:
+            export.max_output_len = args.max_output_length
+
+        if args.max_new_tokens > 0:
+            export.max_num_tokens = args.max_new_tokens
+
+        # Import sharding
+        export = export.with_sharding(args.tp, args.pp)
+
+        # Export
         model = AutoModelForCausalLM.from_pretrained(
             args.model,
             export_config=export,
