@@ -123,11 +123,11 @@ class ExportConfig:
         plugin_config.multiple_profiles = True
         if qmode:
             plugin_config.use_fp8_context_fmha = (
-                qmode.has_fp8_qdq or qmode.has_fp8_kv_cache
+                qmode.has_fp8_qdq() or qmode.has_fp8_kv_cache()
             )
 
             # Low latency GeMM plugin is only available for sm90+ and float8 weigths and activations
-            if qmode.has_fp8_qdq and qmode.has_fp8_kv_cache and is_post_hopper():
+            if qmode.has_fp8_qdq() and qmode.has_fp8_kv_cache() and is_post_hopper():
                 plugin_config.low_latency_gemm_plugin = "fp8"
 
             if qmode.is_weight_only():
