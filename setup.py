@@ -38,7 +38,7 @@ INSTALL_REQUIRES = [
     "setuptools",
     "tensorrt-llm == 0.15.0",
     "torch>=2.3.0a,<=2.6.0a",
-    "transformers >= 4.46.0",
+    "transformers >= 4.45.1",
     "pynvml"
 ]
 
