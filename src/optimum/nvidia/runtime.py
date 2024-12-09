@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import torch
-from tensorrt_llm.bindings.executor import ExecutorConfig, KvCacheConfig
 
 # from tensorrt_llm.executor import (
 #     GenerationExecutor,
@@ -16,6 +15,7 @@ from tensorrt_llm.bindings.executor import ExecutorConfig, KvCacheConfig
 #     GenerationResult,
 # )
 from tensorrt_llm import LLM, SamplingParams
+from tensorrt_llm.bindings.executor import ExecutorConfig, KvCacheConfig
 from transformers import GenerationConfig
 
 from optimum.nvidia.hub import HuggingFaceHubModel

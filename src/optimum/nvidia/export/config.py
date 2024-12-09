@@ -12,9 +12,9 @@ from tensorrt_llm.plugin.plugin import ContextFMHAType
 from transformers import AutoConfig
 
 from optimum.nvidia.lang import DataType
+from optimum.nvidia.utils.nvml import is_post_hopper
 from optimum.utils import NormalizedConfig
 
-from optimum.nvidia.utils.nvml import is_post_hopper
 
 if TYPE_CHECKING:
     from transformers import PretrainedConfig
@@ -83,7 +83,7 @@ class ExportConfig:
         if self.max_num_tokens == -1:
             if self.enabled_chunked_context:
                 # Should be N * tokens_per_block (8192 is the default)
-                self.max_num_tokens = 8192   # hardcode for now
+                self.max_num_tokens = 8192  # hardcode for now
                 warn(
                     f"max_num_tokens set to {self.max_num_tokens} with chunked context enabled might not be optimal."
                 )
