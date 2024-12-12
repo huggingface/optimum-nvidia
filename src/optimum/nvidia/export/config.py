@@ -132,8 +132,7 @@ class ExportConfig:
 
             if qmode.is_weight_only():
                 plugin_config.weight_only_groupwise_quant_matmul_plugin = "auto"
-            # weight_sparsity = qmode.sparsity is not None
-            weight_sparsity = False
+            weight_sparsity = qmode.sparsity is not None
         else:
             weight_sparsity = False
 
