@@ -49,8 +49,7 @@ def convert_generation_config(config: "GenerationConfig") -> "SamplingParams":
         if config.no_repeat_ngram_size > 0
         else 1,
         min_length=config.min_length if config.min_length > 0 else 1,
-        max_new_tokens=config.max_new_tokens,
-        max_tokens=config.max_new_tokens,
+        max_tokens=config.max_new_tokens or 32,  # SamplingParams::max_tokens' default
         return_generation_logits=config.output_logits,
         return_log_probs=not config.renormalize_logits,
     )
