@@ -41,7 +41,7 @@ MODEL_KWARGS_MAPS = {"Mixtral-8x7B-Instruct-v0.1": {"tp": 4}}
 
 
 @pytest.mark.parametrize("model_id", MODEL_TO_TEST)
-@pytest.mark.parametrize("batch_size", [1])
+@pytest.mark.parametrize("batch_size", [1, 2])
 @pytest.mark.parametrize("tp", [1, 2, 4])
 @pytest.mark.parametrize("pp", [1])
 def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
