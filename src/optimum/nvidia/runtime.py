@@ -74,7 +74,9 @@ def default_executor_config(config: Dict[str, Any]) -> "ExecutorConfig":
     )
 
 
-MaybeBatchedToken = Union[List[int], "torch.IntTensor", List[List[int]], List["torch.IntTensor"]]
+MaybeBatchedToken = Union[
+    List[int], "torch.IntTensor", List[List[int]], List["torch.IntTensor"]
+]
 
 
 class InferenceRuntimeBase:
@@ -88,11 +90,16 @@ class InferenceRuntimeBase:
 
     @staticmethod
     def as_inputs_structure(
-        inputs: MaybeBatchedToken,
-        outputs: List[List[int]]
+        inputs: MaybeBatchedToken, outputs: List[List[int]]
     ) -> MaybeBatchedToken:
-        as_batch = isinstance(inputs, List) and (len(inputs) and isinstance(inputs[0], (List, torch.Tensor)))
-        as_torch = isinstance(inputs[0], torch.Tensor) if as_batch else isinstance(inputs, torch.Tensor)
+        as_batch = isinstance(inputs, List) and (
+            len(inputs) and isinstance(inputs[0], (List, torch.Tensor))
+        )
+        as_torch = (
+            isinstance(inputs[0], torch.Tensor)
+            if as_batch
+            else isinstance(inputs, torch.Tensor)
+        )
 
         if not as_batch and not as_torch:
             return outputs[0]
@@ -102,7 +109,6 @@ class InferenceRuntimeBase:
             return outputs
         else:
             return [torch.Tensor(output, dtype=torch.uint32) for output in outputs]
-
 
     def __init__(
         self,
@@ -154,10 +160,9 @@ class InferenceRuntimeBase:
         results = self._executor.generate(inputs, sampling_params=sampling)
 
         # TODO: Fix this
-        return InferenceRuntimeBase.as_inputs_structure(inputs, [
-            result.outputs[0].token_ids
-            for result in results
-        ])
+        return InferenceRuntimeBase.as_inputs_structure(
+            inputs, [result.outputs[0].token_ids for result in results]
+        )
 
     async def agenerate(
         self,
@@ -190,7 +195,9 @@ class InferenceRuntimeBase:
         )
 
         results = await asyncio.gather(*[f.aresult() for f in futures])
-        return InferenceRuntimeBase.as_inputs_structure(inputs, [r.token_ids for r in results])
+        return InferenceRuntimeBase.as_inputs_structure(
+            inputs, [r.token_ids for r in results]
+        )
 
 
 class CausalLM(HuggingFaceHubModel, InferenceRuntimeBase):
@@ -200,7 +207,9 @@ class CausalLM(HuggingFaceHubModel, InferenceRuntimeBase):
         generation_config: "GenerationConfig",
         load_engines: bool = True,
     ):
-        InferenceRuntimeBase.__init__(self, engines_path, generation_config, load_engines)
+        InferenceRuntimeBase.__init__(
+            self, engines_path, generation_config, load_engines
+        )
         HuggingFaceHubModel.__init__(self, engines_path)
 
     def _save_additional_parcels(self, save_directory: Path):
