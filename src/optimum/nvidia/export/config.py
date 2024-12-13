@@ -12,9 +12,9 @@ from tensorrt_llm.plugin.plugin import ContextFMHAType
 from transformers import AutoConfig
 
 from optimum.nvidia.lang import DataType
+from optimum.nvidia.utils.nvml import is_post_hopper
 from optimum.utils import NormalizedConfig
 
-from optimum.nvidia.utils.nvml import is_post_hopper
 
 if TYPE_CHECKING:
     from transformers import PretrainedConfig
@@ -83,7 +83,7 @@ class ExportConfig:
         if self.max_num_tokens == -1:
             if self.enabled_chunked_context:
                 # Should be N * tokens_per_block (8192 is the default)
-                self.max_num_tokens = 8192   # hardcode for now
+                self.max_num_tokens = 8192  # hardcode for now
                 warn(
                     f"max_num_tokens set to {self.max_num_tokens} with chunked context enabled might not be optimal."
                 )
@@ -105,7 +105,6 @@ class ExportConfig:
         config.use_paged_context_fmha = True
 
         if self.sharding.world_size > 1:
-            config.lookup_plugin = "auto"
             config.set_nccl_plugin()
 
         if DataType(self.dtype) == DataType.FLOAT8:
@@ -133,8 +132,7 @@ class ExportConfig:
 
             if qmode.is_weight_only():
                 plugin_config.weight_only_groupwise_quant_matmul_plugin = "auto"
-            # weight_sparsity = qmode.sparsity is not None
-            weight_sparsity = False
+            weight_sparsity = qmode.sparsity is not None
         else:
             weight_sparsity = False
 
@@ -144,7 +142,6 @@ class ExportConfig:
             max_batch_size=self.max_batch_size,
             max_beam_width=self.max_beam_width,
             max_num_tokens=self.max_num_tokens,
-            builder_opt=self.optimization_level,
             plugin_config=plugin_config,
             use_fused_mlp=True,
             weight_sparsity=weight_sparsity,

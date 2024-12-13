@@ -80,5 +80,8 @@ if __name__ == "__main__":
         tokens["input_ids"],
     )
 
-    generated_text = tokenizer.decode(generated, skip_special_tokens=True)
+    if len(generated) and isinstance(generated[0], int):
+        generated_text = tokenizer.decode(generated, skip_special_tokens=True)
+    else:
+        generated_text = tokenizer.batch_decode(generated, skip_special_tokens=True)
     print(generated_text)
