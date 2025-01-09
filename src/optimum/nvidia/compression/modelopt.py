@@ -94,6 +94,12 @@ class ModelOptQuantizer(HfQuantizer):
         workspace: "Workspace" = kwargs.pop("workspace")
 
         with torch.inference_mode():
+
+            # If we have more than one-gpu registered in the current distributed context, lets shard
+            if model.supports_tp_plan and (world_size := torch.distributed.get_world_size()) > 1:
+                device_mesh = torch.distributed.init_device_mesh("cuda", (world_size,))
+                model.tensor_parallel(device_mesh)
+
             # Sparsify the model if requested
             if sconfig := self._recipe.config.sparsity:
                 device = model.device
