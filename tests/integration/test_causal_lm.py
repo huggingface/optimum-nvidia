@@ -63,7 +63,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     tokenizer.pad_token_id = 0
-    inp = tokenizer(prompts, padding=False, return_tensors="pt").to("cuda")
+    inp = tokenizer(prompts, padding=False)
 
     torch_model = TransformersAutoModelForCausalLM.from_pretrained(
         model_id,
@@ -81,7 +81,8 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
         "temperature": 1,
     }
     torch_generated_ids = torch_model.generate(
-        **tokenizer.pad(inp), num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
+        **tokenizer.pad(inp, padding=True, padding_side="left", return_tensors="pt"),
+        num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
     )
 
     # Free a bit of memory.
