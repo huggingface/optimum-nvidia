@@ -80,7 +80,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
         "temperature": 1,
     }
     torch_generated_ids = torch_model.generate(
-        **inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
+        **tokenizer.pad(inp), num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
     )
 
     # Free a bit of memory.
