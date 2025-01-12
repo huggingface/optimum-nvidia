@@ -62,6 +62,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
     clean_cached_engines_for_model(model_id)
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
+    tokenizer.pad_token_id = 0
     inp = tokenizer(prompts, padding=False, return_tensors="pt").to("cuda")
 
     torch_model = TransformersAutoModelForCausalLM.from_pretrained(
