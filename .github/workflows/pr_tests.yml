@@ -76,7 +76,7 @@ jobs:
       matrix:
         config:
           - name: Optimum-Nvidia CLI Test Suite
-            image: nvidia/cuda:12.6.2-devel-ubuntu24.04
+            image: nvidia/cuda:12.6.3-devel-ubuntu24.04
         gpu_target: ["aws-g6-12xlarge-cache", "aws-g5-12xlarge-cache"]
 
     name: ${{ matrix.config.name }}
