@@ -13,20 +13,15 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import gc
 
 import pytest
 import torch
-from transformers import AutoModelForCausalLM as TransformersAutoModelForCausalLM
 from transformers import AutoTokenizer
 from utils_testing import clean_cached_engines_for_model
 
 from optimum.nvidia import AutoModelForCausalLM, ExportConfig
 from optimum.nvidia.export.config import sharded
 from optimum.nvidia.utils.nvml import get_device_count
-from optimum.nvidia.utils.tests import (
-    assert_generated_partially_match,
-)
 
 
 MODEL_TO_TEST = {
@@ -47,8 +42,6 @@ MODEL_KWARGS_MAPS = {"Mixtral-8x7B-Instruct-v0.1": {"tp": 4}}
 def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
     if get_device_count() < tp * pp:
         pytest.skip("Not enough GPU on the system")
-
-    torch_dtype = torch.float16  # TODO: test fp8, int4, int8, fp32
 
     # TODO: test batched generation as well.
     # TODO: This is flaky depending on the prompt for Mistral / Gemma, maybe see if it is a bug or not.
