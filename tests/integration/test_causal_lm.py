@@ -78,7 +78,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
     )
 
     trt_generated_ids = trt_model.generate(
-        inp["input_ids"], num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
+        inp["input_ids"], num_beams=1, do_sample=False, max_new_tokens=15, **kwargs
     )
 
     # TODO: left/right padding is not aligned between Transformers and TRT-LLM.
