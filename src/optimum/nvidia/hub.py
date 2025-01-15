@@ -190,7 +190,7 @@ def from_ranked_hf_model(
 class HuggingFaceHubModel(
     ModelHubMixin,
     library_name=LIBRARY_NAME,
-    language=["python", "c++"],
+    language=["en"],
     tags=["optimum-nvidia", "trtllm"],
     repo_url="https://github.com/huggingface/optimum-nvidia",
     docs_url="https://huggingface.co/docs/optimum/nvidia_overview",
