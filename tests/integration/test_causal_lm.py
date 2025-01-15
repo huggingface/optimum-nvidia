@@ -59,7 +59,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
 
     kwargs = {
         "top_k": 1,
-        "top_p": 0,
+        "top_p": 1.0,
         "length_penalty": 1,
         "repetition_penalty": 1,
         "temperature": 1,
