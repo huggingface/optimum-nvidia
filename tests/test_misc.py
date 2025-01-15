@@ -22,7 +22,7 @@ def test_inference_runtime_base__as_input_structure():
         isinstance(outputs_batch_not_torch, List)
         and len(outputs_batch_not_torch) == 2
         and isinstance(outputs_batch_not_torch[0], List)
-        and isinstance(outputs_batch_not_torch[0], int)
+        and isinstance(outputs_batch_not_torch[0][0], int)
     )
 
     outputs_not_batch_torch = InferenceRuntimeBase.as_inputs_structure(

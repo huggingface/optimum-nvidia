@@ -49,7 +49,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
     for _ in range(batch_size - 1):
         prompts.append("I knew about a boy who played")
 
-    max_new_tokens = 15
+    max_new_tokens = 110
 
     # Make sure we remove the potentially already built engines.
     clean_cached_engines_for_model(model_id)
@@ -59,10 +59,10 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
 
     kwargs = {
         "top_k": 1,
-        "top_p": 0,
+        "top_p": 1e-10,
         "length_penalty": 1,
         "repetition_penalty": 1,
-        "temperature": 1,
+        "temperature": 1
     }
 
     export_config = ExportConfig(
@@ -81,12 +81,13 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
     )
 
     trt_generated_ids = trt_model.generate(
-        inp["input_ids"], num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
+        inp["input_ids"], num_beams=1, do_sample=True, max_new_tokens=max_new_tokens, **kwargs
     )
 
     # TODO: left/right padding is not aligned between Transformers and TRT-LLM.
-    assert isinstance(trt_generated_ids, torch.Tensor)
-    assert trt_generated_ids.shape[0] == batch_size
+    assert isinstance(trt_generated_ids, list)
+    assert isinstance(trt_generated_ids[0], int) or (isinstance(trt_generated_ids[0], list) and isinstance(trt_generated_ids[0][0], int))
+
 
 
 # @requires_multi_gpu

@@ -90,10 +90,10 @@ class InferenceRuntimeBase:
 
     @staticmethod
     def as_inputs_structure(
-        inputs: MaybeBatchedToken, outputs: List[List[int]]
+            inputs: MaybeBatchedToken, outputs: List[List[int]]
     ) -> MaybeBatchedToken:
-        as_batch = isinstance(inputs, List) and (
-            len(inputs) and isinstance(inputs[0], (List, torch.Tensor))
+        as_batch = isinstance(inputs, (list, torch.Tensor)) and (
+                len(inputs) > 1 and (isinstance(inputs[0], list) or (isinstance(inputs[0], torch.Tensor) and inputs[0].dim() > 0))
         )
         as_torch = (
             isinstance(inputs[0], torch.Tensor)
@@ -104,11 +104,11 @@ class InferenceRuntimeBase:
         if not as_batch and not as_torch:
             return outputs[0]
         elif not as_batch and as_torch:
-            return torch.Tensor(outputs[0], dtype=torch.uint32)
+            return torch.tensor(outputs[0], dtype=torch.uint32)
         elif as_batch and not as_torch:
             return outputs
         else:
-            return [torch.Tensor(output, dtype=torch.uint32) for output in outputs]
+            return torch.tensor(outputs, dtype=torch.uint32)
 
     def __init__(
         self,
@@ -159,7 +159,9 @@ class InferenceRuntimeBase:
 
         results = self._executor.generate(inputs, sampling_params=sampling)
 
-        # TODO: Fix this
+        if not isinstance(results, list):
+            results = [results]
+
         return InferenceRuntimeBase.as_inputs_structure(
             inputs, [result.outputs[0].token_ids for result in results]
         )
