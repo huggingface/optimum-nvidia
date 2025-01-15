@@ -90,10 +90,14 @@ class InferenceRuntimeBase:
 
     @staticmethod
     def as_inputs_structure(
-            inputs: MaybeBatchedToken, outputs: List[List[int]]
+        inputs: MaybeBatchedToken, outputs: List[List[int]]
     ) -> MaybeBatchedToken:
         as_batch = isinstance(inputs, (list, torch.Tensor)) and (
-                len(inputs) > 1 and (isinstance(inputs[0], list) or (isinstance(inputs[0], torch.Tensor) and inputs[0].dim() > 0))
+            len(inputs) > 1
+            and (
+                isinstance(inputs[0], list)
+                or (isinstance(inputs[0], torch.Tensor) and inputs[0].dim() > 0)
+            )
         )
         as_torch = (
             isinstance(inputs[0], torch.Tensor)
@@ -102,9 +106,9 @@ class InferenceRuntimeBase:
         )
 
         if not as_batch and not as_torch:
-            return outputs[0]
+            return outputs
         elif not as_batch and as_torch:
-            return torch.tensor(outputs[0], dtype=torch.uint32)
+            return torch.tensor(outputs, dtype=torch.uint32).flatten()
         elif as_batch and not as_torch:
             return outputs
         else:

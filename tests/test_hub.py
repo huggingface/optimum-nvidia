@@ -37,7 +37,7 @@ def test_folder_list_checkpoints(rank: int):
         assert all(
             (
                 lambda checkpoint: checkpoint.name.endswith("safetensors")
-                                   and checkpoint.startswith("rank"),
+                and checkpoint.startswith("rank"),
                 checkpoints,
             )
         ), "Invalid checkpoint name detected in the output"
@@ -53,7 +53,7 @@ def test_folder_list_engines(rank: int):
         assert all(
             (
                 lambda engine: engine.name.endswith("engine")
-                               and engine.startswith("rank"),
+                and engine.startswith("rank"),
                 engines,
             )
         ), "Invalid engine name detected in the output"
@@ -61,7 +61,11 @@ def test_folder_list_engines(rank: int):
 
 @pytest.mark.parametrize(
     "model_id",
-    [("meta-llama/Llama-2-7b-chat-hf", 1), ("google/gemma-2b", 1), ("mistralai/Mistral-7B-v0.3", 4)],
+    [
+        ("meta-llama/Llama-2-7b-chat-hf", 1),
+        ("google/gemma-2b", 1),
+        ("mistralai/Mistral-7B-v0.3", 4),
+    ],
 )
 def test_save_engine_locally_and_reload(model_id: Tuple[str, int]):
     with TemporaryDirectory() as hf_out:
@@ -87,7 +91,9 @@ def test_save_engine_locally_and_reload(model_id: Tuple[str, int]):
                 )
                 export_config = sharded(export_config, model_id[1], 1)
 
-                model = AutoModelForCausalLM.from_pretrained(hf_out,export_config=export_config)
+                model = AutoModelForCausalLM.from_pretrained(
+                    hf_out, export_config=export_config
+                )
                 model.save_pretrained(trtllm_out)
                 del model
                 torch.cuda.empty_cache()
@@ -95,7 +101,7 @@ def test_save_engine_locally_and_reload(model_id: Tuple[str, int]):
                 assert trtllm_out.exists()
                 assert (trtllm_out / device_name / "engines" / "config.json").exists()
                 assert (
-                        trtllm_out / device_name / "engines" / "generation_config.json"
+                    trtllm_out / device_name / "engines" / "generation_config.json"
                 ).exists()
                 assert (trtllm_out / device_name / "engines" / "rank0.engine").exists()
 
@@ -105,8 +111,8 @@ def test_save_engine_locally_and_reload(model_id: Tuple[str, int]):
                     model = AutoModelForCausalLM.from_pretrained(workspace.engines_path)
                     assert model is not None
                     assert (
-                            optimum.nvidia.export.TensorRTModelConverter.build.call_count
-                            == 0
+                        optimum.nvidia.export.TensorRTModelConverter.build.call_count
+                        == 0
                     )
 
                     del model
@@ -119,10 +125,10 @@ def test_save_engine_locally_and_reload(model_id: Tuple[str, int]):
 @pytest.mark.parametrize(
     "type",
     (
-            ("llama", "LlamaForCausalLM"),
-            ("gemma", "GemmaForCausalLM"),
-            ("mistral", "MistralForCausalLM"),
-            ("mixtral", "MixtralForCausalLM"),
+        ("llama", "LlamaForCausalLM"),
+        ("gemma", "GemmaForCausalLM"),
+        ("mistral", "MistralForCausalLM"),
+        ("mixtral", "MixtralForCausalLM"),
     ),
 )
 def test_model_type_from_known_config(type: Tuple[str, str]):

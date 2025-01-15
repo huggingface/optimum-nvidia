@@ -7,7 +7,7 @@ from optimum.nvidia.runtime import InferenceRuntimeBase
 
 def test_inference_runtime_base__as_input_structure():
     outputs_not_batch_not_torch = InferenceRuntimeBase.as_inputs_structure(
-        [0, 1, 2, 3], [[5, 6, 7, 8]]
+        [0, 1, 2, 3], [5, 6, 7, 8]
     )
     assert (
         isinstance(outputs_not_batch_not_torch, List)
@@ -29,6 +29,7 @@ def test_inference_runtime_base__as_input_structure():
         torch.tensor([0, 1, 2, 3]).to(torch.uint32),
         [5, 6, 7, 8],
     )
+
     assert (
         isinstance(outputs_not_batch_torch, torch.Tensor)
         and outputs_not_batch_torch.ndim == 1

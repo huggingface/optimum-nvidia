@@ -15,7 +15,6 @@
 
 
 import pytest
-import torch
 from transformers import AutoTokenizer
 from utils_testing import clean_cached_engines_for_model
 
@@ -62,7 +61,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
         "top_p": 1e-10,
         "length_penalty": 1,
         "repetition_penalty": 1,
-        "temperature": 1
+        "temperature": 1,
     }
 
     export_config = ExportConfig(
@@ -81,13 +80,19 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
     )
 
     trt_generated_ids = trt_model.generate(
-        inp["input_ids"], num_beams=1, do_sample=True, max_new_tokens=max_new_tokens, **kwargs
+        inp["input_ids"],
+        num_beams=1,
+        do_sample=True,
+        max_new_tokens=max_new_tokens,
+        **kwargs,
     )
 
     # TODO: left/right padding is not aligned between Transformers and TRT-LLM.
     assert isinstance(trt_generated_ids, list)
-    assert isinstance(trt_generated_ids[0], int) or (isinstance(trt_generated_ids[0], list) and isinstance(trt_generated_ids[0][0], int))
-
+    assert isinstance(trt_generated_ids[0], int) or (
+        isinstance(trt_generated_ids[0], list)
+        and isinstance(trt_generated_ids[0][0], int)
+    )
 
 
 # @requires_multi_gpu
