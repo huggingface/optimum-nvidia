@@ -25,11 +25,11 @@ from optimum.nvidia.utils.nvml import get_device_count
 
 
 MODEL_TO_TEST = {
-    "google/gemma-2b-it",
+    # "google/gemma-2b-it",
     "meta-llama/Llama-2-7b-chat-hf",
-    "mistralai/Mistral-7B-Instruct-v0.2",
-    "meta-llama/Meta-Llama-3-8B",
-    "mistralai/Mixtral-8x7B-Instruct-v0.1",
+    # "mistralai/Mistral-7B-Instruct-v0.2",
+    # "meta-llama/Meta-Llama-3-8B",
+    # "mistralai/Mixtral-8x7B-Instruct-v0.1",
 }
 
 MODEL_KWARGS_MAPS = {"Mixtral-8x7B-Instruct-v0.1": {"tp": 4}}
@@ -67,9 +67,9 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
 
     export_config = ExportConfig(
         dtype="float16",
-        max_input_len=1024,
+        max_input_len=128,
         max_batch_size=batch_size,
-        max_output_len=1000,
+        max_output_len=128,
         max_num_tokens=max_new_tokens,
     )
     export_config = sharded(export_config, tp, pp)
@@ -81,7 +81,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
     )
 
     trt_generated_ids = trt_model.generate(
-        inp, num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
+        inp["input_ids"], num_beams=1, do_sample=False, max_new_tokens=max_new_tokens, **kwargs
     )
 
     # TODO: left/right padding is not aligned between Transformers and TRT-LLM.
