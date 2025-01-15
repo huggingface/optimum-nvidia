@@ -49,8 +49,6 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
     for _ in range(batch_size - 1):
         prompts.append("I knew about a boy who played")
 
-    max_new_tokens = 15
-
     # Make sure we remove the potentially already built engines.
     clean_cached_engines_for_model(model_id)
 
@@ -69,8 +67,7 @@ def test_generation(model_id: str, batch_size: int, tp: int, pp: int):
         dtype="float16",
         max_input_len=128,
         max_batch_size=batch_size,
-        max_output_len=128,
-        max_num_tokens=max_new_tokens,
+        max_output_len=1024,
     )
     export_config = sharded(export_config, tp, pp)
 
