@@ -26,8 +26,8 @@ def test_inference_runtime_base__as_input_structure():
     )
 
     outputs_not_batch_torch = InferenceRuntimeBase.as_inputs_structure(
-        torch.tensor([0, 1, 2, 3], dtype=torch.uint32),
-        torch.tensor([5, 6, 7, 8], dtype=torch.uint32)
+        torch.tensor([0, 1, 2, 3]).to(torch.uint32),
+        torch.tensor([5, 6, 7, 8]).to(torch.uint32)
     )
     assert (
         isinstance(outputs_not_batch_torch, torch.Tensor)
@@ -37,8 +37,8 @@ def test_inference_runtime_base__as_input_structure():
     )
 
     outputs_batch_torch = InferenceRuntimeBase.as_inputs_structure(
-        torch.tensor([[0, 1], [2, 3]], dtype=torch.uint32),
-        torch.tensor([[5, 6], [7, 8]], dtype=torch.uint32),
+        torch.tensor([[0, 1], [2, 3]]).to(torch.uint32),
+        torch.tensor([[5, 6], [7, 8]]).to(torch.uint32),
     )
     assert (
         isinstance(outputs_batch_torch, torch.Tensor)
