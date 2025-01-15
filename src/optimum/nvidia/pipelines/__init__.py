@@ -36,7 +36,7 @@ SUPPORTED_MODEL_WITH_TASKS: Dict[str, Dict[str, Tuple[Type[Pipeline], Type]]] = 
 
 def get_target_class_for_model_and_task(task: str, architecture: str) -> Optional[Type]:
     task_ = SUPPORTED_MODEL_WITH_TASKS.get(task, None)
-    if not task:
+    if not task_:
         raise NotImplementedError(f"Task {task} is not supported yet.")
 
     target = task_.get(architecture, None)
