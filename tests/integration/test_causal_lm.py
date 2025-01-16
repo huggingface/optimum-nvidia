@@ -24,10 +24,10 @@ from optimum.nvidia.utils.nvml import get_device_count
 
 
 MODEL_TO_TEST = {
-    # "google/gemma-2b-it",
+    "google/gemma-2b-it",
     "meta-llama/Llama-2-7b-chat-hf",
-    # "mistralai/Mistral-7B-Instruct-v0.2",
-    # "meta-llama/Meta-Llama-3-8B",
+    "mistralai/Mistral-7B-Instruct-v0.2",
+    "meta-llama/Meta-Llama-3-8B",
     # "mistralai/Mixtral-8x7B-Instruct-v0.1",
 }
 
