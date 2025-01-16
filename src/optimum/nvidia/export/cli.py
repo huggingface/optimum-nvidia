@@ -23,15 +23,16 @@ def common_trtllm_export_args(parser: "ArgumentParser"):
         help="Maximum sequence length, in number of tokens, the model supports.",
     )
     required_group.add_argument(
-        "--max-new-tokens",
-        type=int,
-        default=-1,
-        help="Maximum new tokens, "
+        "--max-new-tokens", type=int, default=-1, help="Maximum new tokens, "
     )
 
     multi_gpu_group = parser.add_argument_group("Multi-GPU support arguments")
-    multi_gpu_group.add_argument("--tp", type=int, default=1, help="Tensor Parallel degree")
-    multi_gpu_group.add_argument("--pp", type=int, default=1, help="Pipeline Parallel degree")
+    multi_gpu_group.add_argument(
+        "--tp", type=int, default=1, help="Tensor Parallel degree"
+    )
+    multi_gpu_group.add_argument(
+        "--pp", type=int, default=1, help="Pipeline Parallel degree"
+    )
 
     optional_group = parser.add_argument_group("Optional arguments")
     optional_group.add_argument(

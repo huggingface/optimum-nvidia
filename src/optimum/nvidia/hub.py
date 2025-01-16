@@ -241,9 +241,8 @@ class HuggingFaceHubModel(
         # Check if we have a local path to a model OR a model_id on the hub
         if local_model_id.exists() and local_model_id.is_dir():
             if any(engine_files := list(folder_list_engines(local_model_id))):
-                engines_folder = engine_files[
-                    0
-                ].parent  # Looking for parent folder not actual specific engine file
+                # Looking for parent folder not actual specific engine file
+                engines_folder = engine_files[0].parent
                 checkpoints_folder = None
             else:
                 checkpoint_files = list(folder_list_checkpoints(local_model_id))

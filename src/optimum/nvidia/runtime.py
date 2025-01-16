@@ -8,14 +8,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 import torch
-from tensorrt_llm.bindings.executor import ExecutorConfig, KvCacheConfig
 
 # from tensorrt_llm.executor import (
 #     GenerationExecutor,
 #     GenerationRequest,
 #     GenerationResult,
 # )
-from tensorrt_llm.hlapi import LLM, SamplingParams
+from tensorrt_llm import LLM, SamplingParams
+from tensorrt_llm.bindings.executor import ExecutorConfig, KvCacheConfig
 from transformers import GenerationConfig
 
 from optimum.nvidia.hub import HuggingFaceHubModel
@@ -48,9 +48,8 @@ def convert_generation_config(config: "GenerationConfig") -> "SamplingParams":
         no_repeat_ngram_size=config.no_repeat_ngram_size
         if config.no_repeat_ngram_size > 0
         else 1,
-        min_length=config.min_length if config.min_length > 0 else 1,
-        max_new_tokens=config.max_new_tokens,
-        max_tokens=config.max_new_tokens,
+        min_tokens=config.min_length if config.min_length > 0 else 1,
+        max_tokens=config.max_new_tokens or 32,  # SamplingParams::max_tokens' default
         return_generation_logits=config.output_logits,
         return_log_probs=not config.renormalize_logits,
     )
@@ -75,6 +74,11 @@ def default_executor_config(config: Dict[str, Any]) -> "ExecutorConfig":
     )
 
 
+MaybeBatchedToken = Union[
+    List[int], "torch.IntTensor", List[List[int]], List["torch.IntTensor"]
+]
+
+
 class InferenceRuntimeBase:
     __slots__ = (
         "_engines_path",
@@ -84,11 +88,36 @@ class InferenceRuntimeBase:
         "_sampling_config",
     )
 
+    @staticmethod
+    def as_inputs_structure(
+        inputs: MaybeBatchedToken, outputs: List[List[int]]
+    ) -> MaybeBatchedToken:
+        as_batch = isinstance(inputs, (list, torch.Tensor)) and (
+            len(inputs) > 1
+            and (
+                isinstance(inputs[0], list)
+                or (isinstance(inputs[0], torch.Tensor) and inputs[0].dim() > 0)
+            )
+        )
+        as_torch = (
+            isinstance(inputs[0], torch.Tensor)
+            if as_batch
+            else isinstance(inputs, torch.Tensor)
+        )
+
+        if not as_batch and not as_torch:
+            return outputs
+        elif not as_batch and as_torch:
+            return torch.tensor(outputs, dtype=torch.uint32).flatten()
+        elif as_batch and not as_torch:
+            return outputs
+        else:
+            return torch.tensor(outputs, dtype=torch.uint32)
+
     def __init__(
         self,
         engines_path: Union[str, PathLike],
         generation_config: "GenerationConfig",
-        executor_config: Optional["ExecutorConfig"] = None,
         load_engines: bool = True,
     ):
         self._engines_path = Path(engines_path)
@@ -108,10 +137,10 @@ class InferenceRuntimeBase:
 
     def generate(
         self,
-        inputs: Union[List[int], "torch.IntTensor"],
+        inputs: MaybeBatchedToken,
         generation_config: Optional["GenerationConfig"] = None,
         **kwargs,
-    ) -> torch.IntTensor:
+    ) -> MaybeBatchedToken:
         if not self._executor:
             self._executor = LLM(
                 str(self._engines_path),
@@ -129,25 +158,24 @@ class InferenceRuntimeBase:
             else self._sampling_config
         )
 
-        print(sampling)
-
         if isinstance(inputs, torch.Tensor):
             inputs = inputs.tolist()
 
         results = self._executor.generate(inputs, sampling_params=sampling)
 
-        # TODO: Fix this
-        return [
-            torch.tensor(result.outputs[0].token_ids, dtype=torch.uint32)
-            for result in results
-        ]
+        if not isinstance(results, list):
+            results = [results]
+
+        return InferenceRuntimeBase.as_inputs_structure(
+            inputs, [result.outputs[0].token_ids for result in results]
+        )
 
     async def agenerate(
         self,
-        inputs: Union[List[int], "torch.IntTensor"],
+        inputs: MaybeBatchedToken,
         generation_config: Optional["GenerationConfig"] = None,
         **kwargs,
-    ) -> torch.IntTensor:
+    ) -> MaybeBatchedToken:
         if not self._executor:
             self._executor = LLM(
                 str(self._engines_path),
@@ -173,7 +201,9 @@ class InferenceRuntimeBase:
         )
 
         results = await asyncio.gather(*[f.aresult() for f in futures])
-        return [r.token_ids for r in results]
+        return InferenceRuntimeBase.as_inputs_structure(
+            inputs, [r.token_ids for r in results]
+        )
 
 
 class CausalLM(HuggingFaceHubModel, InferenceRuntimeBase):
@@ -181,11 +211,10 @@ class CausalLM(HuggingFaceHubModel, InferenceRuntimeBase):
         self,
         engines_path: Union[str, PathLike, Path],
         generation_config: "GenerationConfig",
-        executor_config: Optional["ExecutorConfig"] = None,
         load_engines: bool = True,
     ):
         InferenceRuntimeBase.__init__(
-            self, engines_path, generation_config, executor_config, load_engines
+            self, engines_path, generation_config, load_engines
         )
         HuggingFaceHubModel.__init__(self, engines_path)
 

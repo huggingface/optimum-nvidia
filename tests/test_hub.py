@@ -9,8 +9,9 @@ from transformers import AutoConfig as HfAutoConfig
 from transformers import AutoModelForCausalLM as HfAutoModelForCausalLM
 
 import optimum.nvidia.hub
-from optimum.nvidia import AutoModelForCausalLM
+from optimum.nvidia import AutoModelForCausalLM, ExportConfig
 from optimum.nvidia.export import Workspace
+from optimum.nvidia.export.config import sharded
 from optimum.nvidia.hub import folder_list_checkpoints, folder_list_engines
 from optimum.nvidia.utils import model_type_from_known_config
 from optimum.nvidia.utils.nvml import get_device_name
@@ -60,16 +61,20 @@ def test_folder_list_engines(rank: int):
 
 @pytest.mark.parametrize(
     "model_id",
-    ("meta-llama/Llama-2-7b-chat-hf", "google/gemma-2b", "mistralai/Mistral-7B-v0.3"),
+    [
+        ("meta-llama/Llama-2-7b-chat-hf", 1),
+        ("google/gemma-2b", 1),
+        ("mistralai/Mistral-7B-v0.3", 4),
+    ],
 )
-def test_save_engine_locally_and_reload(model_id: str):
+def test_save_engine_locally_and_reload(model_id: Tuple[str, int]):
     with TemporaryDirectory() as hf_out:
         with TemporaryDirectory() as trtllm_out:
             device_name = get_device_name(0)[-1]
             trtllm_out = Path(trtllm_out)
 
             def _save():
-                config = HfAutoConfig.from_pretrained(model_id)
+                config = HfAutoConfig.from_pretrained(model_id[0])
                 config.num_hidden_layers = 1
 
                 model = HfAutoModelForCausalLM.from_config(config)
@@ -77,7 +82,18 @@ def test_save_engine_locally_and_reload(model_id: str):
                 del model
                 torch.cuda.empty_cache()
 
-                model = AutoModelForCausalLM.from_pretrained(hf_out)
+                export_config = ExportConfig(
+                    dtype="float16",
+                    max_input_len=128,
+                    max_batch_size=1,
+                    max_output_len=128,
+                    max_num_tokens=100,
+                )
+                export_config = sharded(export_config, model_id[1], 1)
+
+                model = AutoModelForCausalLM.from_pretrained(
+                    hf_out, export_config=export_config
+                )
                 model.save_pretrained(trtllm_out)
                 del model
                 torch.cuda.empty_cache()
