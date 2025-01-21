@@ -66,7 +66,7 @@ jobs:
           repository: nvidia/tensorrt-llm
           submodules: true
           fetch-depth: 1
-          ref: ${{ env.TENSORRT_LLM_VERSION }}
+          ref: v${{ env.TENSORRT_LLM_VERSION }}
 
       - name: Build TensorRT-LLM base image
         id: build-tensorrt-llm-base
