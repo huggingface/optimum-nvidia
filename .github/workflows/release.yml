@@ -36,7 +36,7 @@ jobs:
 #          twine upload dist/* -u __token__ -p "$OPTIMUM_NVIDIA_PYPI_TOKEN"
 
   docker:
-    name: Push Docker container to Docker Hub and Github Registry
+    name: Build and push containers to registries
     runs-on: ubuntu-latest
     permissions:
       contents: read
