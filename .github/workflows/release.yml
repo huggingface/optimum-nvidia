@@ -1,42 +1,39 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - "v*"
 
 jobs:
-  pypi:
-    name: Publish release artifact on PyPi repository
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.10', '3.12']
-
-    steps:
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Check out the repo
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install setuptools wheel
-
-      - run: |
-          python setup.py sdist bdist_wheel
-      - run: |
-          pip install twine
-
-      - name: Upload to PyPi
-        env:
-          OPTIMUM_NVIDIA_PYPI_TOKEN: ${{ secrets.OPTIMUM_NVIDIA_PYPI_TOKEN }}
-        run: |
-          twine upload dist/* -u __token__ -p "$OPTIMUM_NVIDIA_PYPI_TOKEN"
+#  pypi:
+#    name: Publish release artifact on PyPi repository
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Set up Python
+#        uses: actions/setup-python@v4
+#        with:
+#          python-version: 3.10
+#
+#      - name: Check out the repo
+#        uses: actions/checkout@v4
+#
+#      - name: Install dependencies
+#        run: |
+#          pip install --upgrade pip
+#          pip install setuptools wheel
+#
+#      - run: |
+#          python setup.py sdist bdist_wheel
+#      - run: |
+#          pip install twine
+#
+#      - name: Upload to PyPi
+#        env:
+#          OPTIMUM_NVIDIA_PYPI_TOKEN: ${{ secrets.OPTIMUM_NVIDIA_PYPI_TOKEN }}
+#        run: |
+#          twine upload dist/* -u __token__ -p "$OPTIMUM_NVIDIA_PYPI_TOKEN"
 
   docker:
     name: Push Docker container to Docker Hub and Github Registry
@@ -45,7 +42,38 @@ jobs:
       contents: read
       attestations: write
       id-token: write
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.12']
+
     steps:
+      - name: Extract inlined Python version
+        run: echo "INLINE_PYTHON_VERSION=$(echo ${{ matrix.python-version }} | sed 's/\.//')" >> $GITHUB_ENV
+
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Retrieve TensorRT-LLM dependency
+        run:  echo "TENSORRT_LLM_VERSION=$(grep -i 'tensorrt-llm ==' setup.py | cut -c22- | rev | cut -c3- | rev)" >> $GITHUB_ENV
+
+      - name: Print out targeted TensorRT-LLM version
+        run: echo "TensorRT-LLM version -> ${{ env.TENSORRT_LLM_VERSION }}"
+
+      - name: Check out TensorRT-LLM repo
+        uses: actions/checkout@v4
+        with:
+          path: tensorrt-llm
+          repository: nvidia/tensorrt-llm
+          submodules: true
+          fetch-depth: 1
+          ref: ${{ env.TENSORRT_LLM_VERSION }}
+
+      - name: Build TensorRT-LLM base image
+        id: build-tensorrt-llm-base
+        env:
+          TARGET_CUDA_ARCHS: "75-real;80-real;86-real;89-real;90-real"
+        run: make -C docker release_build PYTHON_VERSION=${{ matrix.python-version }} CUDA_ARCHS=${{ env.TARGET_CUDA_ARCHS }}
+
       - name: Check out the repo
         uses: actions/checkout@v4
 
@@ -61,9 +89,8 @@ jobs:
         with:
           images: huggingface/optimum-nvidia
           tags: |
-            type=sha
-            type=pep440,pattern={{raw}},suffix=-py310
-            type=semver,pattern={{raw}},suffix=-py310
+            type=pep440,pattern={{raw}},suffix=-py${{ env.INLINE_PYTHON_VERSION }}
+            type=semver,pattern={{raw}},suffix=-py${{ env.INLINE_PYTHON_VERSION }}
 
       - name: Build and push Docker image
         id: push
