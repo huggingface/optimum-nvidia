@@ -57,7 +57,7 @@ jobs:
         run:  echo "TENSORRT_LLM_VERSION=$(grep -i 'tensorrt-llm ==' setup.py | cut -c22- | rev | cut -c3- | rev)" >> $GITHUB_ENV
 
       - name: Print out targeted TensorRT-LLM version
-        run: echo "TensorRT-LLM version -> ${{ env.TENSORRT_LLM_VERSION }}"
+        run: echo "Building against TensorRT-LLM ${{ env.TENSORRT_LLM_VERSION }}"
 
       - name: Check out TensorRT-LLM repo
         uses: actions/checkout@v4
