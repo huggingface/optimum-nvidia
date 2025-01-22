@@ -66,6 +66,7 @@ jobs:
           path: tensorrt-llm
           repository: nvidia/tensorrt-llm
           submodules: true
+          lfs: true
           fetch-depth: 1
           ref: v${{ env.TENSORRT_LLM_VERSION }}
 
@@ -74,7 +75,7 @@ jobs:
         run: |
           cd tensorrt-llm
           make -C docker release_build \
-            IMAGE_TAG=v${{ env.TENSORRT_LLM_VERSION}}-py${{ matrix.python-version }}
+            IMAGE_TAG=v${{ env.TENSORRT_LLM_VERSION}}-py${{ matrix.python-version }} \
             CUDA_ARCHS="75-real;80-real;86-real;89-real;90-real" \
             PYTHON_VERSION=${{ matrix.python-version }}
 
