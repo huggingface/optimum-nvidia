@@ -72,7 +72,7 @@ jobs:
         id: build-tensorrt-llm-base
         env:
           TARGET_CUDA_ARCHS: "75-real;80-real;86-real;89-real;90-real"
-        run: make -C docker release_build PYTHON_VERSION=${{ matrix.python-version }} CUDA_ARCHS=${{ env.TARGET_CUDA_ARCHS }}
+        run: cd tensorrt-llm && make -C docker release_build PYTHON_VERSION=${{ matrix.python-version }} CUDA_ARCHS=${{ env.TARGET_CUDA_ARCHS }}
 
       - name: Check out the repo
         uses: actions/checkout@v4
