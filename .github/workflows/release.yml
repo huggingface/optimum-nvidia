@@ -37,7 +37,8 @@ jobs:
 
   docker:
     name: Build and push containers to registries
-    runs-on: ubuntu-latest
+    runs-on:
+      group: aws-g6-12xlarge-cache-use1-public-80
     permissions:
       contents: read
       attestations: write
