@@ -86,6 +86,7 @@ setup(
         "Intended Audience :: Science/Research",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.12",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
     keywords="transformers, neural-network, fine-tuning, inference, nvidia, tensorrt, ampere, hopper",
