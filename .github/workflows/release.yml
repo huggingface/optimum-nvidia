@@ -38,7 +38,7 @@ jobs:
   docker:
     name: Build and push containers to registries
     runs-on:
-      group:  aws-g6-12xlarge-cache
+      group: aws-highmemory-32-plus
     permissions:
       contents: read
       attestations: write
