@@ -1,11 +1,7 @@
-FROM tensorrt_llm/release:latest
+ARG PYTHON_VERSION=3.10
+ARG TENSORRT_LLM_VERSION
 
-# 75 = T4/RTX Quadro
-# 80 = A100/A30
-# 86 = A10/A40/RTX Axxx
-# 89 = L4/L40/L40s/RTX Ada/4090
-# 90 = H100/H200
-#ARG TARGET_CUDA_ARCHS="75-real;80-real;86-real;89-real;90-real"
+FROM tensorrt_llm/release:v$TENSORRT_LLM_VERSION-py$PYTHON_VERSION
 
 COPY . /opt/optimum-nvidia
 

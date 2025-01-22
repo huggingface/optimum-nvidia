@@ -37,7 +37,8 @@ jobs:
 
   docker:
     name: Build and push containers to registries
-    runs-on: ubuntu-latest
+    runs-on:
+      group: aws-highmemory-32-plus
     permissions:
       contents: read
       attestations: write
@@ -65,14 +66,18 @@ jobs:
           path: tensorrt-llm
           repository: nvidia/tensorrt-llm
           submodules: true
+          lfs: true
           fetch-depth: 1
           ref: v${{ env.TENSORRT_LLM_VERSION }}
 
       - name: Build TensorRT-LLM base image
         id: build-tensorrt-llm-base
-        env:
-          TARGET_CUDA_ARCHS: "75-real;80-real;86-real;89-real;90-real"
-        run: cd tensorrt-llm && make -C docker release_build PYTHON_VERSION=${{ matrix.python-version }} CUDA_ARCHS=${{ env.TARGET_CUDA_ARCHS }}
+        run: |
+          cd tensorrt-llm
+          make -C docker release_build \
+            IMAGE_TAG=v${{ env.TENSORRT_LLM_VERSION}}-py${{ matrix.python-version }} \
+            CUDA_ARCHS="75-real;80-real;86-real;89-real;90-real" \
+            PYTHON_VERSION=${{ matrix.python-version }}
 
       - name: Check out the repo
         uses: actions/checkout@v4
