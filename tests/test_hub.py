@@ -67,7 +67,7 @@ def test_folder_list_engines(rank: int):
         ("mistralai/Mistral-7B-v0.3", 4),
         ("Qwen/Qwen1.5-0.5B-Chat", 1),
         ("Qwen/Qwen2-1.5B", 1),
-        ("Qwen/Qwen2.5-3B", 2)
+        ("Qwen/Qwen2.5-3B", 2),
     ],
 )
 def test_save_engine_locally_and_reload(model_id: Tuple[str, int]):
