@@ -108,7 +108,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             PYTHON_VERSION: ${{ matrix.python-version }}
-            TENSORRT_LLM_VERSION: ${{ env.TENSORRT_LLM_VERSION }}
+            TRTLLM_VERSION: ${{ env.TENSORRT_LLM_VERSION }}
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
