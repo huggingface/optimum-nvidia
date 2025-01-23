@@ -38,7 +38,7 @@ class AutoModelForCausalLM(ModelHubMixin):
         "mixtral": LlamaForCausalLM,
         "gemma": GemmaForCausalLM,
         "qwen": QwenForCausalLM,
-        "qwen2": QwenForCausalLM
+        "qwen2": QwenForCausalLM,
     }
 
     def __init__(self):
