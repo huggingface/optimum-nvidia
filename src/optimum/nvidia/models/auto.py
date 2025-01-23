@@ -20,6 +20,7 @@ from huggingface_hub import ModelHubMixin
 from optimum.nvidia.errors import UnsupportedModelException
 from optimum.nvidia.models.gemma import GemmaForCausalLM
 from optimum.nvidia.models.llama import LlamaForCausalLM
+from optimum.nvidia.models.qwen import QwenForCausalLM
 from optimum.nvidia.utils import model_type_from_known_config
 
 
@@ -36,7 +37,8 @@ class AutoModelForCausalLM(ModelHubMixin):
         "mistral": LlamaForCausalLM,
         "mixtral": LlamaForCausalLM,
         "gemma": GemmaForCausalLM,
-        # "phi": PhiForCausalLM
+        "qwen": QwenForCausalLM,
+        "qwen2": QwenForCausalLM
     }
 
     def __init__(self):
