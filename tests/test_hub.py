@@ -132,6 +132,8 @@ def test_save_engine_locally_and_reload(model_id: Tuple[str, int]):
         ("gemma", "GemmaForCausalLM"),
         ("mistral", "MistralForCausalLM"),
         ("mixtral", "MixtralForCausalLM"),
+        ("qwen", "QwenForCausalLM"),
+        ("qwen2", "QwenForCausalLM"),
     ),
 )
 def test_model_type_from_known_config(type: Tuple[str, str]):
