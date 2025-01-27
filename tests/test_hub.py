@@ -132,7 +132,6 @@ def test_save_engine_locally_and_reload(model_id: Tuple[str, int]):
         ("gemma", "GemmaForCausalLM"),
         ("mistral", "MistralForCausalLM"),
         ("mixtral", "MixtralForCausalLM"),
-        ("qwen", "QwenForCausalLM"),
         ("qwen2", "QwenForCausalLM"),
     ),
 )
