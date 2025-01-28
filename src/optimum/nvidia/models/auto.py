@@ -65,12 +65,10 @@ class AutoModelForCausalLM(ModelHubMixin):
         if config is None:
             raise ValueError("Unable to determine the model type with config = None")
 
-        model_type = model_type_from_known_config(config)
+        if not (model_type := model_type_from_known_config(config)):
+            raise ValueError(f"Unable to determine the model type from undefined model_type '{model_type}'")
 
-        if (
-            not model_type
-            or model_type not in AutoModelForCausalLM._SUPPORTED_MODEL_CLASS
-        ):
+        if model_type not in AutoModelForCausalLM._SUPPORTED_MODEL_CLASS:
             raise UnsupportedModelException(model_type)
 
         model_clazz = AutoModelForCausalLM._SUPPORTED_MODEL_CLASS[model_type]
