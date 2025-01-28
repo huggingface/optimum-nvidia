@@ -65,6 +65,9 @@ def test_folder_list_engines(rank: int):
         ("meta-llama/Llama-2-7b-chat-hf", 1),
         ("google/gemma-2b", 1),
         ("mistralai/Mistral-7B-v0.3", 4),
+        ("Qwen/Qwen1.5-0.5B-Chat", 1),
+        ("Qwen/Qwen2-1.5B", 1),
+        ("Qwen/Qwen2.5-3B", 2),
     ],
 )
 def test_save_engine_locally_and_reload(model_id: Tuple[str, int]):
@@ -125,14 +128,15 @@ def test_save_engine_locally_and_reload(model_id: Tuple[str, int]):
 @pytest.mark.parametrize(
     "type",
     (
-        ("llama", "LlamaForCausalLM"),
-        ("gemma", "GemmaForCausalLM"),
-        ("mistral", "MistralForCausalLM"),
-        ("mixtral", "MixtralForCausalLM"),
+        ("llama", "llama", "LlamaForCausalLM"),
+        ("gemma", "gemma", "GemmaForCausalLM"),
+        ("mistral", "mistral", "MistralForCausalLM"),
+        ("mixtral", "mixtral", "MixtralForCausalLM"),
+        ("qwen2", "qwen", "QwenForCausalLM"),
     ),
 )
 def test_model_type_from_known_config(type: Tuple[str, str]):
-    transformers_type, trtllm_type = type
+    transformers_type, trtllm_model_type, trtllm_type = type
 
     # transformers config
     transformers_config = {"model_type": transformers_type}
@@ -140,7 +144,7 @@ def test_model_type_from_known_config(type: Tuple[str, str]):
 
     # trtllm engine config
     tensorrt_llm_config = {"pretrained_config": {"architecture": trtllm_type}}
-    assert model_type_from_known_config(tensorrt_llm_config) == transformers_type
+    assert model_type_from_known_config(tensorrt_llm_config) == trtllm_model_type
 
 
 def test_model_type_from_known_config_fail():

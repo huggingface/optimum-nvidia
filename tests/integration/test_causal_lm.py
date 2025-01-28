@@ -28,7 +28,9 @@ MODEL_TO_TEST = {
     "meta-llama/Llama-2-7b-chat-hf",
     "mistralai/Mistral-7B-Instruct-v0.2",
     "meta-llama/Meta-Llama-3-8B",
-    # "mistralai/Mixtral-8x7B-Instruct-v0.1",
+    "Qwen/Qwen1.5-0.5B-Chat",
+    "Qwen/Qwen2-1.5B",
+    "Qwen/Qwen2.5-3B",
 }
 
 MODEL_KWARGS_MAPS = {"Mixtral-8x7B-Instruct-v0.1": {"tp": 4}}
