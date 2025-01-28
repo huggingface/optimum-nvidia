@@ -37,6 +37,7 @@ class AutoModelForCausalLM(ModelHubMixin):
         "mistral": LlamaForCausalLM,
         "mixtral": LlamaForCausalLM,
         "gemma": GemmaForCausalLM,
+        "qwen": QwenForCausalLM,
         "qwen2": QwenForCausalLM,
     }
 
