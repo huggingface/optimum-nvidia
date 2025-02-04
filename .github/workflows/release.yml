@@ -48,17 +48,15 @@ jobs:
         python-version: ['3.10', '3.12']
 
     steps:
-      - name: Extract inlined Python version
-        run: echo "INLINE_PYTHON_VERSION=$(echo ${{ matrix.python-version }} | sed 's/\.//')" >> $GITHUB_ENV
-
       - name: Check out the repo
         uses: actions/checkout@v4
 
       - name: Retrieve TensorRT-LLM dependency
-        run:  echo "TENSORRT_LLM_VERSION=$(grep -i 'tensorrt-llm ==' setup.py | cut -c22- | rev | cut -c3- | rev)" >> $GITHUB_ENV
+        id: trtllm-version
+        uses: "./.github/workflows/get_trtllm_version.yml"
 
       - name: Print out targeted TensorRT-LLM version
-        run: echo "Building against TensorRT-LLM ${{ env.TENSORRT_LLM_VERSION }}"
+        run: echo "Building against TensorRT-LLM ${{ steps.trtllm-version.outputs.version }}"
 
       - name: Check out TensorRT-LLM repo
         uses: actions/checkout@v4
@@ -75,7 +73,7 @@ jobs:
         run: |
           cd tensorrt-llm
           make -C docker release_build \
-            IMAGE_TAG=v${{ env.TENSORRT_LLM_VERSION }}-py${{ matrix.python-version }} \
+            IMAGE_TAG=v${{ steps.trtllm-version.outputs.version }}-py${{ matrix.python-version }} \
             CUDA_ARCHS="75-real;80-real;86-real;89-real;90-real" \
             PYTHON_VERSION=${{ matrix.python-version }}
 
@@ -94,8 +92,8 @@ jobs:
         with:
           images: huggingface/optimum-nvidia
           tags: |
-            type=pep440,pattern={{raw}},suffix=-py${{ env.INLINE_PYTHON_VERSION }}
-            type=semver,pattern={{raw}},suffix=-py${{ env.INLINE_PYTHON_VERSION }}
+            type=pep440,pattern={{raw}},suffix=-py${{ matrix.python-version}}
+            type=semver,pattern={{raw}},suffix=-py${{ matrix.python-version }}
 
       - name: Build and push Docker image
         id: push
@@ -103,12 +101,13 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile
+
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             PYTHON_VERSION=${{ matrix.python-version }}
-            TRTLLM_VERSION=${{ env.TENSORRT_LLM_VERSION }}
+            TRTLLM_VERSION=${{ steps.trtllm-version.outputs.version }}
 
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2

@@ -1,0 +1,19 @@
+name: Extract TensorRT-LLM version
+
+on:
+  workflow_call:
+    outputs:
+      version:
+        description: "Target TensorRT-LLM version"
+        value: string
+
+jobs:
+  extract-trtllm:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extract.outputs.version }}
+
+    steps:
+      - id: extract
+        run:
+          echo "TENSORRT_LLM_VERSION=$(grep -i 'tensorrt-llm ==' setup.py | cut -c22- | rev | cut -c3- | rev)" >> $GITHUB_OUTPUT
