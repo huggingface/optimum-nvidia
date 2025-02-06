@@ -46,6 +46,7 @@ from transformers.utils import (
 )
 
 from optimum.nvidia import LIBRARY_NAME
+from optimum.nvidia.compression import AlreadyQuantizedModelException
 from optimum.nvidia.compression.modelopt import ModelOptRecipe
 from optimum.nvidia.export import (
     PATH_FOLDER_ENGINES,
@@ -331,6 +332,10 @@ class HuggingFaceHubModel(
                     converter = TensorRTModelConverter(
                         model_id, subpart, workspace, licence_path
                     )
+
+                    # Check if the model is not already quantized
+                    if config.quantization_config:
+                        raise AlreadyQuantizedModelException()
 
                     if quantization_config:
                         hf_model = cls.HF_LIBRARY_TARGET_MODEL_CLASS.from_pretrained(

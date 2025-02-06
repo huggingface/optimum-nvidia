@@ -7,3 +7,6 @@ C = TypeVar("C")
 class CompressionRecipe(Protocol[C]):
     @property
     def config(self) -> C: ...
+
+
+from .errors import AlreadyQuantizedModelException
