@@ -109,6 +109,7 @@ class ModelOptQuantizer(HfQuantizer):
             qmodel = mtq.quantize(
                 model, vars(self._recipe.config.qconfig), forward_loop=self._looper
             )
+            mtq.print_quant_summary(qmodel)
 
             # Export to TRTLLM checkpoint and return
             export_tensorrt_llm_checkpoint(
@@ -116,7 +117,7 @@ class ModelOptQuantizer(HfQuantizer):
                 decoder_type=model.config.model_type,
                 dtype=model.dtype,
                 export_dir=workspace.checkpoints_path,
-                inference_tensor_parallel=1,
+                inference_tensor_parallel=0,
                 inference_pipeline_parallel=1,
                 use_nfs_workspace=False,
                 naive_fp8_quantization=False,
